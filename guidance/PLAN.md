@@ -62,8 +62,13 @@ Phases 0-5 and 7 (motion) shipped. **7b (per-layer 'apart' CMY motion) was built
 then REMOVED** — animating individual CMY layers tore the multiply blend (black-out
 + jank). Layered motion now animates the whole cell as one unit via an outer
 non-blended `<g>` wrapper (blend resolves once, statically; transform moves the
-buffer). See the batch-07 append. Only **6 (deploy)** is outstanding — the app is
-feature-complete locally. New fun-first twists welcome anytime.
+buffer). See the batch-07 append. Deploy (6) is live on GitHub Pages. New
+fun-first twists welcome anytime.
+
+**Parked:** rotation / jitter / cutout / spacing+layouts / gradient-map+presets
+were built and verified, then rolled off `main` to a branch over a perf cliff
+(heavy combos -> 24k+ animated DOM nodes). They need a perf gate before merging
+back, not rework. See `guidance/parked.md` and branch `parked/per-cell-effects`.
 
 ## Deliberately skipped (add when needed)
 
