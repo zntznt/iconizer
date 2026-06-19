@@ -35,13 +35,68 @@ function filterFor(r: number, g: number, b: number) {
   return { id, def };
 }
 
-/** The <use>(s) for a single cell. One per cell in this phase. */
-function emitCell(cell: Cell, settings: Settings): string {
-  const scale = scaleFor(cell, settings);
+/** Centered placement box for a cell's icon at a given scale factor. */
+function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
   const size = r2(CELL * scale);
   const pad = r2((CELL - size) / 2); // center the shrunk icon in its box
-  const x = r2(cell.col * CELL + pad);
-  const y = r2(cell.row * CELL + pad);
+  return { x: r2(cell.col * CELL + pad), y: r2(cell.row * CELL + pad), size };
+}
+
+// CMY layer geometry, biggest first. Each layer subtracts ONE channel via
+// multiply blend; offset directions give the chromatic-aberration shimmer.
+// chan = which RGB channel this ink removes (cyan->R, magenta->G, yellow->B).
+const INKS = [
+  { chan: 0, dx: -1, dy: -1 }, // cyan    removes red,   up-left
+  { chan: 1, dx: 1, dy: 1 }, //   magenta removes green, down-right
+  { chan: 2, dx: -1, dy: 1 }, //  yellow  removes blue,  down-left
+] as const;
+
+/** Ink fill for one channel at strength s∈[0,1]: white except the removed
+ *  channel dimmed to (1-s). Multiplied against white -> that channel = 1-s. */
+function inkFill(chan: number, s: number): string {
+  const v = Math.round(255 * (1 - s));
+  const rgb = [255, 255, 255];
+  rgb[chan] = v;
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+
+/** Layered CMY stack for one cell: 2-3 multiply-blended <use> that subtract
+ *  R/G/B channels so the stack reads as the actual cell color. */
+function emitLayered(cell: Cell, settings: Settings): string {
+  const n = settings.layerCount;
+  // ponytail: naive CMY — no black (K) channel, no per-channel screen angles.
+  // Real CMYK extracts K so darks stay neutral (not muddy-brown) and rotates
+  // each ink's screen to avoid moire. We stack SVGs, not print — add only if
+  // darks look bad in practice.
+  const strength = [1 - cell.r / 255, 1 - cell.g / 255, 1 - cell.b / 255];
+  const base = scaleFor(cell, settings);
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const scale = r2(base * (1 - i / n)); // even steps: 1, 1-1/n, 1-2/n ...
+    const { x, y, size } = cellBox(cell, settings, scale);
+    const off = settings.layerOffset;
+    const ox = r2(x + INKS[i].dx * off);
+    const oy = r2(y + INKS[i].dy * off);
+    // color= (NOT fill=) — icons use fill="currentColor", which reads `color`.
+    // Channel strength baked into the ink color (not opacity); multiply-blended
+    // against the cell's white backing, 3 inks multiply to exactly (r,g,b).
+    const ink = inkFill(INKS[i].chan, strength[i]);
+    s += `<use href="#icon" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
+      `color="${ink}" style="mix-blend-mode:multiply"/>`;
+  }
+  // Own isolated blend group + white backing so multiply sees only this cell,
+  // not its neighbours (which would cascade the whole canvas to black).
+  const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
+  return `<g style="isolation:isolate">` +
+    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>` +
+    `${s}</g>`;
+}
+
+/** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */
+function emitCell(cell: Cell, settings: Settings): string {
+  if (settings.layered) return emitLayered(cell, settings);
+
+  const { x, y, size } = cellBox(cell, settings);
   const base = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}"`;
 
   if (settings.tintMode === 'filter') {
@@ -66,9 +121,9 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
 
   const symbol = `<symbol id="icon" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`;
 
-  // Collect distinct filter defs (filter mode only) so we emit each once.
+  // Collect distinct filter defs (solid filter mode only) so we emit each once.
   const filters = new Map<string, string>();
-  if (settings.tintMode === 'filter') {
+  if (!settings.layered && settings.tintMode === 'filter') {
     for (const c of grid) {
       const { id, def } = filterFor(c.r, c.g, c.b);
       if (!filters.has(id)) filters.set(id, def);

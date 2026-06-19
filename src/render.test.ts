@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { render } from './render.ts';
+import { render, emitCell } from './render.ts';
 import type { Cell } from './sample.ts';
 import { defaults } from './settings.ts';
 
@@ -28,4 +28,30 @@ assert.ok(bgOut.includes('<rect width="32" height="16" fill="#000000"/>'),
   'expected a full-size background rect in the chosen color');
 assert.ok(bgOut.indexOf('<rect') < bgOut.indexOf('<use'), 'bg rect must precede uses');
 
-console.log('render.test.ts: ok (2 uses, symbol, fills, filter mode, bg rect)');
+// Layered CMY (batch-04). Multiply-blend mechanism: each ink subtracts one
+// channel; baking strength into the ink color makes 3 inks multiply to (r,g,b).
+const mid: Cell = { col: 0, row: 0, r: 180, g: 90, b: 40, brightness: 0.4 };
+
+const layered = emitCell(mid, { ...defaults, layered: true, layerCount: 3, layerOffset: 0 });
+assert.equal((layered.match(/<use\b/g) ?? []).length, 3, 'layered:3 -> 3 <use>');
+assert.equal((layered.match(/mix-blend-mode:multiply/g) ?? []).length, 3,
+  'all 3 layers multiply-blended');
+
+// The 3 ink fills, multiplied together against white, must equal the cell color.
+// Each fill dims exactly one channel to 255*(1-strength); product per channel
+// = that single dimmed value. Cyan->r=180, magenta->g=90, yellow->b=40.
+const fills = [...layered.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)]
+  .map((m) => [+m[1], +m[2], +m[3]]);
+assert.equal(fills.length, 3, '3 rgb ink colors');
+const product = [0, 1, 2].map((ch) =>
+  Math.round(fills.reduce((acc, f) => (acc * f[ch]) / 255, 255)));
+for (const [ch, want] of [[0, 180], [1, 90], [2, 40]] as const) {
+  assert.ok(Math.abs(product[ch] - want) <= 1,
+    `inks multiply to cell color on ch${ch}: want ${want}, got ${product[ch]}`);
+}
+
+// layered:false -> exactly 1 <use> (solid path unchanged).
+const solid = emitCell(mid, { ...defaults, layered: false });
+assert.equal((solid.match(/<use\b/g) ?? []).length, 1, 'layered:false -> 1 <use>');
+
+console.log('render.test.ts: ok (solid + filter + bg + layered CMY-multiply)');

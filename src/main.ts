@@ -85,6 +85,19 @@ $('sizeMax').addEventListener('input', (e) => {
   scheduleRedraw();
 });
 
+$('layered').addEventListener('change', (e) => {
+  settings.layered = (e.target as HTMLInputElement).checked;
+  scheduleRedraw();
+});
+$('layerCount').addEventListener('change', (e) => {
+  settings.layerCount = +(e.target as HTMLSelectElement).value as 2 | 3;
+  scheduleRedraw();
+});
+$('layerOffset').addEventListener('input', (e) => {
+  settings.layerOffset = +(e.target as HTMLInputElement).value;
+  scheduleRedraw();
+});
+
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);
 });

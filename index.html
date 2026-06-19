@@ -32,6 +32,16 @@
       <label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label>
     </div>
     <div class="controls">
+      <label><input id="layered" type="checkbox" /> layered (CMY)</label>
+      <label>layers
+        <select id="layerCount">
+          <option value="3">3 — CMY</option>
+          <option value="2">2 — CM</option>
+        </select>
+      </label>
+      <label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label>
+    </div>
+    <div class="controls">
       <button id="dlSvg" type="button" disabled>Download SVG</button>
       <button id="dlPng" type="button" disabled>Download PNG</button>
       <label>scale
