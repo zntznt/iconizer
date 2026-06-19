@@ -44,7 +44,8 @@ export function averageCells(
           r += pixels[i];
           g += pixels[i + 1];
           b += pixels[i + 2];
-          // ponytail: alpha ignored — premultiply if transparent sources matter.
+          // alpha already flattened onto white in sample() before getImageData,
+          // so RGB here is the composited color — averaging it directly is correct.
           n++;
         }
       }
@@ -73,6 +74,11 @@ export function sample(
   canvas.height = height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('2d canvas context unavailable');
+  // Flatten transparency onto white so transparent PNGs don't average toward
+  // black. ponytail: white is the default bg; make it a setting if users want
+  // to tint or composite onto the source instead.
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, height);
   ctx.drawImage(image, 0, 0, width, height);
 
   const { data } = ctx.getImageData(0, 0, width, height);
