@@ -23,4 +23,18 @@ assert.deepEqual(snap, rgb(255, 0, 0), 'palette snaps to nearest (red)');
 // none is identity
 assert.deepEqual(transformColor(rgb(123, 45, 67), { kind: 'none' }), rgb(123, 45, 67));
 
-console.log('color.test.ts: ok (grayscale, invert, posterize, palette, none)');
+// gradient: luma maps across stops. Black (luma 0) -> first stop, white -> last.
+const grad = { kind: 'gradient' as const, stops: [rgb(0, 0, 0), rgb(128, 128, 128), rgb(255, 255, 255)] };
+assert.deepEqual(transformColor(rgb(0, 0, 0), grad), rgb(0, 0, 0), 'gradient: black -> first stop');
+assert.deepEqual(transformColor(rgb(255, 255, 255), grad), rgb(255, 255, 255), 'gradient: white -> last stop');
+// a mid-luma color lands between stops (not equal to either endpoint)
+const mid = transformColor(rgb(128, 128, 128), grad);
+assert.ok(mid.r > 100 && mid.r < 160, `gradient mid maps into the ramp, got ${mid.r}`);
+// PRESETS are valid gradient schemes
+import('./color.ts').then(({ PRESETS }) => {
+  for (const [name, s] of Object.entries(PRESETS)) {
+    assert.equal(s.kind, 'gradient', `${name} is a gradient`);
+  }
+});
+
+console.log('color.test.ts: ok (grayscale, invert, posterize, palette, gradient, none)');

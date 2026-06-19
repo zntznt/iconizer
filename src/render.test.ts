@@ -111,4 +111,28 @@ assert.ok(render(dark, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon
 assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon1"'),
   'light cell -> icon1 (last)');
 
-console.log('render.test.ts: ok (solid + bg + layered CMY + scheme + multi-icon)');
+// Cutout: cells brighter than the cutoff are dropped; bg rect omitted (transparent).
+const bright: Cell[] = [{ col: 0, row: 0, r: 240, g: 240, b: 240, brightness: 0.94 }];
+const dropOut = render(bright, twoIcons, { ...defaults, cols: 1, cutout: 0.5 });
+assert.ok(!dropOut.includes('<use'), 'cutout: bright cell dropped -> no <use>');
+// the background rect carries the canvas fill; cutout omits it. (Icon <symbol>s
+// may contain their own <rect>, so match the bg specifically by its fill attr.)
+assert.ok(!/<rect width="\d+" height="\d+" fill=/.test(dropOut), 'cutout: no bg rect -> transparent');
+const keepOut = render(dark, twoIcons, { ...defaults, cols: 1, cutout: 0.5 });
+assert.ok(keepOut.includes('<use'), 'cutout: dark cell kept');
+
+// Rotation by data: a non-zero brightness adds a rotate() transform.
+const rotOut = render(dark, twoIcons, { ...defaults, cols: 1, rotateByData: true });
+assert.ok(/transform="rotate\(/.test(rotOut), 'rotateByData -> rotate transform present');
+const noRot = render(dark, twoIcons, { ...defaults, cols: 1, rotateByData: false });
+assert.ok(!noRot.includes('transform="rotate'), 'no rotation -> no transform');
+
+// Jitter is deterministic: same grid -> identical output across two renders.
+const jOpts = { ...defaults, cols: 1, jitter: 20 };
+assert.equal(render(dark, twoIcons, jOpts), render(dark, twoIcons, jOpts), 'jitter deterministic');
+
+// Spacing < 1 shrinks the icon (smaller than the CELL=16 box) without moving cells.
+const tight = render(dark, twoIcons, { ...defaults, cols: 1, spacing: 0.5 });
+assert.ok(/width="8"/.test(tight), 'spacing 0.5 -> icon half the cell (8 of 16)');
+
+console.log('render.test.ts: ok (solid + layered + scheme + multi-icon + cutout/rotate/jitter/spacing)');

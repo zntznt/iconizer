@@ -4,6 +4,7 @@ import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng } from './export.ts';
 import type { Scheme, RGB } from './color.ts';
+import { PRESETS } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -142,6 +143,31 @@ $('layerOffset').addEventListener('input', (e) => {
   scheduleRedraw();
 });
 
+// Per-cell effects (all render-only — operate on the cached grid, no resample).
+$('rotateByData').addEventListener('change', (e) => {
+  settings.rotateByData = (e.target as HTMLInputElement).checked;
+  scheduleRedraw();
+});
+$('jitter').addEventListener('input', (e) => {
+  settings.jitter = +(e.target as HTMLInputElement).value;
+  $('jitterVal').textContent = String(settings.jitter);
+  scheduleRedraw();
+});
+$('cutout').addEventListener('input', (e) => {
+  settings.cutout = +(e.target as HTMLInputElement).value;
+  $('cutoutVal').textContent = settings.cutout ? settings.cutout.toFixed(2) : 'off';
+  scheduleRedraw();
+});
+$('spacing').addEventListener('input', (e) => {
+  settings.spacing = +(e.target as HTMLInputElement).value;
+  $('spacingVal').textContent = String(settings.spacing);
+  scheduleRedraw();
+});
+$('layout').addEventListener('change', (e) => {
+  settings.layout = (e.target as HTMLSelectElement).value as Settings['layout'];
+  scheduleRedraw();
+});
+
 // hex "#rrggbb" -> RGB
 const hex2rgb = (h: string): RGB => ({
   r: parseInt(h.slice(1, 3), 16),
@@ -174,6 +200,17 @@ function syncSchemeUI() {
 for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pal2']) {
   $(id).addEventListener('input', () => {
     settings.scheme = readScheme();
+    syncSchemeUI();
+    scheduleRedraw();
+  });
+}
+
+// One-click look presets (gradient-map ramps). Set the select to 'none' so the
+// readScheme handlers don't clobber the preset on the next interaction.
+for (const name of Object.keys(PRESETS)) {
+  $(`preset-${name}`).addEventListener('click', () => {
+    settings.scheme = PRESETS[name];
+    ($('scheme') as HTMLSelectElement).value = 'none';
     syncSchemeUI();
     scheduleRedraw();
   });
@@ -220,11 +257,17 @@ function syncControls() {
   set('layered', settings.layered);
   set('layerCount', settings.layerCount);
   set('layerOffset', settings.layerOffset);
+  set('rotateByData', settings.rotateByData);
+  set('jitter', settings.jitter); $('jitterVal').textContent = String(settings.jitter);
+  set('cutout', settings.cutout); $('cutoutVal').textContent = settings.cutout ? settings.cutout.toFixed(2) : 'off';
+  set('spacing', settings.spacing); $('spacingVal').textContent = String(settings.spacing);
+  set('layout', settings.layout);
   set('motion', settings.motion);
   set('motionSpeed', settings.motionSpeed);
   set('staggerMode', settings.staggerMode);
-  // scheme + its conditional sub-controls
-  set('scheme', settings.scheme.kind);
+  // scheme + its conditional sub-controls. 'gradient' (presets) isn't a select
+  // option, so show 'none' there — the scheme still applies from settings.scheme.
+  set('scheme', settings.scheme.kind === 'gradient' ? 'none' : settings.scheme.kind);
   if (settings.scheme.kind === 'posterize') set('levels', settings.scheme.levels);
   if (settings.scheme.kind === 'duotone') {
     set('duoDark', rgb2hex(settings.scheme.dark));

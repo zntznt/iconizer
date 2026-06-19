@@ -14,7 +14,8 @@ export type Scheme =
   | { kind: 'invert' }
   | { kind: 'posterize'; levels: number }
   | { kind: 'duotone'; dark: RGB; light: RGB }
-  | { kind: 'palette'; colors: RGB[] };
+  | { kind: 'palette'; colors: RGB[] }
+  | { kind: 'gradient'; stops: RGB[] }; // map luma 0..1 across N color stops
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp255 = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
@@ -59,5 +60,26 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
       }
       return best;
     }
+    case 'gradient': {
+      // map luma onto the stop ramp; duotone is the 2-stop case, presets are this.
+      const stops = scheme.stops;
+      if (stops.length === 0) return rgb;
+      if (stops.length === 1) return stops[0];
+      const t = luma(rgb) * (stops.length - 1);
+      const i = Math.min(stops.length - 2, Math.floor(t));
+      const f = t - i; // position within segment [i, i+1]
+      return {
+        r: clamp255(lerp(stops[i].r, stops[i + 1].r, f)),
+        g: clamp255(lerp(stops[i].g, stops[i + 1].g, f)),
+        b: clamp255(lerp(stops[i].b, stops[i + 1].b, f)),
+      };
+    }
   }
 }
+
+/** One-click look presets: gradient-map ramps. Drop straight into settings.scheme. */
+export const PRESETS: Record<string, Scheme> = {
+  sepia: { kind: 'gradient', stops: [{ r: 40, g: 26, b: 13 }, { r: 112, g: 80, b: 50 }, { r: 230, g: 200, b: 160 }] },
+  neon: { kind: 'gradient', stops: [{ r: 10, g: 0, b: 30 }, { r: 200, g: 0, b: 160 }, { r: 0, g: 255, b: 230 }] },
+  vaporwave: { kind: 'gradient', stops: [{ r: 30, g: 10, b: 60 }, { r: 255, g: 100, b: 180 }, { r: 120, g: 230, b: 255 }] },
+};

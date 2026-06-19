@@ -42,6 +42,19 @@
       <label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label>
     </div>
     <div class="controls">
+      <label><input id="rotateByData" type="checkbox" /> rotate by brightness</label>
+      <label>jitter <input id="jitter" type="range" min="0" max="45" step="1" value="0" /><span id="jitterVal">0</span>°</label>
+      <label>cutout <input id="cutout" type="range" min="0" max="1" step="0.05" value="0" /><span id="cutoutVal">off</span></label>
+      <label>spacing <input id="spacing" type="range" min="0.3" max="1" step="0.05" value="1" /><span id="spacingVal">1</span></label>
+      <label>layout
+        <select id="layout">
+          <option value="grid">grid</option>
+          <option value="brick">brick</option>
+          <option value="hex">hex</option>
+        </select>
+      </label>
+    </div>
+    <div class="controls">
       <label>scheme
         <select id="scheme">
           <option value="none">none</option>
@@ -58,6 +71,11 @@
         <input id="pal0" type="color" value="#ff0000" />
         <input id="pal1" type="color" value="#00ff00" />
         <input id="pal2" type="color" value="#0000ff" />
+      </span>
+      <span>presets:
+        <button id="preset-sepia" type="button">sepia</button>
+        <button id="preset-neon" type="button">neon</button>
+        <button id="preset-vaporwave" type="button">vaporwave</button>
       </span>
     </div>
     <div class="controls">

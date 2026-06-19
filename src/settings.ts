@@ -12,6 +12,11 @@ export type Settings = {
   layerCount: 2 | 3; // inks to stack (3 = CMY, 2 = CM)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
   scheme: Scheme; // remap each cell color upstream of solid/layered
+  rotateByData: boolean; // static per-cell rotation: brightness -> angle (a swirl)
+  jitter: number; // ± degrees of deterministic hand-drawn rotation wobble; 0 = off
+  cutout: number; // drop cells brighter than this (0-1); 0 = keep all. transparent bg
+  spacing: number; // icon size within its cell (0-1); <1 = gaps. cell pitch unchanged
+  layout: 'grid' | 'brick' | 'hex'; // tiling: square, offset-rows, or hex stagger
   motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static
   motionSpeed: number; // animation period in seconds
   staggerMode: StaggerMode; // per-cell animation-delay pattern
@@ -30,6 +35,11 @@ export const defaults: Settings = {
   layerCount: 3,
   layerOffset: 0,
   scheme: { kind: 'none' },
+  rotateByData: false,
+  jitter: 0,
+  cutout: 0,
+  spacing: 1,
+  layout: 'grid',
   motion: 'none',
   motionSpeed: 1.5,
   staggerMode: 'ripple',

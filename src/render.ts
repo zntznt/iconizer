@@ -34,11 +34,47 @@ function iconFor(cell: Cell, count: number): string {
   return `icon${i}`;
 }
 
-/** Centered placement box for a cell's icon at a given scale factor. */
+/** Cheap deterministic hash of a cell -> [0,1). Stable across renders (no
+ *  Math.random — render() is pure), used for hand-drawn jitter. */
+function cellHash(cell: Cell): number {
+  const h = ((cell.col * 73856093) ^ (cell.row * 19349663)) >>> 0;
+  return (h % 100000) / 100000;
+}
+
+/** Per-cell static rotation (degrees) from settings. Distinct from motion —
+ *  this is a frozen orientation. By brightness: tone -> a swirl. Plus optional
+ *  hand-drawn jitter: a small ± deterministic wobble so the grid looks placed. */
+function cellAngle(cell: Cell, settings: Settings): number {
+  let a = settings.rotateByData ? cell.brightness * 360 : 0;
+  if (settings.jitter > 0) a += (cellHash(cell) - 0.5) * 2 * settings.jitter; // ±jitter deg
+  return a;
+}
+
+/** A `transform="rotate(a cx cy)"` attr (incl. leading space) for one placed
+ *  icon, rotating around ITS centre — or '' when there's no rotation. */
+function rotAttr(cell: Cell, settings: Settings, x: number, y: number, size: number): string {
+  const a = cellAngle(cell, settings);
+  if (a === 0) return '';
+  return ` transform="rotate(${r2(a)} ${r2(x + size / 2)} ${r2(y + size / 2)})"`;
+}
+
+/** Spacing/layout offset for a cell, in CELL units. brick = every other row
+ *  shifts half a cell; hex approximates it with a 0.5 row+col stagger. */
+function layoutOffset(cell: Cell, settings: Settings): { ox: number; oy: number } {
+  let ox = 0;
+  if (settings.layout === 'brick' && cell.row % 2 === 1) ox = CELL / 2;
+  if (settings.layout === 'hex' && cell.row % 2 === 1) ox = CELL / 2;
+  return { ox, oy: 0 };
+}
+
+/** Centered placement box for a cell's icon at a given scale factor.
+ *  `spacing` < 1 shrinks the icon within its cell (gaps); the cell pitch itself
+ *  is unchanged so the grid stays aligned. */
 function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
-  const size = r2(CELL * scale);
-  const pad = r2((CELL - size) / 2); // center the shrunk icon in its box
-  return { x: r2(cell.col * CELL + pad), y: r2(cell.row * CELL + pad), size };
+  const size = r2(CELL * scale * settings.spacing);
+  const pad = r2((CELL - size) / 2); // center the (scaled) icon in its cell
+  const { ox, oy } = layoutOffset(cell, settings);
+  return { x: r2(cell.col * CELL + pad + ox), y: r2(cell.row * CELL + pad + oy), size };
 }
 
 // CMY layer geometry, biggest first. Each layer subtracts ONE channel via
@@ -81,7 +117,8 @@ function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: n
     // Channel strength baked into the ink color (not opacity); multiply-blended
     // against the cell's white backing, 3 inks multiply to exactly (r,g,b).
     const ink = inkFill(INKS[i].chan, strength[i]);
-    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
+    const rot = rotAttr(cell, settings, ox, oy, size);
+    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}"${rot} ` +
       `color="${ink}" style="mix-blend-mode:multiply"/>`;
   }
   const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
@@ -104,8 +141,15 @@ function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: n
   return `<g${mo}>${blended}</g>`;
 }
 
+/** Cutout: drop cells brighter than the cutoff so the icon array traces just the
+ *  dark subject, leaving the background transparent. cutout=0 keeps everything. */
+function cutCell(cell: Cell, settings: Settings): boolean {
+  return settings.cutout > 0 && cell.brightness > settings.cutout;
+}
+
 /** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */
 function emitCell(cell: Cell, settings: Settings, index: number, iconCount: number): string {
+  if (cutCell(cell, settings)) return ''; // dropped -> transparent here
   if (settings.layered) return emitLayered(cell, settings, index, iconCount);
 
   const { x, y, size } = cellBox(cell, settings);
@@ -115,7 +159,8 @@ function emitCell(cell: Cell, settings: Settings, index: number, iconCount: numb
   // per-cell SVG filter, which re-rasterized every frame when animated and made
   // motion lag. fill= too, for belt-and-suspenders on currentColor inheritance.
   const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-  const el = `<use href="#${iconId}" x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" color="${fill}"/>`;
+  const rot = rotAttr(cell, settings, x, y, size);
+  const el = `<use href="#${iconId}" x="${x}" y="${y}" width="${size}" height="${size}"${rot} fill="${fill}" color="${fill}"/>`;
   // Motion on a <g> wrapper, not the <use>: fill-box on a <use>->symbol instance
   // resolves inconsistently (symbol geometry vs placed box). A <g>'s fill-box is
   // its children's rendered box = this icon in place, so it pivots around its OWN
@@ -165,8 +210,9 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
   // export: the downloaded .svg stays alive. '' when motion:'none'.
   const style = motionStyle(settings);
   // Same background the source was sampled against, so sample <-> display <->
-  // export all match. Sits behind the icons.
-  const bg = `<rect width="${w}" height="${h}" fill="${settings.background}"/>`;
+  // export all match. Sits behind the icons. In cutout mode the bg is omitted so
+  // dropped (bright) cells are genuinely transparent — the whole point of cutout.
+  const bg = settings.cutout > 0 ? '' : `<rect width="${w}" height="${h}" fill="${settings.background}"/>`;
   const uses = grid.map((c, i) => emitCell(c, settings, i, icons.length)).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +

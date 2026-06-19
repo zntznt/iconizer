@@ -1,5 +1,5 @@
 import { defaults, type Settings } from './settings.ts';
-import type { Scheme } from './color.ts';
+import { PRESETS, type Scheme } from './color.ts';
 import type { Motion, StaggerMode } from './motion.ts';
 
 /**
@@ -51,11 +51,15 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   const pick = (n: number) => Math.floor(rnd() * n);
   const choose = <T>(arr: readonly T[]): T => arr[pick(arr.length)];
 
+  // scheme: sometimes a one-click preset, otherwise a random built-in.
   let scheme: Scheme;
-  const kind = choose(SCHEMES);
-  if (kind === 'posterize') scheme = { kind, levels: 2 + pick(6) };
-  else if (kind === 'duotone') scheme = { kind, dark: rgb(randHex(pick)), light: rgb(randHex(pick)) };
-  else scheme = { kind } as Scheme;
+  if (rnd() < 0.3) scheme = choose(Object.values(PRESETS));
+  else {
+    const kind = choose(SCHEMES);
+    if (kind === 'posterize') scheme = { kind, levels: 2 + pick(6) };
+    else if (kind === 'duotone') scheme = { kind, dark: rgb(randHex(pick)), light: rgb(randHex(pick)) };
+    else scheme = { kind } as Scheme;
+  }
 
   return {
     ...defaults,
@@ -67,6 +71,11 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     layered: rnd() < 0.5,
     layerOffset: rnd() < 0.5 ? 0 : pick(4),
     scheme,
+    rotateByData: rnd() < 0.35,
+    jitter: rnd() < 0.5 ? 0 : pick(30),
+    cutout: rnd() < 0.75 ? 0 : +(0.3 + rnd() * 0.4).toFixed(2), // mostly off
+    spacing: +(0.6 + rnd() * 0.4).toFixed(2), // 0.6..1
+    layout: choose(['grid', 'grid', 'brick', 'hex'] as const), // grid weighted
     motion: choose(MOTIONS),
     motionSpeed: +(0.5 + rnd() * 3).toFixed(1), // 0.5..3.5
     staggerMode: choose(STAGGERS),
