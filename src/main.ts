@@ -4,11 +4,13 @@ import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng } from './export.ts';
 import type { Scheme, RGB } from './color.ts';
+import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const out = $('out');
-const settings: Settings = { ...defaults };
+// Load settings from the URL hash (a shared permalink) if present, else defaults.
+const settings: Settings = settingsFromUrl() ?? { ...defaults };
 
 // Inputs that don't change every render: cache the parsed results.
 let cells: Cell[] | null = null;
@@ -16,6 +18,7 @@ const icons: { name: string; svg: ParsedSvg }[] = []; // dark->light order
 let lastSvg = ''; // latest render() output, reused by export (no re-render)
 
 function redraw() {
+  syncUrl(settings); // keep the permalink current even before an image is loaded
   if (!cells || icons.length === 0) return;
   lastSvg = render(cells, icons.map((i) => i.svg), settings);
   out.innerHTML = lastSvg;
@@ -193,4 +196,64 @@ $('dlSvg').addEventListener('click', () => {
 });
 $('dlPng').addEventListener('click', () => {
   if (lastSvg) downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+});
+
+// --- Settings -> DOM controls (for permalink load + surprise me) ------------
+
+const rgb2hex = (c: RGB) =>
+  '#' + [c.r, c.g, c.b].map((n) => Math.round(n).toString(16).padStart(2, '0')).join('');
+
+/** Push the current `settings` object back into every control + its value label. */
+function syncControls() {
+  const set = (id: string, v: string | number | boolean) => {
+    const el = $(id) as HTMLInputElement;
+    if (typeof v === 'boolean') el.checked = v;
+    else el.value = String(v);
+  };
+  set('cols', settings.cols); $('colsVal').textContent = String(settings.cols);
+  set('blockSize', settings.blockSize); $('blockVal').textContent = `${settings.blockSize}×${settings.blockSize}`;
+  set('iconScale', settings.iconScale); $('iconScaleVal').textContent = String(settings.iconScale);
+  set('background', settings.background);
+  set('sizeByBrightness', settings.sizeByBrightness);
+  set('sizeMin', settings.sizeRange[0]);
+  set('sizeMax', settings.sizeRange[1]);
+  set('layered', settings.layered);
+  set('layerCount', settings.layerCount);
+  set('layerOffset', settings.layerOffset);
+  set('motion', settings.motion);
+  set('motionSpeed', settings.motionSpeed);
+  set('staggerMode', settings.staggerMode);
+  // scheme + its conditional sub-controls
+  set('scheme', settings.scheme.kind);
+  if (settings.scheme.kind === 'posterize') set('levels', settings.scheme.levels);
+  if (settings.scheme.kind === 'duotone') {
+    set('duoDark', rgb2hex(settings.scheme.dark));
+    set('duoLight', rgb2hex(settings.scheme.light));
+  }
+  if (settings.scheme.kind === 'palette') {
+    settings.scheme.colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
+  }
+  syncSchemeUI();
+}
+
+// Apply settings loaded from a permalink to the controls on startup.
+syncControls();
+
+$('surprise').addEventListener('click', () => {
+  Object.assign(settings, rollRandom());
+  syncControls();
+  redraw(); // immediate (also writes the new URL), so the link reflects the roll
+});
+
+$('share').addEventListener('click', async () => {
+  syncUrl(settings);
+  try {
+    await navigator.clipboard.writeText(location.href);
+    const btn = $('share');
+    const old = btn.textContent;
+    btn.textContent = 'copied!';
+    setTimeout(() => { btn.textContent = old; }, 1200);
+  } catch {
+    prompt('Copy this link:', location.href);
+  }
 });
