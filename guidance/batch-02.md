@@ -94,3 +94,38 @@ One runnable assert on the pure core:
 
 PNG/SVG export (Phase 3), layered quasi-RGB (Phase 4), color schemes/palettes
 (Phase 5), deploy (Phase 6).
+
+---
+
+## APPENDED — background composite color (carry-over from Batch 1 review)
+
+Batch 1's `sample()` flattens image transparency onto **white** before averaging
+(commit b635034), with a `ponytail:` comment to "make it a setting." Promote that
+to a real setting in THIS batch, because two downstream modes depend on it:
+
+- **`tintMode:'filter'`** tints the SVG's own colors against the page — a fixed
+  white assumption leaks into how filtered cells read.
+- **Phase 4 CMY layered** derives ink as `c=1-r/255` etc. Cells composited toward
+  white come out near `c=m=y≈0` -> all layers near-transparent -> near-invisible
+  icons. The background color literally sets the floor of the CMY effect.
+
+So this isn't cosmetic — the composite background is an input to the color model.
+
+### Change
+
+Add to `Settings` (additive — Batch 01 contract):
+
+    background: string;   // CSS color the source is composited onto; default '#ffffff'
+
+Thread it into `sample()`'s `ctx.fillStyle` (replace the hardcoded `'#fff'`), and
+use the SAME color as the output `<svg>`'s background rect in `render()`, so what
+the user samples against matches what they see and export. Update Batch 1's
+`ponytail:` comment to point here (no longer deferred).
+
+UI: a single color input next to the grid controls. Default white keeps current
+behavior byte-for-byte.
+
+### Self-check addition
+
+- `sample()` of a fully-transparent image with `background:'#000000'` yields cells
+  with `r=g=b≈0` (not 255). Confirms the setting actually drives the composite.
