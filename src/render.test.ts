@@ -54,6 +54,12 @@ for (const [ch, want] of [[0, 180], [1, 90], [2, 40]] as const) {
 const solid = emitCell(mid, { ...defaults, layered: false });
 assert.equal((solid.match(/<use\b/g) ?? []).length, 1, 'layered:false -> 1 <use>');
 
+// iconScale: a global multiplier > 1 makes the icon bigger than its cell, so it
+// overlaps (negative pad). CELL is 16 internally; scale 2 -> 32px icon at -8,-8.
+const big = emitCell({ ...mid, col: 0, row: 0 }, { ...defaults, layered: false, iconScale: 2 });
+assert.ok(big.includes('width="32" height="32"'), 'iconScale 2 -> icon 2x cell');
+assert.ok(big.includes('x="-8"'), 'oversized icon is centered (negative pad -> overlaps)');
+
 // Scheme composes with BOTH modes (batch-05). render() transforms upstream, so
 // a scheme must reach the layered path too — not just the solid branch.
 const cell: Cell[] = [{ col: 0, row: 0, r: 200, g: 100, b: 50, brightness: 0.5 }];

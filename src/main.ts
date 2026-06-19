@@ -63,6 +63,13 @@ $('cols').addEventListener('input', async (e) => {
   scheduleRedraw();
 });
 
+// iconScale only affects rendering (not sampling), so no resample — just redraw.
+$('iconScale').addEventListener('input', (e) => {
+  settings.iconScale = +(e.target as HTMLInputElement).value;
+  $('iconScaleVal').textContent = String(settings.iconScale);
+  scheduleRedraw();
+});
+
 $('background').addEventListener('input', async (e) => {
   settings.background = (e.target as HTMLInputElement).value;
   await resample();

@@ -3,6 +3,7 @@ import type { Motion, StaggerMode } from './motion.ts';
 
 export type Settings = {
   cols: number; // grid columns; rows derived from image aspect ratio
+  iconScale: number; // global icon size multiplier; >1 = icons overlap their cell
   tintMode: 'fill' | 'filter';
   sizeByBrightness: boolean; // scale each icon by cell brightness when true
   sizeRange: [number, number]; // min..max scale factor when sizeByBrightness
@@ -20,6 +21,7 @@ export type Settings = {
 
 export const defaults: Settings = {
   cols: 32,
+  iconScale: 1,
   tintMode: 'filter', // works on any SVG; 'fill' is opt-in for currentColor art
   sizeByBrightness: false,
   sizeRange: [0.3, 1],

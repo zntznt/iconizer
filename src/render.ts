@@ -11,12 +11,16 @@ const CELL = 16;
 /** Round to keep the output string small and stable for the self-check. */
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Scale factor for one cell's icon when sizeByBrightness is on. */
+/** Scale factor for one cell's icon: global iconScale x optional brightness scale.
+ *  iconScale > 1 makes icons larger than their cell, so they overlap neighbours
+ *  (a denser, tiled look) — independent of column count. The <symbol> is
+ *  overflow:visible, so oversized icons don't clip. */
 function scaleFor(cell: Cell, settings: Settings): number {
-  if (!settings.sizeByBrightness) return 1;
-  const [min, max] = settings.sizeRange;
-  // darker cell -> larger icon (reads as ink density on a light ground)
-  return min + (max - min) * (1 - cell.brightness);
+  const tonal = settings.sizeByBrightness
+    ? settings.sizeRange[0] +
+      (settings.sizeRange[1] - settings.sizeRange[0]) * (1 - cell.brightness)
+    : 1;
+  return settings.iconScale * tonal;
 }
 
 /** Quantize a 0-255 channel to a coarse step so cells share filter defs. */
