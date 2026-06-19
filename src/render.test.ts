@@ -60,6 +60,17 @@ const big = emitCell({ ...mid, col: 0, row: 0 }, { ...defaults, layered: false, 
 assert.ok(big.includes('width="32" height="32"'), 'iconScale 2 -> icon 2x cell');
 assert.ok(big.includes('x="-8"'), 'oversized icon is centered (negative pad -> overlaps)');
 
+// blockSize: merge NxN sample cells into one averaged icon. 4x4 grid, block 2 ->
+// 2x2 = 4 icons (vs 16), each the average of its block.
+const g16: Cell[] = [];
+for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
+  g16.push({ col: c, row: r, r: 120, g: 120, b: 120, brightness: 0.47 });
+const svg2 = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
+const b1 = (render(g16, svg2, { ...defaults, cols: 4, blockSize: 1 }).match(/<use/g) ?? []).length;
+const b2 = (render(g16, svg2, { ...defaults, cols: 4, blockSize: 2 }).match(/<use/g) ?? []).length;
+assert.equal(b1, 16, 'block 1 -> one icon per cell');
+assert.equal(b2, 4, 'block 2 -> 4 merged icons');
+
 // Scheme composes with BOTH modes (batch-05). render() transforms upstream, so
 // a scheme must reach the layered path too — not just the solid branch.
 const cell: Cell[] = [{ col: 0, row: 0, r: 200, g: 100, b: 50, brightness: 0.5 }];

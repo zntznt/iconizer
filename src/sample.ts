@@ -17,6 +17,41 @@ export function rowsFor(imgWidth: number, imgHeight: number, cols: number): numb
 }
 
 /**
+ * Merge each block x block group of cells into ONE averaged cell (a downsample /
+ * pooling step). block=1 is identity. block=2 turns a 32-wide grid into 16 icons,
+ * each the average of its 2x2 source cells — so one icon represents a chunk of the
+ * image, not a single sample, and fills that chunk's space when rendered.
+ *
+ * Pure Cell[] -> Cell[]. brightness is RE-derived from the averaged rgb (not
+ * averaged itself) so it matches how a single cell computes it.
+ */
+export function poolCells(grid: Cell[], cols: number, block: number): Cell[] {
+  if (block <= 1 || grid.length === 0) return grid;
+  const rows = Math.max(...grid.map((c) => c.row)) + 1;
+  const at = new Map(grid.map((c) => [c.row * cols + c.col, c]));
+  const outCols = Math.ceil(cols / block);
+  const outRows = Math.ceil(rows / block);
+  const out: Cell[] = [];
+
+  for (let br = 0; br < outRows; br++) {
+    for (let bc = 0; bc < outCols; bc++) {
+      let r = 0, g = 0, b = 0, n = 0;
+      // average every source cell in this block (clamped at the grid edge).
+      for (let dy = 0; dy < block; dy++) {
+        for (let dx = 0; dx < block; dx++) {
+          const c = at.get((br * block + dy) * cols + (bc * block + dx));
+          if (c) { r += c.r; g += c.g; b += c.b; n++; }
+        }
+      }
+      if (n === 0) continue; // whole block off the edge
+      r /= n; g /= n; b /= n;
+      out.push({ col: bc, row: br, r, g, b, brightness: (LUMA.r * r + LUMA.g * g + LUMA.b * b) / 255 });
+    }
+  }
+  return out;
+}
+
+/**
  * Pure core: average an RGBA pixel buffer into a Cell[] grid.
  * `pixels` is row-major RGBA (4 bytes/pixel), the shape getImageData returns.
  * Split out from sample() so it's testable without a canvas.

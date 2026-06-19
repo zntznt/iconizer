@@ -1,4 +1,5 @@
 import type { Cell } from './sample.ts';
+import { poolCells } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
 import { transformColor } from './color.ts';
@@ -140,7 +141,12 @@ function emitCell(cell: Cell, settings: Settings, index: number): string {
  */
 export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string {
   if (grid.length === 0) return '';
-  const cols = settings.cols;
+  // Pool N x N source cells into one averaged icon (blockSize). Must run before
+  // we read cols/rows: it re-indexes the grid to a smaller one, so every
+  // downstream use (canvas size, cell placement, filter dedup) stays consistent.
+  grid = poolCells(grid, settings.cols, settings.blockSize);
+  // Derive grid dims from the (possibly pooled) grid, not settings.cols.
+  const cols = Math.max(...grid.map((c) => c.col)) + 1;
   const rows = Math.max(...grid.map((c) => c.row)) + 1;
   const w = cols * CELL;
   const h = rows * CELL;

@@ -63,6 +63,13 @@ $('cols').addEventListener('input', async (e) => {
   scheduleRedraw();
 });
 
+// blockSize pools the already-sampled grid (no resample) — just redraw.
+$('blockSize').addEventListener('input', (e) => {
+  settings.blockSize = +(e.target as HTMLInputElement).value;
+  $('blockVal').textContent = `${settings.blockSize}×${settings.blockSize}`;
+  scheduleRedraw();
+});
+
 // iconScale only affects rendering (not sampling), so no resample — just redraw.
 $('iconScale').addEventListener('input', (e) => {
   settings.iconScale = +(e.target as HTMLInputElement).value;

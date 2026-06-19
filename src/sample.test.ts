@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { averageCells, rowsFor } from './sample.ts';
+import { averageCells, rowsFor, poolCells, type Cell } from './sample.ts';
 
 // Solid rgb(255,0,0), 4x4 px, cols:2 -> a square image -> 2 rows -> 4 cells.
 const W = 4, H = 4;
@@ -35,4 +35,17 @@ for (const c of blackCells) {
   assert.ok(c.r < 1 && c.g < 1 && c.b < 1, `black bg -> black cell, got ${c.r},${c.g},${c.b}`);
 }
 
-console.log('sample.test.ts: ok (4 red cells b~0.21; black-bg composite -> black)');
+// poolCells: merge a 2x2 grid (4 distinct colors) into one averaged cell.
+const quad: Cell[] = [
+  { col: 0, row: 0, r: 200, g: 0, b: 0, brightness: 0.1 },
+  { col: 1, row: 0, r: 0, g: 200, b: 0, brightness: 0.4 },
+  { col: 0, row: 1, r: 0, g: 0, b: 200, brightness: 0.02 },
+  { col: 1, row: 1, r: 200, g: 200, b: 200, brightness: 0.78 },
+];
+const pooled = poolCells(quad, 2, 2);
+assert.equal(pooled.length, 1, 'block 2 on a 2x2 grid -> 1 cell');
+assert.ok(pooled[0].r === 100 && pooled[0].g === 100 && pooled[0].b === 100,
+  `pooled cell is the average, got ${pooled[0].r},${pooled[0].g},${pooled[0].b}`);
+assert.equal(poolCells(quad, 2, 1), quad, 'block 1 is identity (same array)');
+
+console.log('sample.test.ts: ok (4 red cells b~0.21; black-bg composite -> black; pool 2x2->avg)');
