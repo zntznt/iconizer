@@ -4,6 +4,11 @@ Goal: a Vite app that boots, plus a working `sample()` that turns an uploaded
 image into a grid of averaged-color cells. No rendering of the SVG yet — this
 batch ends when sampling is correct and proven.
 
+> **The `Cell` and `Settings` types below are a contract.** Later phases (render,
+> export, layering) are planned against these exact field names. If you need to
+> change one (`brightness` -> `luma`, etc.), that's fine — but flag it, because it
+> ripples into every later brief. Add fields freely; rename/remove with a heads-up.
+
 ## Phase 0 — Scaffold
 
 1. `npm create vite@latest . -- --template vanilla-ts` in the repo root.
