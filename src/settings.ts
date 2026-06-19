@@ -9,7 +9,7 @@ export type Settings = {
 
 export const defaults: Settings = {
   cols: 32,
-  tintMode: 'fill',
+  tintMode: 'filter', // works on any SVG; 'fill' is opt-in for currentColor art
   sizeByBrightness: false,
   sizeRange: [0.3, 1],
   background: '#ffffff',
