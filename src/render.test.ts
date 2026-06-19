@@ -9,18 +9,17 @@ const grid: Cell[] = [
 ];
 const svg = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
 
-const out = render(grid, svg, { ...defaults, cols: 2, tintMode: 'fill' });
+const out = render(grid, svg, { ...defaults, cols: 2 });
 
 const useCount = (out.match(/<use\b/g) ?? []).length;
 assert.equal(useCount, 2, `expected 2 <use, got ${useCount}`);
 assert.ok(out.includes('<symbol id="icon"'), 'expected one <symbol id="icon"');
 assert.ok(out.includes('fill="rgb(255,0,0)"'), 'expected a red fill');
 assert.ok(out.includes('fill="rgb(0,0,255)"'), 'expected a blue fill');
-
-// filter mode: no fills, one filter ref per cell, shared defs collapse dupes.
-const fout = render(grid, svg, { ...defaults, cols: 2, tintMode: 'filter' });
-assert.ok(!fout.includes('fill="rgb('), 'filter mode should not set rgb fills');
-assert.equal((fout.match(/filter="url\(#/g) ?? []).length, 2, 'two filtered uses');
+// solid tinting via color=/fill=, never SVG filters (those re-rasterize per frame
+// when animated and caused the motion lag — removed).
+assert.ok(!out.includes('filter="url(#') && !out.includes('<filter'),
+  'no per-cell SVG filters (color-based tinting only)');
 
 // background rect uses settings.background, behind the uses (batch-02 append).
 const bgOut = render(grid, svg, { ...defaults, cols: 2, background: '#000000' });
@@ -93,7 +92,7 @@ assert.deepEqual(invProduct, [55, 155, 205], `layered+invert -> inverted color, 
 
 // Same scheme reaches the solid path's fill.
 const invSolid = render(cell, tinySvg,
-  { ...defaults, cols: 1, tintMode: 'fill', scheme: { kind: 'invert' } });
+  { ...defaults, cols: 1, scheme: { kind: 'invert' } });
 assert.ok(invSolid.includes('fill="rgb(55,155,205)"'), 'solid+invert -> inverted fill');
 
-console.log('render.test.ts: ok (solid + filter + bg + layered CMY + scheme compose)');
+console.log('render.test.ts: ok (solid + bg + layered CMY + scheme compose; no filters)');

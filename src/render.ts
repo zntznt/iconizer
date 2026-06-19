@@ -24,24 +24,6 @@ function scaleFor(cell: Cell, settings: Settings): number {
   return settings.iconScale * tonal;
 }
 
-/** Quantize a 0-255 channel to a coarse step so cells share filter defs. */
-const QUANT = 32;
-const q = (v: number) => Math.min(255, Math.round(v / QUANT) * QUANT);
-
-/** A stable id + a flood-through-alpha filter for one quantized color. */
-function filterFor(r: number, g: number, b: number) {
-  const id = `t${q(r)}-${q(g)}-${q(b)}`;
-  // Flood the target color and keep it only where the icon is opaque
-  // (SourceAlpha). This recolors ANY art — solid black, white, multicolor —
-  // because it ignores the source's own RGB and uses only its shape. The old
-  // luminance-matrix approach left solid-dark icons black (lum~0 -> color~0).
-  const color = `rgb(${q(r)},${q(g)},${q(b)})`;
-  const def = `<filter id="${id}" color-interpolation-filters="sRGB">` +
-    `<feFlood flood-color="${color}"/>` +
-    `<feComposite in2="SourceAlpha" operator="in"/></filter>`;
-  return { id, def };
-}
-
 /** Centered placement box for a cell's icon at a given scale factor. */
 function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
   const size = r2(CELL * scale);
@@ -116,17 +98,12 @@ function emitCell(cell: Cell, settings: Settings, index: number): string {
   if (settings.layered) return emitLayered(cell, settings, index);
 
   const { x, y, size } = cellBox(cell, settings);
-  const base = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}"`;
-
-  let el: string;
-  if (settings.tintMode === 'filter') {
-    const { id } = filterFor(cell.r, cell.g, cell.b);
-    el = `${base} filter="url(#${id})"/>`;
-  } else {
-    // fill mode: needs the source SVG to use fill="currentColor"/inherit.
-    const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-    el = `${base} fill="${fill}" color="${fill}"/>`;
-  }
+  // Tint via color= (makeTintable forces icons to currentColor, so this recolors
+  // any art). This is GPU-cheap and the SAME mechanism CMY uses — unlike the old
+  // per-cell SVG filter, which re-rasterized every frame when animated and made
+  // motion lag. fill= too, for belt-and-suspenders on currentColor inheritance.
+  const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
+  const el = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" color="${fill}"/>`;
   // Motion on a <g> wrapper, not the <use>: fill-box on a <use>->symbol instance
   // resolves inconsistently (symbol geometry vs placed box). A <g>'s fill-box is
   // its children's rendered box = this icon in place, so it pivots around its OWN
@@ -167,19 +144,7 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
   }
 
   const symbol = `<symbol id="icon" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`;
-
-  // Collect distinct filter defs (solid filter mode only) so we emit each once.
-  const filters = new Map<string, string>();
-  if (!settings.layered && settings.tintMode === 'filter') {
-    for (const c of grid) {
-      const { id, def } = filterFor(c.r, c.g, c.b);
-      if (!filters.has(id)) filters.set(id, def);
-    }
-  }
-  // ponytail: filter mode quantizes color to QUANT-step buckets so cells share
-  // a handful of <filter> defs. Drop QUANT (finer buckets) if banding shows.
-
-  const defs = `<defs>${symbol}${[...filters.values()].join('')}</defs>`;
+  const defs = `<defs>${symbol}</defs>`;
   // Motion keyframes baked into the SVG (no JS loop) — so animation survives
   // export: the downloaded .svg stays alive. '' when motion:'none'.
   const style = motionStyle(settings);

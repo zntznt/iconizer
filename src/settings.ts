@@ -5,7 +5,6 @@ export type Settings = {
   cols: number; // grid columns; rows derived from image aspect ratio
   blockSize: number; // merge NxN sample cells into 1 averaged icon; 1 = off
   iconScale: number; // global icon size multiplier; >1 = icons overlap their cell
-  tintMode: 'fill' | 'filter';
   sizeByBrightness: boolean; // scale each icon by cell brightness when true
   sizeRange: [number, number]; // min..max scale factor when sizeByBrightness
   background: string; // CSS color the source is composited onto; sets CMY floor
@@ -24,7 +23,6 @@ export const defaults: Settings = {
   cols: 32,
   blockSize: 1,
   iconScale: 1,
-  tintMode: 'filter', // works on any SVG; 'fill' is opt-in for currentColor art
   sizeByBrightness: false,
   sizeRange: [0.3, 1],
   background: '#ffffff',

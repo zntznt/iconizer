@@ -83,10 +83,6 @@ $('background').addEventListener('input', async (e) => {
   scheduleRedraw();
 });
 
-$('tintMode').addEventListener('change', (e) => {
-  settings.tintMode = (e.target as HTMLSelectElement).value as Settings['tintMode'];
-  scheduleRedraw();
-});
 $('sizeByBrightness').addEventListener('change', (e) => {
   settings.sizeByBrightness = (e.target as HTMLInputElement).checked;
   scheduleRedraw();
