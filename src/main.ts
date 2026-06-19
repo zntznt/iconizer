@@ -136,6 +136,19 @@ for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pa
   });
 }
 
+$('motion').addEventListener('change', (e) => {
+  settings.motion = (e.target as HTMLSelectElement).value as Settings['motion'];
+  scheduleRedraw();
+});
+$('motionSpeed').addEventListener('input', (e) => {
+  settings.motionSpeed = +(e.target as HTMLInputElement).value;
+  scheduleRedraw();
+});
+$('staggerMode').addEventListener('change', (e) => {
+  settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
+  scheduleRedraw();
+});
+
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);
 });

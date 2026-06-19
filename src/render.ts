@@ -2,6 +2,7 @@ import type { Cell } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
 import { transformColor } from './color.ts';
+import { motionStyle, motionAttrs } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
 // root viewBox scales the whole thing, so this is just internal resolution.
@@ -63,7 +64,7 @@ function inkFill(chan: number, s: number): string {
 
 /** Layered CMY stack for one cell: 2-3 multiply-blended <use> that subtract
  *  R/G/B channels so the stack reads as the actual cell color. */
-function emitLayered(cell: Cell, settings: Settings): string {
+function emitLayered(cell: Cell, settings: Settings, index: number): string {
   const n = settings.layerCount;
   // ponytail: naive CMY — no black (K) channel, no per-channel screen angles.
   // Real CMYK extracts K so darks stay neutral (not muddy-brown) and rotates
@@ -87,18 +88,22 @@ function emitLayered(cell: Cell, settings: Settings): string {
   }
   // Own isolated blend group + white backing so multiply sees only this cell,
   // not its neighbours (which would cascade the whole canvas to black).
+  // Motion class goes on this <g> so the CMY stack moves as ONE unit, colors
+  // stay registered (batch-07 "together"). ponytail: batch-07b's per-layer
+  // "apart" motion would instead hang the class off the child <use>s below.
   const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
-  return `<g style="isolation:isolate">` +
+  return `<g style="isolation:isolate"${motionAttrs(cell, index, settings)}>` +
     `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>` +
     `${s}</g>`;
 }
 
 /** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */
-function emitCell(cell: Cell, settings: Settings): string {
-  if (settings.layered) return emitLayered(cell, settings);
+function emitCell(cell: Cell, settings: Settings, index: number): string {
+  if (settings.layered) return emitLayered(cell, settings, index);
 
   const { x, y, size } = cellBox(cell, settings);
-  const base = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}"`;
+  const mo = motionAttrs(cell, index, settings); // class+delay on the single <use>
+  const base = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}"${mo}`;
 
   if (settings.tintMode === 'filter') {
     const { id } = filterFor(cell.r, cell.g, cell.b);
@@ -141,13 +146,16 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
   // a handful of <filter> defs. Drop QUANT (finer buckets) if banding shows.
 
   const defs = `<defs>${symbol}${[...filters.values()].join('')}</defs>`;
+  // Motion keyframes baked into the SVG (no JS loop) — so animation survives
+  // export: the downloaded .svg stays alive. '' when motion:'none'.
+  const style = motionStyle(settings);
   // Same background the source was sampled against, so sample <-> display <->
   // export all match. Sits behind the icons.
   const bg = `<rect width="${w}" height="${h}" fill="${settings.background}"/>`;
-  const uses = grid.map((c) => emitCell(c, settings)).join('');
+  const uses = grid.map((c, i) => emitCell(c, settings, i)).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +
-    `width="${w}" height="${h}">${defs}${bg}${uses}</svg>`;
+    `width="${w}" height="${h}">${style}${defs}${bg}${uses}</svg>`;
 }
 
 export { emitCell };

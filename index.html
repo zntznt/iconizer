@@ -61,6 +61,28 @@
       </span>
     </div>
     <div class="controls">
+      <label>motion
+        <select id="motion">
+          <option value="none">none</option>
+          <option value="wiggle">wiggle</option>
+          <option value="swing">swing</option>
+          <option value="spin">spin</option>
+          <option value="pulse">pulse</option>
+          <option value="bob">bob</option>
+          <option value="shimmer">shimmer</option>
+        </select>
+      </label>
+      <label>speed <input id="motionSpeed" type="range" min="0.3" max="4" step="0.1" value="1.5" /></label>
+      <label>stagger
+        <select id="staggerMode">
+          <option value="ripple">ripple</option>
+          <option value="none">none</option>
+          <option value="brightness">brightness</option>
+          <option value="random">random</option>
+        </select>
+      </label>
+    </div>
+    <div class="controls">
       <button id="dlSvg" type="button" disabled>Download SVG</button>
       <button id="dlPng" type="button" disabled>Download PNG</button>
       <label>scale

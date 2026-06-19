@@ -1,4 +1,5 @@
 import type { Scheme } from './color.ts';
+import type { Motion, StaggerMode } from './motion.ts';
 
 export type Settings = {
   cols: number; // grid columns; rows derived from image aspect ratio
@@ -10,6 +11,9 @@ export type Settings = {
   layerCount: 2 | 3; // inks to stack (3 = CMY, 2 = CM)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
   scheme: Scheme; // remap each cell color upstream of solid/layered
+  motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static
+  motionSpeed: number; // animation period in seconds
+  staggerMode: StaggerMode; // per-cell animation-delay pattern
 };
 
 export const defaults: Settings = {
@@ -22,4 +26,7 @@ export const defaults: Settings = {
   layerCount: 3,
   layerOffset: 0,
   scheme: { kind: 'none' },
+  motion: 'none',
+  motionSpeed: 1.5,
+  staggerMode: 'ripple',
 };
