@@ -88,3 +88,42 @@ Assert on `emitCell` (pure, string out):
 
 Color schemes/palettes (Phase 5), deploy (Phase 6), true CMYK/K-channel (deferred,
 see simplification note).
+
+---
+
+## APPENDED — what actually shipped (planner-blessed contract change)
+
+The brief's spec above (pure CMY fills `#00FFFF...` + `opacity` = channel strength)
+**renders greyscale** and is superseded. Alpha-stacking opaque-ish CMY layers
+composites toward grey/black, not toward the cell color — it cannot do subtractive
+mixing. Confirmed by pixel measurement during the build (`[10,10,10]` per cell).
+
+**Blessed mechanism (c529f7f):**
+
+- Each cell emits 2-3 stacked `<use>` with `style="mix-blend-mode:multiply"` —
+  multiply IS the subtractive operation, so overlapping inks darken toward the
+  cell color like real CMY.
+- Channel strength is **baked into the ink color, not opacity**. Ink for channel
+  `chan` at strength `s` = white with that one channel dimmed to `255*(1-s)`.
+  Three such inks multiplied against white = exactly `(r,g,b)`. opacity stays 1.
+- The icon tint is set via **`color=` not `fill=`** — icons use
+  `fill="currentColor"`, which reads the `color` property. (This was the bug that
+  caused four wrong-layer debugging detours: `fill=` left every layer black.)
+- Each cell is wrapped in `<g style="isolation:isolate">` with its **own white
+  `<rect>` backing**, so multiply sees only that cell's white backdrop. Without
+  isolation, multiply blends against neighbouring cells and cascades the whole
+  canvas to black.
+
+**Self-check changed accordingly:** it no longer asserts literal `#00FFFF` fills /
+opacity values. It now asserts the stronger invariant — the 3 emitted ink colors,
+multiplied per-channel against white, equal the cell color (±1). That tests the
+actual goal, not the markup.
+
+**Known divergence — `background` in layered mode.** The per-cell multiply backing
+is hardcoded `#fff`, NOT `settings.background`. This is required: multiply against
+a non-white backdrop skews every cell's hue. So in layered mode `background` only
+sets the outer page backdrop, not what shows behind the icons. The batch-02 append
+called `background` "the CMY floor" — that framing held for the opacity spec; under
+multiply the white per-cell backing is the floor instead. Documented in
+manual-tests R7. If a tinted layered background is ever wanted, it needs a
+different mechanism (e.g. compositing the cell color in JS), not this path.

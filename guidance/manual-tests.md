@@ -51,6 +51,11 @@ Annotated so nobody prunes them as "obvious":
 - **R6 (sizeByBrightness)** Toggle on: icon sizes visibly vary by cell tone.
 - **R7 (background)** Change the background color input: the mosaic's backdrop AND
   the sampling composite both follow it (sample <-> display match).
+  NOTE: in LAYERED mode this applies only to the outer page backdrop — each cell's
+  multiply backing is hardcoded white by necessity (multiply needs a white backdrop
+  to resolve to the cell color; a tinted backing would skew every cell's hue). So
+  `background` does not show through behind the icons in layered mode. By design —
+  see batch-04 append. Test R7's "behind the icons" part in SOLID mode only.
 
 ## Phase 3 — Export (`export.ts`)
 
