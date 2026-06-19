@@ -111,27 +111,25 @@ assert.ok(render(dark, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon
 assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon1"'),
   'light cell -> icon1 (last)');
 
-// RGB-proportion layered style: 3 solid red/green/blue icons, sized by channel
-// share, NO multiply blend. Reddish cell -> red is the biggest layer.
+// RGB additive layered style: 3 full-size icons carrying each channel's TRUE
+// value, screen-blended over black so overlaps add back to the original colour.
 const rgbOut = render(cell, tinySvg, { ...defaults, cols: 1, layered: true, layerStyle: 'rgb' });
-assert.ok(!rgbOut.includes('mix-blend-mode'), 'RGB style does not multiply-blend');
+assert.equal((rgbOut.match(/mix-blend-mode:screen/g) ?? []).length, 3, 'RGB style screen-blends 3 layers');
+assert.ok(rgbOut.includes('fill="#000"'), 'RGB style has a black backing (screen identity)');
+// cell (200,100,50) -> channel layers carry true values, NOT pure 255.
 const rgbFills = [...rgbOut.matchAll(/color="(rgb\([^)]+\))"/g)].map((m) => m[1]);
-assert.deepEqual([...rgbFills].sort(), ['rgb(0,0,255)', 'rgb(0,255,0)', 'rgb(255,0,0)'],
-  'RGB style uses pure red/green/blue fills');
-// red dominant (200,100,50) -> the red <use> is the largest. <use> emits
-// width=... then color=..., so match in that order.
-const widthOf = (fill: string) => {
-  const m = rgbOut.match(new RegExp(`<use[^>]*width="([\\d.]+)"[^>]*color="${fill.replace(/[()]/g, '\\$&')}"`));
-  return m ? +m[1] : 0;
-};
-assert.ok(widthOf('rgb(255,0,0)') > widthOf('rgb(0,0,255)'),
-  'reddish cell -> red layer larger than blue layer');
+assert.deepEqual(rgbFills, ['rgb(200,0,0)', 'rgb(0,100,0)', 'rgb(0,0,50)'],
+  'RGB channels carry true values so screen adds back to the original colour');
+// all three are full-size (overlap = whole icon = original colour at offset 0).
+const rgbSizes = [...rgbOut.matchAll(/<use[^>]*width="([\d.]+)"/g)].map((m) => +m[1]);
+assert.ok(rgbSizes.length === 3 && rgbSizes.every((w) => w === rgbSizes[0]),
+  `RGB layers are all full size, got ${rgbSizes}`);
 
-// scheme reaches RGB style: grayscale -> r=g=b -> all three layers equal size.
+// scheme reaches RGB style: grayscale -> r=g=b -> all three channel values equal.
 const grayRgb = render(cell, tinySvg,
   { ...defaults, cols: 1, layered: true, layerStyle: 'rgb', scheme: { kind: 'grayscale' } });
-const graySizes = [...grayRgb.matchAll(/<use[^>]*width="([\d.]+)"/g)].map((m) => +m[1]);
-assert.ok(graySizes.length === 3 && graySizes.every((w) => Math.abs(w - graySizes[0]) < 0.01),
-  `grayscale -> equal RGB layers (scheme reached layered), got ${graySizes}`);
+const grayVals = [...grayRgb.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => +m[1] + +m[2] + +m[3]);
+assert.ok(grayVals.length === 3 && grayVals.every((v) => v === grayVals[0]),
+  `grayscale -> equal channel values (scheme reached layered), got ${grayVals}`);
 
 console.log('render.test.ts: ok (solid + CMY + RGB-proportion + scheme reaches layered + multi-icon)');

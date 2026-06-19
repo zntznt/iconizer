@@ -84,31 +84,34 @@ function cmyBody(cell: Cell, settings: Settings, iconId: string): string {
     `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>${s}</g>`;
 }
 
-/** RGB-proportion layered body: 3 solid-filled icons (pure red/green/blue), each
- *  SCALED by that channel's share of the total. Biggest channel forms the base,
- *  smaller channels overlay as concentric accents. No blend — just stacked alpha,
- *  so it's cheaper than CMY and the cell's actual (scheme-transformed) colour
- *  drives the proportions. */
+/** RGB additive layered body: 3 full-size icons carrying each channel's TRUE
+ *  value (r,0,0 / 0,g,0 / 0,0,b), screen-blended over black so where the shapes
+ *  overlap the channels ADD back to the exact cell colour — like RGB subpixels
+ *  combining. screen is the additive mirror of CMY's multiply; black backing is
+ *  screen's identity (mirror of multiply's white). layerOffset spreads the
+ *  channels for a chromatic-split look; at 0 the whole icon = the original colour.
+ *  The cell is already scheme-transformed upstream, so the scheme's colour shows. */
 function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
-  const total = cell.r + cell.g + cell.b || 1; // avoid /0 on a pure-black cell
   const CHANS = [
-    { share: cell.r / total, fill: 'rgb(255,0,0)', dx: -1, dy: -1 },
-    { share: cell.g / total, fill: 'rgb(0,255,0)', dx: 1, dy: 1 },
-    { share: cell.b / total, fill: 'rgb(0,0,255)', dx: -1, dy: 1 },
+    { fill: `rgb(${Math.round(cell.r)},0,0)`, dx: -1, dy: -1 },
+    { fill: `rgb(0,${Math.round(cell.g)},0)`, dx: 1, dy: 1 },
+    { fill: `rgb(0,0,${Math.round(cell.b)})`, dx: -1, dy: 1 },
   ];
-  // largest share first so it's the base layer the others sit on.
-  CHANS.sort((a, b) => b.share - a.share);
-  const base = scaleFor(cell, settings);
+  const { x, y, size } = cellBox(cell, settings);
   const off = settings.layerOffset;
   let s = '';
   for (const ch of CHANS) {
-    if (ch.share <= 0) continue;
-    const { x, y, size } = cellBox(cell, settings, base * ch.share);
     const ox = r2(x + ch.dx * off);
     const oy = r2(y + ch.dy * off);
-    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" color="${ch.fill}"/>`;
+    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
+      `color="${ch.fill}" style="mix-blend-mode:screen"/>`;
   }
-  return s;
+  const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
+  // isolated group over BLACK: screen against black is identity, so the channels
+  // accumulate cleanly to (r,g,b). STATIC like CMY — animating would re-blend
+  // against the wrong backdrop.
+  return `<g style="isolation:isolate">` +
+    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#000"/>${s}</g>`;
 }
 
 /** A layered cell: CMY multiply stack or RGB-proportion stack, then the motion
