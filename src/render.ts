@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
 import { transformColor } from './color.ts';
-import { motionStyle, motionAttrs, apartActive, layerMotionStyle } from './motion.ts';
+import { motionStyle, motionAttrs } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
 // root viewBox scales the whole thing, so this is just internal resolution.
@@ -72,7 +72,6 @@ function emitLayered(cell: Cell, settings: Settings, index: number): string {
   // darks look bad in practice.
   const strength = [1 - cell.r / 255, 1 - cell.g / 255, 1 - cell.b / 255];
   const base = scaleFor(cell, settings);
-  const apart = apartActive(settings); // per-layer phase offset (batch-07b)
   let s = '';
   for (let i = 0; i < n; i++) {
     const scale = r2(base * (1 - i / n)); // even steps: 1, 1-1/n, 1-2/n ...
@@ -84,24 +83,27 @@ function emitLayered(cell: Cell, settings: Settings, index: number): string {
     // Channel strength baked into the ink color (not opacity); multiply-blended
     // against the cell's white backing, 3 inks multiply to exactly (r,g,b).
     const ink = inkFill(INKS[i].chan, strength[i]);
-    // 'apart': merge motion INTO this one style (a 2nd style attr is silently
-    // dropped by the browser). 'together'/no-motion: just the multiply blend.
-    // class="motion" stays on so the reduce-motion guard (animation:none
-    // !important on .motion) still beats the inline animation. a11y holds.
-    const style = apart ? layerMotionStyle(cell, index, i, settings) : 'mix-blend-mode:multiply';
-    const cls = apart ? ' class="motion"' : '';
     s += `<use href="#icon" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
-      `color="${ink}"${cls} style="${style}"/>`;
+      `color="${ink}" style="mix-blend-mode:multiply"/>`;
   }
-  // Own isolated blend group + white backing so multiply sees only this cell,
-  // not its neighbours (which would cascade the whole canvas to black).
-  // Motion class goes on this <g> so the CMY stack moves as ONE unit ('together',
-  // batch-07). In 'apart' (07b) the <g> stays still — each <use> animates above.
   const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
-  const gMotion = apart ? '' : motionAttrs(cell, index, settings);
-  return `<g style="isolation:isolate"${gMotion}>` +
+  // INNER group: isolated blend + white backing. STATIC — the multiply resolves
+  // ONCE here (3 inks -> exact cell colour). Never animated; that's the fix for
+  // the "goes black" bug: a transform promotes the element to its own layer and
+  // the multiply re-blends against a transparent/black backdrop instead of this
+  // white rect. So blending and motion must live on DIFFERENT elements.
+  const blended =
+    `<g style="isolation:isolate">` +
     `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>` +
     `${s}</g>`;
+  // OUTER group: motion only, no blend/isolation. The browser composites the
+  // inner blended result to a buffer once, then cheaply transforms THAT buffer
+  // per frame (no per-frame re-blend) — fixes the jank too. The .motion class
+  // sets transform-box:fill-box + transform-origin:center, so this <g> pivots
+  // around ITS OWN children's box = this icon's centre (canvas-irrelevant).
+  const mo = motionAttrs(cell, index, settings);
+  if (!mo) return blended;
+  return `<g${mo}>${blended}</g>`;
 }
 
 /** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */
@@ -109,16 +111,23 @@ function emitCell(cell: Cell, settings: Settings, index: number): string {
   if (settings.layered) return emitLayered(cell, settings, index);
 
   const { x, y, size } = cellBox(cell, settings);
-  const mo = motionAttrs(cell, index, settings); // class+delay on the single <use>
-  const base = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}"${mo}`;
+  const base = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}"`;
 
+  let el: string;
   if (settings.tintMode === 'filter') {
     const { id } = filterFor(cell.r, cell.g, cell.b);
-    return `${base} filter="url(#${id})"/>`;
+    el = `${base} filter="url(#${id})"/>`;
+  } else {
+    // fill mode: needs the source SVG to use fill="currentColor"/inherit.
+    const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
+    el = `${base} fill="${fill}" color="${fill}"/>`;
   }
-  // fill mode: needs the source SVG to use fill="currentColor"/inherit.
-  const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-  return `${base} fill="${fill}" color="${fill}"/>`;
+  // Motion on a <g> wrapper, not the <use>: fill-box on a <use>->symbol instance
+  // resolves inconsistently (symbol geometry vs placed box). A <g>'s fill-box is
+  // its children's rendered box = this icon in place, so it pivots around its OWN
+  // centre regardless of canvas size. No motion -> bare element, output unchanged.
+  const mo = motionAttrs(cell, index, settings);
+  return mo ? `<g${mo}>${el}</g>` : el;
 }
 
 /**

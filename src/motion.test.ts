@@ -35,38 +35,33 @@ assert.ok(!still.includes('class="motion"'), 'motion:none -> no motion class');
 const o = { ...defaults, cols: 6, motion: 'spin' as const, staggerMode: 'random' as const };
 assert.equal(render(grid, svg, o), render(grid, svg, o), 'random stagger deterministic');
 
-// --- batch-07b: per-layer 'apart' motion ---------------------------------
+// --- layered + motion: blend and transform on SEPARATE elements ----------
+// The multiply blend must NOT be animated (a transform re-blends it against a
+// black/transparent backdrop -> goes black). So motion wraps the blended group
+// in an OUTER <g>, while the inner isolated group stays static.
 const lay = (over: Partial<typeof defaults>) =>
   render(grid, svg, { ...defaults, cols: 6, layered: true, layerCount: 3, ...over });
 
-// apart + wiggle (small-displacement, allowed): the 3 <use> in a cell have 3
-// DISTINCT animation-delay values (per-layer phase offset present).
-const apart = lay({ motion: 'wiggle', layerMotion: 'apart', staggerMode: 'none' });
-// first cell = first <g>...</g>; pull its 3 use delays
-const firstG = apart.slice(apart.indexOf('<g'), apart.indexOf('</g>'));
-const layerDelays = [...firstG.matchAll(/animation-delay:([\d.]+)s/g)].map((m) => m[1]);
-assert.equal(layerDelays.length, 3, 'apart -> 3 per-layer delays');
-assert.equal(new Set(layerDelays).size, 3, 'apart -> 3 DISTINCT delays');
-// merged into ONE style (multiply + animation together), no second style attr
-assert.ok(firstG.includes('mix-blend-mode:multiply;') && firstG.includes('animation:mo'),
-  'apart merges blend + animation in one style');
-assert.ok(!/<use[^>]*style="[^"]*"[^>]*style=/.test(firstG), 'no double style attr');
+// layered + wiggle: motion class on an OUTER <g> that contains the isolated
+// blend group; the inner <g style="isolation:isolate"> has NO motion class.
+const animated = lay({ motion: 'wiggle', staggerMode: 'none' });
+assert.ok(/<g class="motion"><g style="isolation:isolate">/.test(animated),
+  'layered motion -> outer motion <g> wraps the static blend group');
+assert.ok(!/isolation:isolate"[^>]*class="motion"/.test(animated),
+  'the blended (isolated) group is NEVER animated -> no black-out');
+// no per-<use> animation (the layers stay static; the whole cell moves as one).
+assert.ok(!/<use[^>]*class="motion"/.test(animated) && !/<use[^>]*animation/.test(animated),
+  'CMY layers themselves are not animated');
 
-// together: class on the <g>, NOT on the <use>s (batch-07 structure).
-const together = lay({ motion: 'wiggle', layerMotion: 'together' });
-assert.ok(together.includes('<g style="isolation:isolate" class="motion"'), 'together -> class on <g>');
-assert.ok(!/<use[^>]*class="motion"/.test(together), 'together -> no class on <use>');
+// layered, no motion -> bare blend group, no outer wrapper (output unchanged).
+const stillLayered = lay({ motion: 'none' });
+assert.ok(stillLayered.includes('<g style="isolation:isolate">') &&
+  !stillLayered.includes('class="motion"'), 'layered+none -> no motion wrapper');
 
-// spin/pulse TEAR: apart falls back to together (class on <g>, not per-use anim).
-const spinApart = lay({ motion: 'spin', layerMotion: 'apart' });
-assert.ok(spinApart.includes('<g style="isolation:isolate" class="motion"'),
-  'spin+apart -> fell back to together (<g> carries motion)');
-assert.ok(!/<use[^>]*animation:mo/.test(spinApart), 'spin+apart -> no per-layer animation');
+// solid + motion: the <use> is wrapped in a motion <g> (per-icon pivot via the
+// .motion class's fill-box+center), not the motion attrs on the <use> directly.
+const solid = render(grid, svg, { ...defaults, cols: 6, motion: 'wiggle', staggerMode: 'none' });
+assert.ok(/<g class="motion"><use\b/.test(solid), 'solid motion -> <g> wraps the <use>');
+assert.ok(!/<use[^>]*class="motion"/.test(solid), 'solid -> class on the <g>, not the <use>');
 
-// layerMotion inert when not layered, or motion none.
-const notLayered = render(grid, svg, { ...defaults, cols: 6, layered: false, motion: 'wiggle', layerMotion: 'apart' });
-assert.ok(!notLayered.includes('isolation:isolate'), 'not layered -> no CMY groups, apart inert');
-const noMotion = lay({ motion: 'none', layerMotion: 'apart' });
-assert.ok(!noMotion.includes('animation'), 'motion:none -> apart inert, no animation');
-
-console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + 07b apart/gate/inert)');
+console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + layered/solid motion wrappers)');

@@ -14,7 +14,8 @@ export type Settings = {
   motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static
   motionSpeed: number; // animation period in seconds
   staggerMode: StaggerMode; // per-cell animation-delay pattern
-  layerMotion: 'together' | 'apart'; // layered+motion: whole cell, or per-CMY-layer
+  // (layered motion always animates the cell as one unit — see render.ts; the old
+  //  per-layer 'apart' mode broke the multiply blend and was removed.)
 };
 
 export const defaults: Settings = {
@@ -30,5 +31,4 @@ export const defaults: Settings = {
   motion: 'none',
   motionSpeed: 1.5,
   staggerMode: 'ripple',
-  layerMotion: 'together',
 };
