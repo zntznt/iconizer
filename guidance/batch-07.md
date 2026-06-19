@@ -74,11 +74,13 @@ group is `<g style="isolation:isolate">...</g>` (batch-04) — put the `class` +
 `animation-delay` on THAT `<g>`, so the CMY stack moves as a unit and colors stay
 aligned. In solid mode, the class goes on the single `<use>`.
 
-> **Per-layer CMY motion is a STRETCH, explicitly deferred.** Animating each CMY
-> layer with a slight phase offset (living chromatic aberration) is on-theme but
-> trickier — interacts with the isolation group and multiply blend. Ship `together`
-> first; only attempt `apart` if the basics feel good. `ponytail:` comment the
-> seam (the `<g>` is where per-layer animation would later hang off children).
+> **Per-layer CMY motion is a STRETCH, explicitly deferred — see
+> `guidance/batch-07b.md`.** Animating each CMY layer with a slight phase offset
+> (living chromatic aberration) is on-theme but trickier — motion and color are
+> coupled through the multiply blend, so it has a low amplitude ceiling. Ship
+> `together` first; only attempt `apart` if the basics feel good. `ponytail:`
+> comment the seam (this `<g>` is where 07b's per-layer animation hangs off
+> children instead).
 
 ## Accessibility (don't skip — it's one block)
 
