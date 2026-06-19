@@ -75,11 +75,13 @@ Annotated so nobody prunes them as "obvious":
 
 - **L1** Toggle layered on: look switches from flat tint to the CMY stack. Off ==
   byte-for-byte the Phase 2 solid-tint look (no regression).
-- **L2 (the muddiness check)** A mid-tone photo renders as recognizable color, NOT
-  muddy gray/brown. If muddy, opacity-per-channel is wrong — layers must use
-  opacity ∝ ink strength, not fills alone. This is the brief's central mechanism.
-- **L3 (near-white)** A near-white region -> all CMY layers near-transparent ->
-  light cells, not dense overlap.
+- **L2 (the color check)** A mid-tone photo renders as recognizable color, NOT
+  greyscale/black. If grey, the multiply mechanism is broken — layers use
+  `mix-blend-mode:multiply` with channel strength baked into `color=` (NOT `fill=`;
+  icons are currentColor) inside a per-cell `isolation:isolate` group over white.
+  See batch-04 append. (Measure: a cell should match its source color within ~2/255.)
+- **L3 (near-white)** A near-white region -> inks near-white -> multiply barely
+  darkens -> light cells. A dark region -> all channels subtracted -> near-black.
 - **L4 (offset slider)** Offset > 0 produces the chromatic-aberration shimmer;
   offset == 0 is clean concentric.
 - **L5 (layerCount)** 2 vs 3 inks visibly differ.
@@ -96,3 +98,25 @@ Annotated so nobody prunes them as "obvious":
   loads the app — NOT a blank page. Blank + asset 404s in console == `base`
   mismatch. This is the #1 Pages failure.
 - **D2** Full upload -> render -> export flow works on the live URL, not just local.
+
+## Phase 7 — Motion (`motion.ts`)
+
+- **M1 (THE gotcha — pivot in place)** Set motion=spin. Icons rotate IN PLACE, do
+  NOT fling across the canvas in a big arc. If they fly off, `transform-box:fill-box`
+  is missing. Verify by measuring: a `.motion` element's screen-center stays fixed
+  across animation frames (builder confirmed center {33,318} steady mid-spin).
+- **M2 (ripple, not buzz)** staggerMode=ripple: a wave visibly rolls diagonally
+  across the mosaic — not a uniform vibration. `none` == all in phase.
+- **M3 (export survives — the free win)** Export an animated SVG, open the
+  downloaded `.svg` in a fresh browser tab — STILL animated. The `<style>`/`@keyframes`
+  is inside the file. This is the payoff for choosing CSS over a JS loop; don't lose it.
+- **M4 (layered moves as a unit)** layered + motion: the CMY stack moves together,
+  colors stay registered. Class is on the per-cell `<g>` (verify: g.motion count =
+  cell count, use.motion = 0). NOTE: settings changes are debounced — wait a beat
+  before querying the DOM or you'll race the redraw (builder hit this).
+- **M5 (reduce-motion)** OS reduce-motion ON (System Settings > Accessibility >
+  Display > Reduce motion) -> mosaic is static. The guard is always emitted when
+  motion is active; this confirms it's honored.
+- **M6 (perf)** Fine grid (50+ cols, thousands of `<use>`) animates smoothly
+  (~60fps). If it janks: `will-change:transform` on `.motion` is the first lever,
+  capping animated cell count the fallback. ponytail the ceiling if hit.
