@@ -1,4 +1,13 @@
-# Batch 07b — STRETCH: Per-layer CMY motion (living chromatic aberration)
+# Batch 07b — STRETCH: Per-layer CMY motion — BUILT, THEN REMOVED
+
+> **STATUS: REMOVED (commit 3f139a8). DO NOT IMPLEMENT.** This was built and shipped,
+> then ripped out because it's fundamentally broken: animating individual CMY layers
+> moves them out of overlap AND promotes each blended layer to its own compositing
+> layer, so `mix-blend-mode:multiply` re-blends against black — the mosaic goes black
+> and janks. The whole premise (per-layer phase offset) is incompatible with the
+> multiply blend. Layered motion now animates the whole cell as ONE unit via an outer
+> non-blended `<g>` wrapper (see batch-07 append). This doc is kept ONLY as a record
+> of the dead end. Everything below is the original (failed) plan.
 
 Optional follow-on to batch-07. Only attempt after unified motion (07) ships and
 feels good. This makes the three CMY layers in a cell animate on slightly offset

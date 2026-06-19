@@ -82,6 +82,41 @@ aligned. In solid mode, the class goes on the single `<use>`.
 > comment the seam (this `<g>` is where 07b's per-layer animation hangs off
 > children instead).
 
+---
+
+## APPENDED — CORRECTION: how layered motion actually works (post-bug-fix)
+
+The "put the motion class on the isolated `<g>`" instruction above is WRONG and
+was fixed (commit 3f139a8). **You cannot animate a multiply-blended element.** A
+`transform` promotes it to its own compositing layer, and `mix-blend-mode:multiply`
+then re-blends against a transparent/black backdrop instead of the cell's white
+rect — the whole mosaic goes BLACK. It also janks: thousands of animated blend
+layers re-blend every frame.
+
+**Correct structure — blend and motion on SEPARATE elements:**
+
+    <g class="motion">                        <!-- OUTER: motion only, no blend -->
+      <g style="isolation:isolate">           <!-- INNER: static blend, NEVER moves -->
+        <rect ... fill="#fff"/>                <!-- white backing for multiply -->
+        <use ... style="mix-blend-mode:multiply"/>  x2-3
+      </g>
+    </g>
+
+The inner blend resolves ONCE (exact cell color, byte-identical to batch-04). The
+browser composites it to a buffer, then the outer `<g>` cheaply transforms that
+buffer per frame. Color correct, fast, and — because `.motion` uses
+`transform-box:fill-box; transform-origin:center` on a `<g>` whose fill-box is its
+children's placed box — each icon pivots around ITS OWN centre (canvas-irrelevant).
+
+**07b ('apart' per-layer motion) was REMOVED.** Animating individual CMY layers is
+precisely what tears the blend. There is no per-layer motion; layered always
+animates as one unit. `batch-07b.md` is kept only as a record of why it doesn't
+work.
+
+Solid (non-layered) motion uses the same `<g>`-wrapper pattern, not motion attrs on
+the bare `<use>` — a `<use>`->`<symbol>` instance's fill-box is unreliable across
+browsers; a `<g>` wrapper's fill-box is its children's box, so it pivots in place.
+
 ## Accessibility (don't skip — it's one block)
 
 Wrap the keyframes so motion respects the OS "reduce motion" setting:

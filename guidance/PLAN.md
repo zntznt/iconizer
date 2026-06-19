@@ -58,9 +58,12 @@ One pure function, everything else is plumbing:
 
 Batch 1 = Phase 0 + Phase 1. See `guidance/batch-01.md`.
 
-Phases 0-5, 7, and 7b (per-layer CMY motion stretch) shipped. Only **6 (deploy)**
-is outstanding — the app is feature-complete locally; deploy is the remaining step
-to put it live. New fun-first twists welcome anytime.
+Phases 0-5 and 7 (motion) shipped. **7b (per-layer 'apart' CMY motion) was built
+then REMOVED** — animating individual CMY layers tore the multiply blend (black-out
++ jank). Layered motion now animates the whole cell as one unit via an outer
+non-blended `<g>` wrapper (blend resolves once, statically; transform moves the
+buffer). See the batch-07 append. Only **6 (deploy)** is outstanding — the app is
+feature-complete locally. New fun-first twists welcome anytime.
 
 ## Deliberately skipped (add when needed)
 

@@ -110,10 +110,15 @@ Annotated so nobody prunes them as "obvious":
 - **M3 (export survives — the free win)** Export an animated SVG, open the
   downloaded `.svg` in a fresh browser tab — STILL animated. The `<style>`/`@keyframes`
   is inside the file. This is the payoff for choosing CSS over a JS loop; don't lose it.
-- **M4 (layered moves as a unit)** layered + motion: the CMY stack moves together,
-  colors stay registered. Class is on the per-cell `<g>` (verify: g.motion count =
-  cell count, use.motion = 0). NOTE: settings changes are debounced — wait a beat
-  before querying the DOM or you'll race the redraw (builder hit this).
+- **M4 (layered moves as a unit, stays COLOURED)** layered + motion: the CMY stack
+  moves together AND stays in colour — it must NOT go black (that was the bug). The
+  motion class is on an OUTER `<g class="motion">` that wraps the static
+  `<g style="isolation:isolate">` blend group; the blended group is never animated.
+  Verify: pick an animated cell, confirm it renders its source colour (±2/255), not
+  black. NOTE: settings changes are debounced — wait a beat before querying the DOM.
+- **M4b (perf — was janky)** layered + motion at a fine grid stays smooth (~60fps).
+  If it janks, the blend is being re-computed per frame — check the blend group is
+  static and only the outer `<g>` carries the transform.
 - **M5 (reduce-motion)** OS reduce-motion ON (System Settings > Accessibility >
   Display > Reduce motion) -> mosaic is static. The guard is always emitted when
   motion is active; this confirms it's honored.
@@ -121,26 +126,9 @@ Annotated so nobody prunes them as "obvious":
   (~60fps). If it janks: `will-change:transform` on `.motion` is the first lever,
   capping animated cell count the fallback. ponytail the ceiling if hit.
 
-## Phase 7b — Per-layer CMY motion (`motion.ts` apart mode)
+## Phase 7b — REMOVED
 
-Only active when: layered ON + motion in {wiggle,swing,bob} + layerMotion=apart.
-
-- **MB1 (the shimmer)** apart + wiggle: cyan/magenta/yellow visibly separate and
-  rejoin — a colored chromatic fringe that breathes. Image stays READABLE, not
-  desaturated to mush. The streaks bloom at the cycle edges, register at rest.
-- **MB2 (the ceiling is real)** Crank speed/amplitude: confirm the documented
-  failure mode — fringes bloom, color washes toward RGB mush. This proves the
-  coupling ceiling exists; it's why only small motions get apart.
-- **MB3 (tear-gate)** apart + spin (or pulse): falls back to TOGETHER — the stack
-  moves as one unit, no per-layer tearing. Verify: g.motion = cell count, no
-  per-`<use>` animation. (`APART_OK` excludes spin/pulse.)
-- **MB4 (export survives)** Export an apart-animated SVG, reopen the file: the
-  per-layer shimmer is still alive.
-- **MB5 (a11y survives the stretch — the subtle one)** OS reduce-motion ON, apart
-  mode active: mosaic is STATIC. apart animates via INLINE style, which only the
-  guard's `animation:none!important` (on `.motion`, which apart `<use>`s keep) can
-  override. If this fails, the guard lost its `!important` or the class dropped —
-  motion forced on opted-out users. Re-test after any motion-attr change.
-- **MB6 (no double-style)** Inspect an apart `<use>`: exactly ONE `style` attr
-  carrying both `mix-blend-mode:multiply` AND `animation`. Two style attrs = the
-  browser drops one silently. (Builder verified styleAttrCount:1, both honored.)
+Per-layer 'apart' CMY motion was built then removed (commit 3f139a8) — animating
+individual CMY layers breaks the multiply blend (black-out + jank). The MB1-MB6
+checks that were here are deleted. Layered motion is covered by M4/M4b above
+(animates as one unit, stays coloured, stays smooth).
