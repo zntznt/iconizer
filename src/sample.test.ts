@@ -23,4 +23,16 @@ for (const c of cells) {
   assert.ok(Math.abs(c.brightness - 0.2126) < 0.001, `brightness ~0.21, got ${c.brightness}`);
 }
 
-console.log('sample.test.ts: ok (4 red cells, brightness ~0.21)');
+// Background composite (batch-02 append): sample() fills the canvas with
+// settings.background before drawImage, so a fully-transparent source over
+// '#000000' lands as all-zero RGB in getImageData. averageCells of that buffer
+// must read black — confirming the composite drives the color, not a hardcoded
+// white. ponytail: the canvas fillStyle plumbing itself is verified in-browser;
+// here we assert the pure averaging of the buffer it produces.
+const blackPx = new Uint8ClampedArray(W * H * 4); // all zeros = transparent-over-black
+const blackCells = averageCells(blackPx, W, H, 2);
+for (const c of blackCells) {
+  assert.ok(c.r < 1 && c.g < 1 && c.b < 1, `black bg -> black cell, got ${c.r},${c.g},${c.b}`);
+}
+
+console.log('sample.test.ts: ok (4 red cells b~0.21; black-bg composite -> black)');

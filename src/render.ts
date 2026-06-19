@@ -82,10 +82,13 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
   // a handful of <filter> defs. Drop QUANT (finer buckets) if banding shows.
 
   const defs = `<defs>${symbol}${[...filters.values()].join('')}</defs>`;
+  // Same background the source was sampled against, so sample <-> display <->
+  // export all match. Sits behind the icons.
+  const bg = `<rect width="${w}" height="${h}" fill="${settings.background}"/>`;
   const uses = grid.map((c) => emitCell(c, settings)).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +
-    `width="${w}" height="${h}">${defs}${uses}</svg>`;
+    `width="${w}" height="${h}">${defs}${bg}${uses}</svg>`;
 }
 
 export { emitCell };

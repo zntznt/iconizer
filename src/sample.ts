@@ -74,10 +74,10 @@ export function sample(
   canvas.height = height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('2d canvas context unavailable');
-  // Flatten transparency onto white so transparent PNGs don't average toward
-  // black. ponytail: white is the default bg; make it a setting if users want
-  // to tint or composite onto the source instead.
-  ctx.fillStyle = '#fff';
+  // Flatten transparency onto settings.background so transparent PNGs don't
+  // average toward black. The composite color is an input to the color model
+  // (it sets the CMY floor in Phase 4), not just cosmetic — see batch-02 append.
+  ctx.fillStyle = settings.background;
   ctx.fillRect(0, 0, width, height);
   ctx.drawImage(image, 0, 0, width, height);
 

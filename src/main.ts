@@ -40,18 +40,26 @@ $('svg').addEventListener('change', async (e) => {
   redraw();
 });
 
-// cols changes the grid, so it must re-sample — but we only have the bitmap at
-// upload time. Re-sampling needs the image kept around; cheapest is to re-read
-// from the file input on cols change.
+// cols and background change the sampled grid, so they must re-sample. We only
+// have the bitmap at upload time; cheapest is to re-read the File from the input.
+async function resample() {
+  const file = ($('image') as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const bitmap = await createImageBitmap(file);
+  cells = sample(bitmap, settings);
+  bitmap.close();
+}
+
 $('cols').addEventListener('input', async (e) => {
   settings.cols = +(e.target as HTMLInputElement).value;
   $('colsVal').textContent = String(settings.cols);
-  const file = ($('image') as HTMLInputElement).files?.[0];
-  if (file) {
-    const bitmap = await createImageBitmap(file);
-    cells = sample(bitmap, settings);
-    bitmap.close();
-  }
+  await resample();
+  scheduleRedraw();
+});
+
+$('background').addEventListener('input', async (e) => {
+  settings.background = (e.target as HTMLInputElement).value;
+  await resample();
   scheduleRedraw();
 });
 

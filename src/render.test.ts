@@ -22,4 +22,10 @@ const fout = render(grid, svg, { ...defaults, cols: 2, tintMode: 'filter' });
 assert.ok(!fout.includes('fill="rgb('), 'filter mode should not set rgb fills');
 assert.equal((fout.match(/filter="url\(#/g) ?? []).length, 2, 'two filtered uses');
 
-console.log('render.test.ts: ok (2 uses, symbol, red+blue fills, filter mode)');
+// background rect uses settings.background, behind the uses (batch-02 append).
+const bgOut = render(grid, svg, { ...defaults, cols: 2, background: '#000000' });
+assert.ok(bgOut.includes('<rect width="32" height="16" fill="#000000"/>'),
+  'expected a full-size background rect in the chosen color');
+assert.ok(bgOut.indexOf('<rect') < bgOut.indexOf('<use'), 'bg rect must precede uses');
+
+console.log('render.test.ts: ok (2 uses, symbol, fills, filter mode, bg rect)');
