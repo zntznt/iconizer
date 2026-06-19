@@ -66,10 +66,16 @@ const g16: Cell[] = [];
 for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
   g16.push({ col: c, row: r, r: 120, g: 120, b: 120, brightness: 0.47 });
 const svg2 = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
-const b1 = (render(g16, svg2, { ...defaults, cols: 4, blockSize: 1 }).match(/<use/g) ?? []).length;
-const b2 = (render(g16, svg2, { ...defaults, cols: 4, blockSize: 2 }).match(/<use/g) ?? []).length;
-assert.equal(b1, 16, 'block 1 -> one icon per cell');
-assert.equal(b2, 4, 'block 2 -> 4 merged icons');
+const r1 = render(g16, svg2, { ...defaults, cols: 4, blockSize: 1 });
+const r2x = render(g16, svg2, { ...defaults, cols: 4, blockSize: 2 });
+assert.equal((r1.match(/<use/g) ?? []).length, 16, 'block 1 -> one icon per cell');
+assert.equal((r2x.match(/<use/g) ?? []).length, 4, 'block 2 -> 4 merged icons');
+// Canvas footprint stays constant: rendered width/height is the same for both,
+// only the viewBox (internal coord space) shrinks so icons scale up to fill.
+const px = (s: string) => s.match(/width="(\d+)" height="(\d+)"/)!.slice(1, 3).join('x');
+assert.equal(px(r1), px(r2x), 'block does NOT change canvas size — icons grow to fill');
+assert.ok(/viewBox="0 0 64 64"/.test(r1) && /viewBox="0 0 32 32"/.test(r2x),
+  'viewBox shrinks with block (64->32) while rendered px is constant');
 
 // Scheme composes with BOTH modes (batch-05). render() transforms upstream, so
 // a scheme must reach the layered path too — not just the solid branch.

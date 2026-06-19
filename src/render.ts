@@ -144,12 +144,20 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
   // Pool N x N source cells into one averaged icon (blockSize). Must run before
   // we read cols/rows: it re-indexes the grid to a smaller one, so every
   // downstream use (canvas size, cell placement, filter dedup) stays consistent.
+  const fullRows = Math.max(...grid.map((c) => c.row)) + 1; // before pooling
   grid = poolCells(grid, settings.cols, settings.blockSize);
   // Derive grid dims from the (possibly pooled) grid, not settings.cols.
   const cols = Math.max(...grid.map((c) => c.col)) + 1;
   const rows = Math.max(...grid.map((c) => c.row)) + 1;
+  // Internal coordinate space = the pooled grid at CELL each. The icons render
+  // here, naturally smaller when pooled (fewer, bigger cells).
   const w = cols * CELL;
   const h = rows * CELL;
+  // Rendered (pixel) size = the UN-pooled canvas, so the footprint stays constant
+  // as block grows: the viewBox content is scaled up to fill it. block only
+  // changes how many icons cover the same area, not the canvas size.
+  const outW = settings.cols * CELL;
+  const outH = fullRows * CELL;
 
   // Single upstream colour remap: everything downstream (filter defs, solid
   // fill, CMY split) consumes the transformed colour, so schemes compose with
@@ -181,7 +189,7 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
   const uses = grid.map((c, i) => emitCell(c, settings, i)).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +
-    `width="${w}" height="${h}">${style}${defs}${bg}${uses}</svg>`;
+    `width="${outW}" height="${outH}">${style}${defs}${bg}${uses}</svg>`;
 }
 
 export { emitCell };
