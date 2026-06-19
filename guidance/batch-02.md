@@ -129,3 +129,27 @@ behavior byte-for-byte.
 
 - `sample()` of a fully-transparent image with `background:'#000000'` yields cells
   with `r=g=b≈0` (not 255). Confirms the setting actually drives the composite.
+
+---
+
+## APPENDED 2 — default tintMode decision (planner call, post-build)
+
+Builder flagged it correctly: `fill` mode only tints `currentColor`/inherit SVGs,
+but virtually every real icon pack (Font Awesome, Material, Lucide) ships
+SOLID-color art with baked `fill="#000"`. So the brief's default (`tintMode:'fill'`)
+silently no-ops on the most common input. The flood-through-alpha `filter` mode has
+no such requirement — it recolors any art via shape alpha.
+
+**Decision: default `tintMode` to `'filter'`.** It "just works" on real packs.
+`fill` stays as an opt-in for `currentColor` art (genuinely sharper/lighter output
+when the input supports it). Change `defaults.tintMode` in `settings.ts` to
+`'filter'`.
+
+**No auto-detect.** Rejected sniffing the SVG for `currentColor` to switch modes:
+the heuristic is fragile (SVGs mix `currentColor` + hardcoded fills), it forces
+`parseSvg` to inspect content, and two clearly-labeled modes already cover the
+space. A one-line UI hint beats a detector — keep the modes honest and explicit.
+
+UI: make sure the mode toggle's labels say which input each suits — e.g.
+`filter (any SVG)` / `fill (currentColor icons — crisper)`. No new self-check;
+this is a default value + label change.
