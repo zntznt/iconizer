@@ -1,4 +1,5 @@
 import type { Settings } from './settings.ts';
+import { LUMA } from './color.ts';
 
 export type Cell = {
   col: number;
@@ -54,7 +55,7 @@ export function averageCells(
 
       // ponytail: averaged in raw sRGB, not linear light. Gamma-correct
       // (decode -> average -> encode) if tonal accuracy ever matters.
-      const brightness = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      const brightness = (LUMA.r * r + LUMA.g * g + LUMA.b * b) / 255;
       cells.push({ col, row, r, g, b, brightness });
     }
   }

@@ -3,6 +3,7 @@ import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng } from './export.ts';
+import type { Scheme, RGB } from './color.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -97,6 +98,43 @@ $('layerOffset').addEventListener('input', (e) => {
   settings.layerOffset = +(e.target as HTMLInputElement).value;
   scheduleRedraw();
 });
+
+// hex "#rrggbb" -> RGB
+const hex2rgb = (h: string): RGB => ({
+  r: parseInt(h.slice(1, 3), 16),
+  g: parseInt(h.slice(3, 5), 16),
+  b: parseInt(h.slice(5, 7), 16),
+});
+
+function readScheme(): Scheme {
+  const kind = ($('scheme') as HTMLSelectElement).value;
+  switch (kind) {
+    case 'posterize':
+      return { kind, levels: +($('levels') as HTMLInputElement).value };
+    case 'duotone':
+      return { kind, dark: hex2rgb(($('duoDark') as HTMLInputElement).value),
+        light: hex2rgb(($('duoLight') as HTMLInputElement).value) };
+    case 'palette':
+      return { kind, colors: ['pal0', 'pal1', 'pal2'].map((id) => hex2rgb(($(id) as HTMLInputElement).value)) };
+    default:
+      return { kind } as Scheme; // none | grayscale | invert
+  }
+}
+
+function syncSchemeUI() {
+  const kind = ($('scheme') as HTMLSelectElement).value;
+  ($('p-levels') as HTMLElement).hidden = kind !== 'posterize';
+  ($('p-duotone') as HTMLElement).hidden = kind !== 'duotone';
+  ($('p-palette') as HTMLElement).hidden = kind !== 'palette';
+}
+
+for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pal2']) {
+  $(id).addEventListener('input', () => {
+    settings.scheme = readScheme();
+    syncSchemeUI();
+    scheduleRedraw();
+  });
+}
 
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);

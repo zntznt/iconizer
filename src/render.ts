@@ -1,6 +1,7 @@
 import type { Cell } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
+import { transformColor } from './color.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
 // root viewBox scales the whole thing, so this is just internal resolution.
@@ -118,6 +119,13 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
   const rows = Math.max(...grid.map((c) => c.row)) + 1;
   const w = cols * CELL;
   const h = rows * CELL;
+
+  // Single upstream colour remap: everything downstream (filter defs, solid
+  // fill, CMY split) consumes the transformed colour, so schemes compose with
+  // both modes for free. 'none' is identity -> prior output unchanged.
+  if (settings.scheme.kind !== 'none') {
+    grid = grid.map((c) => ({ ...c, ...transformColor(c, settings.scheme) }));
+  }
 
   const symbol = `<symbol id="icon" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`;
 

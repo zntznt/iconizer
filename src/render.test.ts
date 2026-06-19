@@ -54,4 +54,23 @@ for (const [ch, want] of [[0, 180], [1, 90], [2, 40]] as const) {
 const solid = emitCell(mid, { ...defaults, layered: false });
 assert.equal((solid.match(/<use\b/g) ?? []).length, 1, 'layered:false -> 1 <use>');
 
-console.log('render.test.ts: ok (solid + filter + bg + layered CMY-multiply)');
+// Scheme composes with BOTH modes (batch-05). render() transforms upstream, so
+// a scheme must reach the layered path too — not just the solid branch.
+const cell: Cell[] = [{ col: 0, row: 0, r: 200, g: 100, b: 50, brightness: 0.5 }];
+const tinySvg = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
+
+// invert(200,100,50) = (55,155,205). Layered inks must multiply to THAT, not the
+// original — proving the scheme reached emitLayered, not just the solid path.
+const inv = render(cell, tinySvg,
+  { ...defaults, cols: 1, layered: true, layerCount: 3, scheme: { kind: 'invert' } });
+const invFills = [...inv.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => [+m[1], +m[2], +m[3]]);
+const invProduct = [0, 1, 2].map((ch) =>
+  Math.round(invFills.reduce((acc, f) => (acc * f[ch]) / 255, 255)));
+assert.deepEqual(invProduct, [55, 155, 205], `layered+invert -> inverted color, got ${invProduct}`);
+
+// Same scheme reaches the solid path's fill.
+const invSolid = render(cell, tinySvg,
+  { ...defaults, cols: 1, tintMode: 'fill', scheme: { kind: 'invert' } });
+assert.ok(invSolid.includes('fill="rgb(55,155,205)"'), 'solid+invert -> inverted fill');
+
+console.log('render.test.ts: ok (solid + filter + bg + layered CMY + scheme compose)');

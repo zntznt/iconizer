@@ -42,6 +42,25 @@
       <label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label>
     </div>
     <div class="controls">
+      <label>scheme
+        <select id="scheme">
+          <option value="none">none</option>
+          <option value="grayscale">grayscale</option>
+          <option value="invert">invert</option>
+          <option value="posterize">posterize</option>
+          <option value="duotone">duotone</option>
+          <option value="palette">palette</option>
+        </select>
+      </label>
+      <label id="p-levels" hidden>levels <input id="levels" type="range" min="2" max="8" step="1" value="4" /></label>
+      <label id="p-duotone" hidden>dark <input id="duoDark" type="color" value="#1a0033" /> light <input id="duoLight" type="color" value="#1ed760" /></label>
+      <span id="p-palette" hidden>palette
+        <input id="pal0" type="color" value="#ff0000" />
+        <input id="pal1" type="color" value="#00ff00" />
+        <input id="pal2" type="color" value="#0000ff" />
+      </span>
+    </div>
+    <div class="controls">
       <button id="dlSvg" type="button" disabled>Download SVG</button>
       <button id="dlPng" type="button" disabled>Download PNG</button>
       <label>scale

@@ -1,3 +1,5 @@
+import type { Scheme } from './color.ts';
+
 export type Settings = {
   cols: number; // grid columns; rows derived from image aspect ratio
   tintMode: 'fill' | 'filter';
@@ -7,7 +9,7 @@ export type Settings = {
   layered: boolean; // false -> solid-tint path; true -> CMY-stack per cell
   layerCount: 2 | 3; // inks to stack (3 = CMY, 2 = CM)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
-  // (more fields land in later phases)
+  scheme: Scheme; // remap each cell color upstream of solid/layered
 };
 
 export const defaults: Settings = {
@@ -19,4 +21,5 @@ export const defaults: Settings = {
   layered: false,
   layerCount: 3,
   layerOffset: 0,
+  scheme: { kind: 'none' },
 };
