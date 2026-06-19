@@ -10,13 +10,17 @@
       .controls label { display: flex; gap: 0.4rem; align-items: center; }
       #out { margin-top: 1rem; max-width: 100%; }
       #out svg { max-width: 100%; height: auto; border: 1px solid #ddd; }
+      #iconList { display: flex; flex-direction: column; gap: 0.2rem; }
+      .icon-row { display: flex; gap: 0.5rem; align-items: center; font-size: 13px; }
+      .icon-row button { cursor: pointer; line-height: 1; }
     </style>
   </head>
   <body>
     <h1>iconizer</h1>
     <div class="controls">
       <label>image <input id="image" type="file" accept="image/*" /></label>
-      <label>icon SVG <input id="svg" type="file" accept=".svg,image/svg+xml" /></label>
+      <label>add icon SVG(s) <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label>
+      <div id="iconList" title="dark cells use the top icon, light cells the bottom"></div>
     </div>
     <div class="controls">
       <label>cols <input id="cols" type="range" min="4" max="120" value="32" /><span id="colsVal">32</span></label>

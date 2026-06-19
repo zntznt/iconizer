@@ -7,13 +7,14 @@ const grid: Cell[] = [
   { col: 0, row: 0, r: 255, g: 0, b: 0, brightness: 0.21 },
   { col: 1, row: 0, r: 0, g: 0, b: 255, brightness: 0.07 },
 ];
-const svg = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
+const svg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
 
 const out = render(grid, svg, { ...defaults, cols: 2 });
 
 const useCount = (out.match(/<use\b/g) ?? []).length;
 assert.equal(useCount, 2, `expected 2 <use, got ${useCount}`);
-assert.ok(out.includes('<symbol id="icon"'), 'expected one <symbol id="icon"');
+assert.ok(out.includes('<symbol id="icon0"'), 'expected one <symbol id="icon0"');
+assert.ok(out.includes('href="#icon0"'), 'single icon -> uses reference #icon0');
 assert.ok(out.includes('fill="rgb(255,0,0)"'), 'expected a red fill');
 assert.ok(out.includes('fill="rgb(0,0,255)"'), 'expected a blue fill');
 // solid tinting via color=/fill=, never SVG filters (those re-rasterize per frame
@@ -64,7 +65,7 @@ assert.ok(big.includes('x="-8"'), 'oversized icon is centered (negative pad -> o
 const g16: Cell[] = [];
 for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
   g16.push({ col: c, row: r, r: 120, g: 120, b: 120, brightness: 0.47 });
-const svg2 = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
+const svg2 = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
 const r1 = render(g16, svg2, { ...defaults, cols: 4, blockSize: 1 });
 const r2x = render(g16, svg2, { ...defaults, cols: 4, blockSize: 2 });
 assert.equal((r1.match(/<use/g) ?? []).length, 16, 'block 1 -> one icon per cell');
@@ -79,7 +80,7 @@ assert.ok(/viewBox="0 0 64 64"/.test(r1) && /viewBox="0 0 32 32"/.test(r2x),
 // Scheme composes with BOTH modes (batch-05). render() transforms upstream, so
 // a scheme must reach the layered path too — not just the solid branch.
 const cell: Cell[] = [{ col: 0, row: 0, r: 200, g: 100, b: 50, brightness: 0.5 }];
-const tinySvg = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
+const tinySvg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
 
 // invert(200,100,50) = (55,155,205). Layered inks must multiply to THAT, not the
 // original — proving the scheme reached emitLayered, not just the solid path.
@@ -95,4 +96,19 @@ const invSolid = render(cell, tinySvg,
   { ...defaults, cols: 1, scheme: { kind: 'invert' } });
 assert.ok(invSolid.includes('fill="rgb(55,155,205)"'), 'solid+invert -> inverted fill');
 
-console.log('render.test.ts: ok (solid + bg + layered CMY + scheme compose; no filters)');
+// Multi-icon: N symbols, each cell picks by brightness (dark -> icon0, light -> last).
+const twoIcons = [
+  { innerSvg: '<circle r="12"/>', viewBox: '0 0 24 24' },
+  { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' },
+];
+const dark: Cell[] = [{ col: 0, row: 0, r: 10, g: 10, b: 10, brightness: 0.04 }];
+const light: Cell[] = [{ col: 0, row: 0, r: 240, g: 240, b: 240, brightness: 0.94 }];
+const mOut = render(dark, twoIcons, { ...defaults, cols: 1 });
+assert.ok(mOut.includes('<symbol id="icon0"') && mOut.includes('<symbol id="icon1"'),
+  '2 icons -> 2 symbols');
+assert.ok(render(dark, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon0"'),
+  'dark cell -> icon0 (densest, first)');
+assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon1"'),
+  'light cell -> icon1 (last)');
+
+console.log('render.test.ts: ok (solid + bg + layered CMY + scheme + multi-icon)');

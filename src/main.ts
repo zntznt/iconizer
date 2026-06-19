@@ -12,12 +12,12 @@ const settings: Settings = { ...defaults };
 
 // Inputs that don't change every render: cache the parsed results.
 let cells: Cell[] | null = null;
-let icon: ParsedSvg | null = null;
+const icons: { name: string; svg: ParsedSvg }[] = []; // dark->light order
 let lastSvg = ''; // latest render() output, reused by export (no re-render)
 
 function redraw() {
-  if (!cells || !icon) return;
-  lastSvg = render(cells, icon, settings);
+  if (!cells || icons.length === 0) return;
+  lastSvg = render(cells, icons.map((i) => i.svg), settings);
   out.innerHTML = lastSvg;
   ($('dlSvg') as HTMLButtonElement).disabled = false;
   ($('dlPng') as HTMLButtonElement).disabled = false;
@@ -39,10 +39,40 @@ $('image').addEventListener('change', async (e) => {
   redraw();
 });
 
+// Render the icon list with remove buttons. Order = dark->light draw order.
+function renderIconList() {
+  const list = $('iconList');
+  list.innerHTML = '';
+  icons.forEach((it, i) => {
+    const row = document.createElement('div');
+    row.className = 'icon-row';
+    row.innerHTML = `<span>${i + 1}. ${it.name}</span><button data-i="${i}" type="button">×</button>`;
+    list.appendChild(row);
+  });
+}
+
+// Add one or more SVGs to the list (the file input allows multiple).
 $('svg').addEventListener('change', async (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  icon = parseSvg(await file.text());
+  const files = (e.target as HTMLInputElement).files;
+  if (!files?.length) return;
+  for (const file of files) {
+    try {
+      icons.push({ name: file.name, svg: parseSvg(await file.text()) });
+    } catch {
+      alert(`Couldn't parse ${file.name} — skipped.`);
+    }
+  }
+  (e.target as HTMLInputElement).value = ''; // allow re-adding the same file
+  renderIconList();
+  redraw();
+});
+
+// Remove an icon (event delegation on the list).
+$('iconList').addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest('button');
+  if (!btn) return;
+  icons.splice(+btn.dataset.i!, 1);
+  renderIconList();
   redraw();
 });
 

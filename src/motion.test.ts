@@ -3,7 +3,7 @@ import { render } from './render.ts';
 import type { Cell } from './sample.ts';
 import { defaults } from './settings.ts';
 
-const svg = { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' };
+const svg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
 // 6x6 grid so stagger has distinct cells.
 const grid: Cell[] = [];
 for (let row = 0; row < 6; row++)

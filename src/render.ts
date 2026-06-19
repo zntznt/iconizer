@@ -24,6 +24,16 @@ function scaleFor(cell: Cell, settings: Settings): number {
   return settings.iconScale * tonal;
 }
 
+/** Which icon a cell draws, by brightness: dark cell -> icon 0, light -> last.
+ *  Order your SVGs dense->sparse (like ASCII art: '@' dark ... '.' light). */
+function iconFor(cell: Cell, count: number): string {
+  if (count <= 1) return 'icon0';
+  // dark cell (low brightness) -> icon0; light -> last. clamp so brightness==1
+  // doesn't overflow to index count.
+  const i = Math.min(count - 1, Math.floor(cell.brightness * count));
+  return `icon${i}`;
+}
+
 /** Centered placement box for a cell's icon at a given scale factor. */
 function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
   const size = r2(CELL * scale);
@@ -51,8 +61,9 @@ function inkFill(chan: number, s: number): string {
 
 /** Layered CMY stack for one cell: 2-3 multiply-blended <use> that subtract
  *  R/G/B channels so the stack reads as the actual cell color. */
-function emitLayered(cell: Cell, settings: Settings, index: number): string {
+function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
   const n = settings.layerCount;
+  const iconId = iconFor(cell, iconCount);
   // ponytail: naive CMY — no black (K) channel, no per-channel screen angles.
   // Real CMYK extracts K so darks stay neutral (not muddy-brown) and rotates
   // each ink's screen to avoid moire. We stack SVGs, not print — add only if
@@ -70,7 +81,7 @@ function emitLayered(cell: Cell, settings: Settings, index: number): string {
     // Channel strength baked into the ink color (not opacity); multiply-blended
     // against the cell's white backing, 3 inks multiply to exactly (r,g,b).
     const ink = inkFill(INKS[i].chan, strength[i]);
-    s += `<use href="#icon" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
+    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
       `color="${ink}" style="mix-blend-mode:multiply"/>`;
   }
   const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
@@ -94,16 +105,17 @@ function emitLayered(cell: Cell, settings: Settings, index: number): string {
 }
 
 /** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */
-function emitCell(cell: Cell, settings: Settings, index: number): string {
-  if (settings.layered) return emitLayered(cell, settings, index);
+function emitCell(cell: Cell, settings: Settings, index: number, iconCount: number): string {
+  if (settings.layered) return emitLayered(cell, settings, index, iconCount);
 
   const { x, y, size } = cellBox(cell, settings);
+  const iconId = iconFor(cell, iconCount);
   // Tint via color= (makeTintable forces icons to currentColor, so this recolors
   // any art). This is GPU-cheap and the SAME mechanism CMY uses — unlike the old
   // per-cell SVG filter, which re-rasterized every frame when animated and made
   // motion lag. fill= too, for belt-and-suspenders on currentColor inheritance.
   const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-  const el = `<use href="#icon" x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" color="${fill}"/>`;
+  const el = `<use href="#${iconId}" x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" color="${fill}"/>`;
   // Motion on a <g> wrapper, not the <use>: fill-box on a <use>->symbol instance
   // resolves inconsistently (symbol geometry vs placed box). A <g>'s fill-box is
   // its children's rendered box = this icon in place, so it pivots around its OWN
@@ -116,8 +128,8 @@ function emitCell(cell: Cell, settings: Settings, index: number): string {
  * Pure core: grid + parsed svg + settings -> one standalone <svg> string.
  * No DOM reads, no canvas — re-runs cheaply on every settings change.
  */
-export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string {
-  if (grid.length === 0) return '';
+export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): string {
+  if (grid.length === 0 || icons.length === 0) return '';
   // Pool N x N source cells into one averaged icon (blockSize). Must run before
   // we read cols/rows: it re-indexes the grid to a smaller one, so every
   // downstream use (canvas size, cell placement, filter dedup) stays consistent.
@@ -143,15 +155,19 @@ export function render(grid: Cell[], svg: ParsedSvg, settings: Settings): string
     grid = grid.map((c) => ({ ...c, ...transformColor(c, settings.scheme) }));
   }
 
-  const symbol = `<symbol id="icon" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`;
-  const defs = `<defs>${symbol}</defs>`;
+  // One <symbol id="icon{i}"> per uploaded SVG; each cell picks one by brightness
+  // (iconFor). Single icon -> just #icon0, identical to before.
+  const symbols = icons
+    .map((svg, i) => `<symbol id="icon${i}" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`)
+    .join('');
+  const defs = `<defs>${symbols}</defs>`;
   // Motion keyframes baked into the SVG (no JS loop) — so animation survives
   // export: the downloaded .svg stays alive. '' when motion:'none'.
   const style = motionStyle(settings);
   // Same background the source was sampled against, so sample <-> display <->
   // export all match. Sits behind the icons.
   const bg = `<rect width="${w}" height="${h}" fill="${settings.background}"/>`;
-  const uses = grid.map((c, i) => emitCell(c, settings, i)).join('');
+  const uses = grid.map((c, i) => emitCell(c, settings, i, icons.length)).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +
     `width="${outW}" height="${outH}">${style}${defs}${bg}${uses}</svg>`;
