@@ -61,3 +61,41 @@ export function motionAttrs(cell: Cell, index: number, settings: Settings): stri
   const d = delay ? ` style="animation-delay:${delay}s"` : '';
   return ` class="motion"${d}`;
 }
+
+// spin/pulse tear the CMY overlap apart at any visible amplitude, so 'apart'
+// falls back to 'together' for them (planner's recommended gate). Only the
+// small-displacement motions get per-layer phase offset.
+const APART_OK: ReadonlySet<Motion> = new Set(['wiggle', 'swing', 'bob']);
+
+/** Is per-layer 'apart' motion actually active for this render? */
+export function apartActive(settings: Settings): boolean {
+  return (
+    settings.layered &&
+    settings.motion !== 'none' &&
+    settings.layerMotion === 'apart' &&
+    APART_OK.has(settings.motion)
+  );
+}
+
+/**
+ * The full inline `style` value for ONE animated CMY layer in 'apart' mode —
+ * the existing multiply blend MERGED with pivot + animation + phased delay.
+ * One style string (never a second style attr — the browser drops duplicates).
+ * Phase: each layer drifts by layerIndex * d, d a small fraction of the period.
+ */
+export function layerMotionStyle(
+  cell: Cell,
+  index: number,
+  layerIndex: number,
+  settings: Settings,
+): string {
+  const period = settings.motionSpeed;
+  const d = period * 0.12; // small per-layer phase -> sub-pixel-ish separation
+  const delay = r2(cellDelay(cell, index, settings) + layerIndex * d);
+  return (
+    `mix-blend-mode:multiply;` +
+    `transform-box:fill-box;transform-origin:center;` +
+    `animation:mo ${r2(period)}s ease-in-out infinite;` +
+    `animation-delay:${delay}s`
+  );
+}

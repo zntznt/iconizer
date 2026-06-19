@@ -35,4 +35,38 @@ assert.ok(!still.includes('class="motion"'), 'motion:none -> no motion class');
 const o = { ...defaults, cols: 6, motion: 'spin' as const, staggerMode: 'random' as const };
 assert.equal(render(grid, svg, o), render(grid, svg, o), 'random stagger deterministic');
 
-console.log('motion.test.ts: ok (keyframes, pivot, reduce-motion, stagger, none, deterministic)');
+// --- batch-07b: per-layer 'apart' motion ---------------------------------
+const lay = (over: Partial<typeof defaults>) =>
+  render(grid, svg, { ...defaults, cols: 6, layered: true, layerCount: 3, ...over });
+
+// apart + wiggle (small-displacement, allowed): the 3 <use> in a cell have 3
+// DISTINCT animation-delay values (per-layer phase offset present).
+const apart = lay({ motion: 'wiggle', layerMotion: 'apart', staggerMode: 'none' });
+// first cell = first <g>...</g>; pull its 3 use delays
+const firstG = apart.slice(apart.indexOf('<g'), apart.indexOf('</g>'));
+const layerDelays = [...firstG.matchAll(/animation-delay:([\d.]+)s/g)].map((m) => m[1]);
+assert.equal(layerDelays.length, 3, 'apart -> 3 per-layer delays');
+assert.equal(new Set(layerDelays).size, 3, 'apart -> 3 DISTINCT delays');
+// merged into ONE style (multiply + animation together), no second style attr
+assert.ok(firstG.includes('mix-blend-mode:multiply;') && firstG.includes('animation:mo'),
+  'apart merges blend + animation in one style');
+assert.ok(!/<use[^>]*style="[^"]*"[^>]*style=/.test(firstG), 'no double style attr');
+
+// together: class on the <g>, NOT on the <use>s (batch-07 structure).
+const together = lay({ motion: 'wiggle', layerMotion: 'together' });
+assert.ok(together.includes('<g style="isolation:isolate" class="motion"'), 'together -> class on <g>');
+assert.ok(!/<use[^>]*class="motion"/.test(together), 'together -> no class on <use>');
+
+// spin/pulse TEAR: apart falls back to together (class on <g>, not per-use anim).
+const spinApart = lay({ motion: 'spin', layerMotion: 'apart' });
+assert.ok(spinApart.includes('<g style="isolation:isolate" class="motion"'),
+  'spin+apart -> fell back to together (<g> carries motion)');
+assert.ok(!/<use[^>]*animation:mo/.test(spinApart), 'spin+apart -> no per-layer animation');
+
+// layerMotion inert when not layered, or motion none.
+const notLayered = render(grid, svg, { ...defaults, cols: 6, layered: false, motion: 'wiggle', layerMotion: 'apart' });
+assert.ok(!notLayered.includes('isolation:isolate'), 'not layered -> no CMY groups, apart inert');
+const noMotion = lay({ motion: 'none', layerMotion: 'apart' });
+assert.ok(!noMotion.includes('animation'), 'motion:none -> apart inert, no animation');
+
+console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + 07b apart/gate/inert)');

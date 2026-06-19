@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
 import { transformColor } from './color.ts';
-import { motionStyle, motionAttrs } from './motion.ts';
+import { motionStyle, motionAttrs, apartActive, layerMotionStyle } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
 // root viewBox scales the whole thing, so this is just internal resolution.
@@ -72,6 +72,7 @@ function emitLayered(cell: Cell, settings: Settings, index: number): string {
   // darks look bad in practice.
   const strength = [1 - cell.r / 255, 1 - cell.g / 255, 1 - cell.b / 255];
   const base = scaleFor(cell, settings);
+  const apart = apartActive(settings); // per-layer phase offset (batch-07b)
   let s = '';
   for (let i = 0; i < n; i++) {
     const scale = r2(base * (1 - i / n)); // even steps: 1, 1-1/n, 1-2/n ...
@@ -83,16 +84,22 @@ function emitLayered(cell: Cell, settings: Settings, index: number): string {
     // Channel strength baked into the ink color (not opacity); multiply-blended
     // against the cell's white backing, 3 inks multiply to exactly (r,g,b).
     const ink = inkFill(INKS[i].chan, strength[i]);
+    // 'apart': merge motion INTO this one style (a 2nd style attr is silently
+    // dropped by the browser). 'together'/no-motion: just the multiply blend.
+    // class="motion" stays on so the reduce-motion guard (animation:none
+    // !important on .motion) still beats the inline animation. a11y holds.
+    const style = apart ? layerMotionStyle(cell, index, i, settings) : 'mix-blend-mode:multiply';
+    const cls = apart ? ' class="motion"' : '';
     s += `<use href="#icon" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
-      `color="${ink}" style="mix-blend-mode:multiply"/>`;
+      `color="${ink}"${cls} style="${style}"/>`;
   }
   // Own isolated blend group + white backing so multiply sees only this cell,
   // not its neighbours (which would cascade the whole canvas to black).
-  // Motion class goes on this <g> so the CMY stack moves as ONE unit, colors
-  // stay registered (batch-07 "together"). ponytail: batch-07b's per-layer
-  // "apart" motion would instead hang the class off the child <use>s below.
+  // Motion class goes on this <g> so the CMY stack moves as ONE unit ('together',
+  // batch-07). In 'apart' (07b) the <g> stays still — each <use> animates above.
   const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
-  return `<g style="isolation:isolate"${motionAttrs(cell, index, settings)}>` +
+  const gMotion = apart ? '' : motionAttrs(cell, index, settings);
+  return `<g style="isolation:isolate"${gMotion}>` +
     `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>` +
     `${s}</g>`;
 }

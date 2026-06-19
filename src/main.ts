@@ -148,6 +148,10 @@ $('staggerMode').addEventListener('change', (e) => {
   settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
   scheduleRedraw();
 });
+$('layerMotion').addEventListener('change', (e) => {
+  settings.layerMotion = (e.target as HTMLSelectElement).value as Settings['layerMotion'];
+  scheduleRedraw();
+});
 
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);
