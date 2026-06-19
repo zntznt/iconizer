@@ -52,8 +52,14 @@ One pure function, everything else is plumbing:
 - **Phase 5 — color schemes/filters.** Map cell color through a palette or CSS
   filter (grayscale, posterize, duotone) before it hits `fill`.
 - **Phase 6 — deploy.** Pages Action on push to `main`.
+- **Phase 7 — motion (fun twist).** Optional CSS-keyframe animation baked into the
+  output SVG (wiggle/swing/spin/pulse/bob/shimmer), staggered per cell so it
+  ripples. Zero JS loop; motion survives export. See `guidance/batch-07.md`.
 
 Batch 1 = Phase 0 + Phase 1. See `guidance/batch-01.md`.
+
+Phases 0-5 shipped; 6 (deploy) and 7 (motion) outstanding. Build order is flexible —
+7 is independent of 6 and is the next fun-first target.
 
 ## Deliberately skipped (add when needed)
 
