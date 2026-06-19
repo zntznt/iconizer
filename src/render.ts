@@ -21,21 +21,17 @@ function scaleFor(cell: Cell, settings: Settings): number {
 const QUANT = 32;
 const q = (v: number) => Math.min(255, Math.round(v / QUANT) * QUANT);
 
-/** A stable id + the channel-tinting feColorMatrix for one quantized color. */
+/** A stable id + a flood-through-alpha filter for one quantized color. */
 function filterFor(r: number, g: number, b: number) {
   const id = `t${q(r)}-${q(g)}-${q(b)}`;
-  // Map source luminance onto the target color: out = lum * (target/255).
-  // Drops the source's own hue (acceptable — filter mode is "approximate").
-  const fr = q(r) / 255, fg = q(g) / 255, fb = q(b) / 255;
-  const lr = 0.2126, lg = 0.7152, lb = 0.0722;
-  const m = [
-    fr * lr, fr * lg, fr * lb, 0, 0,
-    fg * lr, fg * lg, fg * lb, 0, 0,
-    fb * lr, fb * lg, fb * lb, 0, 0,
-    0, 0, 0, 1, 0,
-  ].map(r2).join(' ');
+  // Flood the target color and keep it only where the icon is opaque
+  // (SourceAlpha). This recolors ANY art — solid black, white, multicolor —
+  // because it ignores the source's own RGB and uses only its shape. The old
+  // luminance-matrix approach left solid-dark icons black (lum~0 -> color~0).
+  const color = `rgb(${q(r)},${q(g)},${q(b)})`;
   const def = `<filter id="${id}" color-interpolation-filters="sRGB">` +
-    `<feColorMatrix type="matrix" values="${m}"/></filter>`;
+    `<feFlood flood-color="${color}"/>` +
+    `<feComposite in2="SourceAlpha" operator="in"/></filter>`;
   return { id, def };
 }
 
