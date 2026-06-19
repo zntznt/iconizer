@@ -1,15 +1,73 @@
-import { defaults } from './settings.ts';
-import { sample } from './sample.ts';
+import { defaults, type Settings } from './settings.ts';
+import { sample, type Cell } from './sample.ts';
+import { parseSvg, type ParsedSvg } from './parseSvg.ts';
+import { render } from './render.ts';
 
-const input = document.querySelector<HTMLInputElement>('#image')!;
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-input.addEventListener('change', async () => {
-  const file = input.files?.[0];
+const out = $('out');
+const settings: Settings = { ...defaults };
+
+// Inputs that don't change every render: cache the parsed results.
+let cells: Cell[] | null = null;
+let icon: ParsedSvg | null = null;
+
+function redraw() {
+  if (!cells || !icon) return;
+  out.innerHTML = render(cells, icon, settings);
+}
+
+// Debounce so dragging a slider doesn't thrash render() on every input event.
+let timer: number | undefined;
+function scheduleRedraw() {
+  clearTimeout(timer);
+  timer = setTimeout(redraw, 50);
+}
+
+$('image').addEventListener('change', async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
-
   const bitmap = await createImageBitmap(file);
-  const cells = sample(bitmap, defaults);
+  cells = sample(bitmap, settings);
   bitmap.close();
+  redraw();
+});
 
-  console.log(`sampled ${cells.length} cells (cols=${defaults.cols})`, cells[0]);
+$('svg').addEventListener('change', async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  icon = parseSvg(await file.text());
+  redraw();
+});
+
+// cols changes the grid, so it must re-sample — but we only have the bitmap at
+// upload time. Re-sampling needs the image kept around; cheapest is to re-read
+// from the file input on cols change.
+$('cols').addEventListener('input', async (e) => {
+  settings.cols = +(e.target as HTMLInputElement).value;
+  $('colsVal').textContent = String(settings.cols);
+  const file = ($('image') as HTMLInputElement).files?.[0];
+  if (file) {
+    const bitmap = await createImageBitmap(file);
+    cells = sample(bitmap, settings);
+    bitmap.close();
+  }
+  scheduleRedraw();
+});
+
+$('tintMode').addEventListener('change', (e) => {
+  settings.tintMode = (e.target as HTMLSelectElement).value as Settings['tintMode'];
+  scheduleRedraw();
+});
+$('sizeByBrightness').addEventListener('change', (e) => {
+  settings.sizeByBrightness = (e.target as HTMLInputElement).checked;
+  scheduleRedraw();
+});
+$('sizeMin').addEventListener('input', (e) => {
+  settings.sizeRange[0] = +(e.target as HTMLInputElement).value;
+  scheduleRedraw();
+});
+$('sizeMax').addEventListener('input', (e) => {
+  settings.sizeRange[1] = +(e.target as HTMLInputElement).value;
+  scheduleRedraw();
 });
