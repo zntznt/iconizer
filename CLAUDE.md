@@ -41,3 +41,7 @@ settings change and stays the one thing worth a unit test.
 - Solo project, pre-launch. Commit straight to `main`, no branches.
 - Plan and per-batch briefs live in `guidance/`. Read the relevant brief before
   starting a phase; read `guidance/PLAN.md` for the whole arc.
+- `npm test` covers the pure cores only. Anything needing a real browser (canvas,
+  download, visual correctness) has a re-runnable checklist in
+  `guidance/manual-tests.md` — run the relevant phase's checks after touching
+  sampling/render/tint/export. Tests passing is necessary, not sufficient.
