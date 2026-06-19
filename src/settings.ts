@@ -8,8 +8,10 @@ export type Settings = {
   sizeByBrightness: boolean; // scale each icon by cell brightness when true
   sizeRange: [number, number]; // min..max scale factor when sizeByBrightness
   background: string; // CSS color the source is composited onto; sets CMY floor
-  layered: boolean; // false -> solid-tint path; true -> CMY-stack per cell
-  layerCount: 2 | 3; // inks to stack (3 = CMY, 2 = CM)
+  layered: boolean; // false -> solid-tint path; true -> per-cell layered stack
+  layerStyle: 'cmy' | 'rgb'; // cmy: multiply-subtract to cell colour; rgb: solid
+                             // red/green/blue icons scaled by channel proportion
+  layerCount: 2 | 3; // CMY only: inks to stack (3 = CMY, 2 = CM)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
   scheme: Scheme; // remap each cell color upstream of solid/layered
   motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static
@@ -27,6 +29,7 @@ export const defaults: Settings = {
   sizeRange: [0.3, 1],
   background: '#ffffff',
   layered: false,
+  layerStyle: 'cmy',
   layerCount: 3,
   layerOffset: 0,
   scheme: { kind: 'none' },

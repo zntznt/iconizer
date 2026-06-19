@@ -32,7 +32,13 @@
       <label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label>
     </div>
     <div class="controls">
-      <label><input id="layered" type="checkbox" /> layered (CMY)</label>
+      <label><input id="layered" type="checkbox" /> layered</label>
+      <label>style
+        <select id="layerStyle">
+          <option value="cmy">CMY (multiply)</option>
+          <option value="rgb">RGB (proportion)</option>
+        </select>
+      </label>
       <label>layers
         <select id="layerCount">
           <option value="3">3 — CMY</option>

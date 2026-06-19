@@ -65,6 +65,7 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     sizeByBrightness: rnd() < 0.5,
     background: rnd() < 0.7 ? '#ffffff' : randHex(pick),
     layered: rnd() < 0.5,
+    layerStyle: rnd() < 0.5 ? 'cmy' : 'rgb',
     layerOffset: rnd() < 0.5 ? 0 : pick(4),
     scheme,
     motion: choose(MOTIONS),

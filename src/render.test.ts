@@ -111,4 +111,27 @@ assert.ok(render(dark, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon
 assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon1"'),
   'light cell -> icon1 (last)');
 
-console.log('render.test.ts: ok (solid + bg + layered CMY + scheme + multi-icon)');
+// RGB-proportion layered style: 3 solid red/green/blue icons, sized by channel
+// share, NO multiply blend. Reddish cell -> red is the biggest layer.
+const rgbOut = render(cell, tinySvg, { ...defaults, cols: 1, layered: true, layerStyle: 'rgb' });
+assert.ok(!rgbOut.includes('mix-blend-mode'), 'RGB style does not multiply-blend');
+const rgbFills = [...rgbOut.matchAll(/color="(rgb\([^)]+\))"/g)].map((m) => m[1]);
+assert.deepEqual([...rgbFills].sort(), ['rgb(0,0,255)', 'rgb(0,255,0)', 'rgb(255,0,0)'],
+  'RGB style uses pure red/green/blue fills');
+// red dominant (200,100,50) -> the red <use> is the largest. <use> emits
+// width=... then color=..., so match in that order.
+const widthOf = (fill: string) => {
+  const m = rgbOut.match(new RegExp(`<use[^>]*width="([\\d.]+)"[^>]*color="${fill.replace(/[()]/g, '\\$&')}"`));
+  return m ? +m[1] : 0;
+};
+assert.ok(widthOf('rgb(255,0,0)') > widthOf('rgb(0,0,255)'),
+  'reddish cell -> red layer larger than blue layer');
+
+// scheme reaches RGB style: grayscale -> r=g=b -> all three layers equal size.
+const grayRgb = render(cell, tinySvg,
+  { ...defaults, cols: 1, layered: true, layerStyle: 'rgb', scheme: { kind: 'grayscale' } });
+const graySizes = [...grayRgb.matchAll(/<use[^>]*width="([\d.]+)"/g)].map((m) => +m[1]);
+assert.ok(graySizes.length === 3 && graySizes.every((w) => Math.abs(w - graySizes[0]) < 0.01),
+  `grayscale -> equal RGB layers (scheme reached layered), got ${graySizes}`);
+
+console.log('render.test.ts: ok (solid + CMY + RGB-proportion + scheme reaches layered + multi-icon)');

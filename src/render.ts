@@ -59,15 +59,11 @@ function inkFill(chan: number, s: number): string {
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
 
-/** Layered CMY stack for one cell: 2-3 multiply-blended <use> that subtract
- *  R/G/B channels so the stack reads as the actual cell color. */
-function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
+/** CMY layered body: 2-3 multiply-blended <use> subtracting R/G/B channels, in
+ *  an isolated group over white so they multiply to the exact cell colour. */
+function cmyBody(cell: Cell, settings: Settings, iconId: string): string {
   const n = settings.layerCount;
-  const iconId = iconFor(cell, iconCount);
   // ponytail: naive CMY — no black (K) channel, no per-channel screen angles.
-  // Real CMYK extracts K so darks stay neutral (not muddy-brown) and rotates
-  // each ink's screen to avoid moire. We stack SVGs, not print — add only if
-  // darks look bad in practice.
   const strength = [1 - cell.r / 255, 1 - cell.g / 255, 1 - cell.b / 255];
   const base = scaleFor(cell, settings);
   let s = '';
@@ -77,31 +73,57 @@ function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: n
     const off = settings.layerOffset;
     const ox = r2(x + INKS[i].dx * off);
     const oy = r2(y + INKS[i].dy * off);
-    // color= (NOT fill=) — icons use fill="currentColor", which reads `color`.
-    // Channel strength baked into the ink color (not opacity); multiply-blended
-    // against the cell's white backing, 3 inks multiply to exactly (r,g,b).
     const ink = inkFill(INKS[i].chan, strength[i]);
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
       `color="${ink}" style="mix-blend-mode:multiply"/>`;
   }
   const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
-  // INNER group: isolated blend + white backing. STATIC — the multiply resolves
-  // ONCE here (3 inks -> exact cell colour). Never animated; that's the fix for
-  // the "goes black" bug: a transform promotes the element to its own layer and
-  // the multiply re-blends against a transparent/black backdrop instead of this
-  // white rect. So blending and motion must live on DIFFERENT elements.
-  const blended =
-    `<g style="isolation:isolate">` +
-    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>` +
-    `${s}</g>`;
-  // OUTER group: motion only, no blend/isolation. The browser composites the
-  // inner blended result to a buffer once, then cheaply transforms THAT buffer
-  // per frame (no per-frame re-blend) — fixes the jank too. The .motion class
-  // sets transform-box:fill-box + transform-origin:center, so this <g> pivots
-  // around ITS OWN children's box = this icon's centre (canvas-irrelevant).
+  // INNER group: isolated blend + white backing. STATIC — multiply resolves once
+  // to the exact colour. Animating it would re-blend against black (the old bug).
+  return `<g style="isolation:isolate">` +
+    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>${s}</g>`;
+}
+
+/** RGB-proportion layered body: 3 solid-filled icons (pure red/green/blue), each
+ *  SCALED by that channel's share of the total. Biggest channel forms the base,
+ *  smaller channels overlay as concentric accents. No blend — just stacked alpha,
+ *  so it's cheaper than CMY and the cell's actual (scheme-transformed) colour
+ *  drives the proportions. */
+function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
+  const total = cell.r + cell.g + cell.b || 1; // avoid /0 on a pure-black cell
+  const CHANS = [
+    { share: cell.r / total, fill: 'rgb(255,0,0)', dx: -1, dy: -1 },
+    { share: cell.g / total, fill: 'rgb(0,255,0)', dx: 1, dy: 1 },
+    { share: cell.b / total, fill: 'rgb(0,0,255)', dx: -1, dy: 1 },
+  ];
+  // largest share first so it's the base layer the others sit on.
+  CHANS.sort((a, b) => b.share - a.share);
+  const base = scaleFor(cell, settings);
+  const off = settings.layerOffset;
+  let s = '';
+  for (const ch of CHANS) {
+    if (ch.share <= 0) continue;
+    const { x, y, size } = cellBox(cell, settings, base * ch.share);
+    const ox = r2(x + ch.dx * off);
+    const oy = r2(y + ch.dy * off);
+    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" color="${ch.fill}"/>`;
+  }
+  return s;
+}
+
+/** A layered cell: CMY multiply stack or RGB-proportion stack, then the motion
+ *  wrapper. The scheme already transformed cell.r/g/b upstream, so both styles
+ *  pick up the scheme for free. */
+function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
+  const iconId = iconFor(cell, iconCount);
+  const body = settings.layerStyle === 'rgb'
+    ? rgbBody(cell, settings, iconId)
+    : cmyBody(cell, settings, iconId);
+  // OUTER group: motion only, no blend. Browser composites the body to a buffer
+  // once, then cheaply transforms it per frame. .motion pivots around the icon's
+  // own box (canvas-irrelevant). No motion -> bare body, output unchanged.
   const mo = motionAttrs(cell, index, settings);
-  if (!mo) return blended;
-  return `<g${mo}>${blended}</g>`;
+  return mo ? `<g${mo}>${body}</g>` : body;
 }
 
 /** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */

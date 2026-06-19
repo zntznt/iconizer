@@ -133,6 +133,10 @@ $('layered').addEventListener('change', (e) => {
   settings.layered = (e.target as HTMLInputElement).checked;
   scheduleRedraw();
 });
+$('layerStyle').addEventListener('change', (e) => {
+  settings.layerStyle = (e.target as HTMLSelectElement).value as Settings['layerStyle'];
+  scheduleRedraw();
+});
 $('layerCount').addEventListener('change', (e) => {
   settings.layerCount = +(e.target as HTMLSelectElement).value as 2 | 3;
   scheduleRedraw();
@@ -218,6 +222,7 @@ function syncControls() {
   set('sizeMin', settings.sizeRange[0]);
   set('sizeMax', settings.sizeRange[1]);
   set('layered', settings.layered);
+  set('layerStyle', settings.layerStyle);
   set('layerCount', settings.layerCount);
   set('layerOffset', settings.layerOffset);
   set('motion', settings.motion);
