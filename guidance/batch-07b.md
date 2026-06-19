@@ -52,6 +52,13 @@ other combination it's inert -> output identical to batch-07.
 batch-07 already marks the `<g>` as where this hangs off. For `apart`:
 - DON'T put the class on the `<g>`. Put it on each `<use>`, computing
   `animation-delay = cellDelay + layerIndex * d`.
+- **WATCH:** the layered `<use>`s already carry `style="mix-blend-mode:multiply"`
+  (render.ts ~line 87). Don't emit a SECOND `style=` — merge the
+  `animation-delay` into the existing one (`style="mix-blend-mode:multiply;
+  animation-delay:Xs"`). Two `style` attrs = the second is ignored, motion
+  silently dead. This is the easy footgun here.
+- The `transform-origin`/`transform-box` for the pivot must also live in that same
+  merged style (or a shared class) — same merge rule.
 - Keep `transform-box: fill-box; transform-origin: center` per `<use>` (each layer
   pivots in its own box — they're different sizes, so shared origin would skew).
 - The isolation group and multiply blend are UNCHANGED — this only moves where the
