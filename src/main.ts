@@ -2,6 +2,7 @@ import { defaults, type Settings } from './settings.ts';
 import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
+import { downloadSvg, downloadPng } from './export.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -11,10 +12,14 @@ const settings: Settings = { ...defaults };
 // Inputs that don't change every render: cache the parsed results.
 let cells: Cell[] | null = null;
 let icon: ParsedSvg | null = null;
+let lastSvg = ''; // latest render() output, reused by export (no re-render)
 
 function redraw() {
   if (!cells || !icon) return;
-  out.innerHTML = render(cells, icon, settings);
+  lastSvg = render(cells, icon, settings);
+  out.innerHTML = lastSvg;
+  ($('dlSvg') as HTMLButtonElement).disabled = false;
+  ($('dlPng') as HTMLButtonElement).disabled = false;
 }
 
 // Debounce so dragging a slider doesn't thrash render() on every input event.
@@ -78,4 +83,11 @@ $('sizeMin').addEventListener('input', (e) => {
 $('sizeMax').addEventListener('input', (e) => {
   settings.sizeRange[1] = +(e.target as HTMLInputElement).value;
   scheduleRedraw();
+});
+
+$('dlSvg').addEventListener('click', () => {
+  if (lastSvg) downloadSvg(lastSvg);
+});
+$('dlPng').addEventListener('click', () => {
+  if (lastSvg) downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
 });
