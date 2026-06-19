@@ -58,8 +58,9 @@ One pure function, everything else is plumbing:
 
 Batch 1 = Phase 0 + Phase 1. See `guidance/batch-01.md`.
 
-Phases 0-5 shipped; 6 (deploy) and 7 (motion) outstanding. Build order is flexible —
-7 is independent of 6 and is the next fun-first target.
+Phases 0-5, 7, and 7b (per-layer CMY motion stretch) shipped. Only **6 (deploy)**
+is outstanding — the app is feature-complete locally; deploy is the remaining step
+to put it live. New fun-first twists welcome anytime.
 
 ## Deliberately skipped (add when needed)
 

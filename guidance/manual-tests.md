@@ -120,3 +120,27 @@ Annotated so nobody prunes them as "obvious":
 - **M6 (perf)** Fine grid (50+ cols, thousands of `<use>`) animates smoothly
   (~60fps). If it janks: `will-change:transform` on `.motion` is the first lever,
   capping animated cell count the fallback. ponytail the ceiling if hit.
+
+## Phase 7b — Per-layer CMY motion (`motion.ts` apart mode)
+
+Only active when: layered ON + motion in {wiggle,swing,bob} + layerMotion=apart.
+
+- **MB1 (the shimmer)** apart + wiggle: cyan/magenta/yellow visibly separate and
+  rejoin — a colored chromatic fringe that breathes. Image stays READABLE, not
+  desaturated to mush. The streaks bloom at the cycle edges, register at rest.
+- **MB2 (the ceiling is real)** Crank speed/amplitude: confirm the documented
+  failure mode — fringes bloom, color washes toward RGB mush. This proves the
+  coupling ceiling exists; it's why only small motions get apart.
+- **MB3 (tear-gate)** apart + spin (or pulse): falls back to TOGETHER — the stack
+  moves as one unit, no per-layer tearing. Verify: g.motion = cell count, no
+  per-`<use>` animation. (`APART_OK` excludes spin/pulse.)
+- **MB4 (export survives)** Export an apart-animated SVG, reopen the file: the
+  per-layer shimmer is still alive.
+- **MB5 (a11y survives the stretch — the subtle one)** OS reduce-motion ON, apart
+  mode active: mosaic is STATIC. apart animates via INLINE style, which only the
+  guard's `animation:none!important` (on `.motion`, which apart `<use>`s keep) can
+  override. If this fails, the guard lost its `!important` or the class dropped —
+  motion forced on opted-out users. Re-test after any motion-attr change.
+- **MB6 (no double-style)** Inspect an apart `<use>`: exactly ONE `style` attr
+  carrying both `mix-blend-mode:multiply` AND `animation`. Two style attrs = the
+  browser drops one silently. (Builder verified styleAttrCount:1, both honored.)
