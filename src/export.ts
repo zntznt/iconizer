@@ -126,14 +126,26 @@ export async function downloadGif(
   const workerBlobUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
   const gif = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
 
-  // The live <style> sets `.motion{...animation:mo ...}`. We swap the whole
-  // .motion rule for a static phase rule. Match the existing rule to replace it.
-  const motionRuleRe = /\.motion\{[^}]*\}/;
+  // Drop the live <style> (its animation/reduce-motion rules are inert in a static
+  // image and would conflict). We bake a PER-CELL static transform instead — each
+  // motion element carries its own `animation-delay` (the stagger), so it must be
+  // frozen at ITS phase, not a global one, or the GIF loses the ripple/wave look.
+  const styleStripped = svg.replace(/<style>.*?<\/style>/s, '');
+  // matches a motion element's class attr + optional inline animation-delay style.
+  const motionElRe = /class="motion"(?:\s+style="animation-delay:([\d.-]+)s")?/g;
+  const period = periodSec;
 
   try {
     for (let i = 0; i < frames; i++) {
-      const p = i / frames;
-      const frameSvg = svg.replace(motionRuleRe, `.motion{${motionRuleAt(motion, p)}}`);
+      const t = (period * i) / frames; // global time within one cycle
+      const frameSvg = styleStripped.replace(motionElRe, (_m, delayStr) => {
+        // CSS: effective phase = ((t - delay) / period) wrapped to [0,1).
+        const delay = delayStr ? parseFloat(delayStr) : 0;
+        let p = ((t - delay) / period) % 1;
+        if (p < 0) p += 1;
+        // bake this cell's transform inline; class removed so nothing re-animates.
+        return `style="${motionRuleAt(motion, p)}"`;
+      });
       const frame = await rasterize(frameSvg, W, H);
       gif.addFrame(frame, { delay: delayMs, copy: true });
     }
