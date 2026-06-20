@@ -20,12 +20,36 @@
 
       body {
         margin: 0; font: 14px/1.4 var(--sans); color: var(--ink);
-        /* tiled neon Geocities backdrop, zero images */
-        background:
-          radial-gradient(circle at 6px 6px, rgba(255,255,255,.5) 0 1px, transparent 2px) 0 0 / 24px 24px,
-          repeating-linear-gradient(45deg, #1a0033 0 16px, #2a004d 16px 32px);
+        background: #11002a; /* base under the animated layers */
         padding-bottom: var(--taskbar-h);
       }
+      /* ---- loud animated Y2K backdrop, zero images, fixed behind everything ---- */
+      body::before {
+        content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+        background:
+          /* twinkling stars */
+          radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 2px) 0 0 / 90px 90px,
+          radial-gradient(circle at 70% 60%, #fff 0 1px, transparent 2px) 0 0 / 130px 110px,
+          radial-gradient(circle at 45% 85%, #b6f 0 1px, transparent 2px) 0 0 / 70px 70px,
+          /* holographic oil-slick wash */
+          conic-gradient(from 0deg at 30% 30%, #ff00cc, #3300ff, #00ffe0, #ff00cc),
+          linear-gradient(135deg, #1a0033, #3d0066 40%, #00264d 75%, #1a0033);
+        background-blend-mode: screen, screen, screen, soft-light, normal;
+        opacity: .9;
+        animation: holo 24s ease-in-out infinite, twinkle 6s steps(2) infinite;
+      }
+      /* perspective neon grid floor, fixed, drifting toward the viewer */
+      body::after {
+        content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+        background:
+          repeating-linear-gradient(transparent 0 38px, rgba(0,255,224,.18) 38px 40px),
+          repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,0,204,.14) 38px 40px);
+        background-size: 40px 40px;
+        animation: gridrun 3.5s linear infinite;
+      }
+      @keyframes holo { 0%,100% { background-position: 0 0,0 0,0 0,0% 50%,0 0; } 50% { background-position: 40px 30px,-50px 20px,30px -40px,100% 50%,0 0; } }
+      @keyframes twinkle { 0%,100% { opacity: .9; } 50% { opacity: .72; } }
+      @keyframes gridrun { from { background-position: 0 0; } to { background-position: 0 40px; } }
 
       /* ---- top marquee banner (decorative) ---- */
       .banner {
@@ -173,7 +197,7 @@
         input[type="range"] { height: 28px; }
       }
       @media (prefers-reduced-motion: reduce) {
-        .banner span, .led { animation: none !important; }
+        .banner span, .led, body::before, body::after { animation: none !important; }
         .banner span { padding-left: 0; }
       }
     </style>
