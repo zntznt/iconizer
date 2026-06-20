@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Iconizer favicon: the Start-menu 4-colour Win9x flag.
+       Four triangles meeting at centre with a thin dark gap, on a black tile
+       so it reads on the Space Jam void. -->
+  <rect width="32" height="32" rx="3" fill="#000"/>
+  <g transform="translate(16 16) rotate(-12)">
+    <!-- gap = the triangles stop short of centre/edges; ~1.2 inset -->
+    <polygon points="-1.5,-1.5 -11,-1.5 -1.5,-11"  fill="#f00"/><!-- top-left  red -->
+    <polygon points="1.5,-1.5  11,-1.5  1.5,-11"   fill="#0c0"/><!-- top-right green -->
+    <polygon points="-1.5,1.5  -11,1.5  -1.5,11"   fill="#00f"/><!-- bot-left  blue -->
+    <polygon points="1.5,1.5   11,1.5   1.5,11"    fill="#fc0"/><!-- bot-right yellow -->
+  </g>
+</svg>
