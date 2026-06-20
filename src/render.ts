@@ -17,11 +17,17 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  (a denser, tiled look) — independent of column count. The <symbol> is
  *  overflow:visible, so oversized icons don't clip. */
 function scaleFor(cell: Cell, settings: Settings): number {
-  const tonal = settings.sizeByBrightness
-    ? settings.sizeRange[0] +
-      (settings.sizeRange[1] - settings.sizeRange[0]) * (1 - cell.brightness)
-    : 1;
-  return settings.iconScale * tonal;
+  let tonal = 1;
+  if (settings.sizeByBrightness) {
+    // sort the range so min>max (independent sliders) doesn't invert the lerp.
+    const lo = Math.min(settings.sizeRange[0], settings.sizeRange[1]);
+    const hi = Math.max(settings.sizeRange[0], settings.sizeRange[1]);
+    tonal = lo + (hi - lo) * (1 - cell.brightness);
+  }
+  const s = settings.iconScale * tonal;
+  // floor at a tiny positive value so icons can shrink small but never vanish
+  // entirely (sizeRange [0,0] otherwise -> a blank mosaic, looks like a bug).
+  return Math.max(0.02, s);
 }
 
 /** Which icon a cell draws, by brightness: dark cell -> icon 0, light -> last.

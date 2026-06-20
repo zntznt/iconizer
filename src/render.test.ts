@@ -60,6 +60,14 @@ const big = emitCell({ ...mid, col: 0, row: 0 }, { ...defaults, layered: false, 
 assert.ok(big.includes('width="32" height="32"'), 'iconScale 2 -> icon 2x cell');
 assert.ok(big.includes('x="-8"'), 'oversized icon is centered (negative pad -> overlaps)');
 
+// sizeByBrightness degenerate guards: range [0,0] must not zero icons out (blank
+// mosaic looks like a bug), and min>max must not invert the lerp.
+const zero = emitCell(mid, { ...defaults, layered: false, sizeByBrightness: true, sizeRange: [0, 0] });
+const zeroW = +(zero.match(/width="([\d.]+)"/)?.[1] ?? '0');
+assert.ok(zeroW > 0, `sizeRange [0,0] floors above zero (icons tiny, not gone), got ${zeroW}`);
+const inverted = emitCell(mid, { ...defaults, layered: false, sizeByBrightness: true, sizeRange: [0.8, 0.1] });
+assert.ok((inverted.match(/width="([\d.]+)"/)?.[1] ?? '') !== '', 'min>max renders a valid (sorted) size');
+
 // blockSize: merge NxN sample cells into one averaged icon. 4x4 grid, block 2 ->
 // 2x2 = 4 icons (vs 16), each the average of its block.
 const g16: Cell[] = [];
