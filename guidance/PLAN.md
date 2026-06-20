@@ -19,6 +19,23 @@ grid, map each sample to SVG transforms/fills.
 | Color   | Solid tint first, then layered quasi-RGB as a toggle |
 | Repo    | Commit straight to `main`, no branches (pre-launch) |
 
+## Differentiators (what's ours — protect these)
+
+What sets iconizer apart from the mature adjacent tools (photomosaic / halftone-SVG
+/ ASCII generators / channel-split glitch filters). Full analysis + sources:
+`guidance/competitive-landscape.md`. Lead with these when scoping features:
+
+1. **Channel-split layering as a *mosaic primitive* (the "quasi-RGB" CMY/RGB
+   stack).** The most defensibly unique part — channel split exists everywhere as a
+   whole-image filter, nowhere as the per-cell render unit. Don't dilute it.
+2. **Tile = a user-uploaded *arbitrary* SVG**, recolored + brightness-ramped per
+   cell (multi-icon dark→light). Not photo tiles, not fixed dots, not text glyphs.
+3. **Motion baked into the export** — animated SVG stays alive on download; GIF
+   bakes per-cell phase. Free, no watermark, 100% client-side.
+
+Closest cousin = ASCII-art generators (glyph-per-cell, colored) — but text-only,
+no layering, no motion. Our wedge is vector-icon tile + channel-split + animation.
+
 ## The core
 
 One pure function, everything else is plumbing:
