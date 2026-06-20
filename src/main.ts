@@ -56,6 +56,7 @@ function redraw() {
   refreshExportState();
   refreshPips();
   setStatus('ready');
+  bootReveal(); // first successful render -> cascade the windows in (runs once)
 }
 
 // Single source of truth for export button states. SVG/PNG enabled once a render
@@ -567,15 +568,38 @@ function minimizeWin(win: HTMLElement) {
   win.addEventListener('transitionend', (e) => { if (e.propertyName === 'transform') finish(); }, { once: true });
   setTimeout(finish, 400);
 }
-function restoreWin(win: HTMLElement) {
+function restoreWin(win: HTMLElement, scroll = true) {
   taskFor(win)?.classList.remove('stowed');
   if (!win.classList.contains('minimized')) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { win.classList.remove('minimized'); return; }
-  // pop back into the grid at the shrunk state, then release on next frame to genie up.
+  // Pop back into the grid AT the shrunk state (.minimizing transform), force the
+  // browser to actually PAINT that shrunk frame (reading offsetWidth flushes layout),
+  // THEN remove .minimizing so the transform transitions from shrunk -> normal. Without
+  // the forced reflow, going display:none -> grid + removing .minimizing in the same
+  // frame gives the transition no "from" value, so it snaps with no genie.
   win.classList.add('minimizing');
   win.classList.remove('minimized');
-  requestAnimationFrame(() => requestAnimationFrame(() => win.classList.remove('minimizing')));
-  win.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  void win.offsetWidth; // force reflow so the shrunk state is the painted "from"
+  requestAnimationFrame(() => win.classList.remove('minimizing'));
+  if (scroll) win.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// All control windows in boot order. On first load they start minimized (just the
+// CRT shows); after the first successful render they cascade in one by one.
+const allWins = ['winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion', 'winExport'];
+function bootMinimizeAll() {
+  allWins.forEach((id) => {
+    const w = document.getElementById(id);
+    if (w) { w.classList.add('minimized'); taskFor(w)?.classList.add('stowed'); }
+  });
+}
+let booted = false; // the cascade reveal runs once
+function bootReveal() {
+  if (booted) return;
+  booted = true;
+  allWins.forEach((id, i) => {
+    setTimeout(() => { const w = document.getElementById(id); if (w) restoreWin(w, false); }, i * 240);
+  });
 }
 
 // win-bar _ and × buttons minimize their window (it's a toy — × just stows it too).
@@ -603,3 +627,10 @@ const spy = new IntersectionObserver((entries) => {
   }
 }, { threshold: 0.5 });
 tasks.forEach((t) => { const w = document.getElementById(t.dataset.win!); if (w) spy.observe(w); });
+
+// Boot: start every control window minimized (just the CRT shows). The CRT
+// drop-well is the upload path; once both image+svg are loaded and the first
+// render happens, redraw() -> bootReveal() cascades the windows in one by one.
+// If a permalink/Surprise arrives needing a render before upload, the cascade
+// still fires on that first render. (Reduced-motion: instant hide, instant reveal.)
+bootMinimizeAll();

@@ -208,14 +208,15 @@
         }
         .hero { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; }
       }
-      .win { background: var(--face); box-shadow: var(--bevel-up); min-width: 0; }
-      /* minimize: genie toward the taskbar (shrink + slide down + fade), then leave
-         the grid so others reflow. transform-origin bottom = it shrinks downward. */
-      .win.minimizing {
-        transition: transform .28s cubic-bezier(.5,0,.75,0), opacity .28s ease;
-        transform: translateY(60vh) scale(.04); opacity: 0; transform-origin: 50% 100%;
-        pointer-events: none;
+      /* the transition lives on .win (always present) so BOTH directions animate:
+         adding .minimizing genies to shrunk, removing it (restore) genies back. */
+      .win {
+        background: var(--face); box-shadow: var(--bevel-up); min-width: 0;
+        transition: transform .28s cubic-bezier(.4,0,.6,1), opacity .28s ease;
+        transform-origin: 50% 100%;
       }
+      /* minimize target: shrink + slide down toward the taskbar + fade */
+      .win.minimizing { transform: translateY(60vh) scale(.04); opacity: 0; pointer-events: none; }
       .win.minimized { display: none; }
       .win-bar .btns .mini { cursor: pointer; }
       .win-bar .btns .mini:hover { box-shadow: var(--bevel-down); }
