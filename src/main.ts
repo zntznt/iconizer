@@ -53,8 +53,23 @@ function redraw() {
   if (!cells || icons.length === 0) return;
   lastSvg = render(cells, icons.map((i) => i.svg), settings);
   out.innerHTML = lastSvg;
-  ($('dlSvg') as HTMLButtonElement).disabled = false;
-  ($('dlPng') as HTMLButtonElement).disabled = false;
+  refreshExportState();
+  refreshPips();
+  setStatus('ready');
+}
+
+// Single source of truth for export button states. SVG/PNG enabled once a render
+// exists; GIF additionally needs motion (shown visible-but-disabled with a reason,
+// not hidden, so users learn why). Mirrors into the footer quick-save proxies.
+function refreshExportState() {
+  const rendered = !!lastSvg;
+  const animated = settings.motion !== 'none';
+  ($('dlSvg') as HTMLButtonElement).disabled = !rendered;
+  ($('dlPng') as HTMLButtonElement).disabled = !rendered;
+  ($('dlGif') as HTMLButtonElement).disabled = !rendered || !animated;
+  const note = document.getElementById('gifNote');
+  if (note) note.textContent = animated ? 'animated · ready' : 'animated · needs Motion FX';
+  syncQuickSave();
 }
 
 // Debounce so dragging a slider doesn't thrash render() on every input event.
@@ -69,6 +84,8 @@ async function loadImage(file: File) {
   const bitmap = await createImageBitmap(file);
   cells = sample(bitmap, settings);
   bitmap.close();
+  $('srcName').textContent = file.name;
+  refreshPips(); // light the picture pip even before an icon is added
   redraw();
 }
 
@@ -117,6 +134,7 @@ $('svg').addEventListener('change', async (e) => {
   }
   (e.target as HTMLInputElement).value = ''; // allow re-adding the same file
   renderIconList();
+  refreshPips();
   redraw();
 });
 
@@ -126,6 +144,7 @@ $('iconList').addEventListener('click', (e) => {
   if (!btn) return;
   icons.splice(+btn.dataset.i!, 1);
   renderIconList();
+  refreshPips();
   redraw();
 });
 
@@ -245,7 +264,7 @@ function syncDisclosure() {
   disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
-  $('dlGif').hidden = ($('motion') as HTMLSelectElement).value === 'none';
+  refreshExportState();
 }
 
 for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pal2']) {
@@ -265,7 +284,7 @@ $('motion').addEventListener('change', async (e) => {
   }
   settings.motion = val;
   disclose('p-motion', val !== 'none');
-  $('dlGif').hidden = settings.motion === 'none'; // GIF export only when animated
+  refreshExportState(); // GIF becomes available/unavailable with motion
   scheduleRedraw();
 });
 $('motionSpeed').addEventListener('input', (e) => {
@@ -279,8 +298,11 @@ $('staggerMode').addEventListener('change', (e) => {
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);
 });
-$('dlPng').addEventListener('click', () => {
-  if (lastSvg) downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+$('dlPng').addEventListener('click', async () => {
+  if (!lastSvg) return;
+  setStatus('exporting'); setProg(30);
+  await downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+  setProg(100); setTimeout(() => { setStatus('ready'); setProg(0); }, 400);
 });
 $('dlGif').addEventListener('click', async () => {
   if (!lastSvg || settings.motion === 'none') return;
@@ -288,11 +310,18 @@ $('dlGif').addEventListener('click', async () => {
   const old = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'encoding…';
+  setStatus('exporting'); setProg(15);
+  // coarse progress: the bar creeps while gif.js encodes (no per-frame callback wired).
+  let p = 15;
+  const creep = setInterval(() => { p = Math.min(90, p + 8); setProg(p); }, 200);
   try {
     await downloadGif(lastSvg, settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value);
+    setProg(100);
   } finally {
+    clearInterval(creep);
     btn.disabled = false;
     btn.textContent = old;
+    setTimeout(() => { setStatus('ready'); setProg(0); }, 400);
   }
 });
 
@@ -338,6 +367,7 @@ function syncControls() {
 
 // Apply settings loaded from a permalink to the controls on startup.
 syncControls();
+refreshPips(); // initial LED states (no image/svg/render yet)
 // A permalink or roll can arrive with the heavy combo already on; don't nag about
 // a state the user didn't just create by hand.
 if (settings.layered && settings.motion !== 'none') heavyAccepted = true;
@@ -375,7 +405,35 @@ setInterval(tick, 15000);
 // Honest localStorage visitor counter — counts THIS browser's visits, odometer-padded.
 const n = (Number(localStorage.getItem('iconizer.visits')) || 0) + 1;
 localStorage.setItem('iconizer.visits', String(n));
-$('visitorCount').textContent = `visitor No. ${String(n).padStart(6, '0')}`;
+$('visitorCount').textContent = `#${String(n).padStart(6, '0')}`;
+
+// --- header status: filename caption, readiness pips, export progress --------
+
+function setPip(id: string, on: boolean, nudge = false) {
+  const el = $(id);
+  el.classList.toggle('on', on);
+  el.classList.toggle('nudge', nudge && !on);
+}
+/** Refresh the three readiness LEDs from current state. */
+function refreshPips() {
+  setPip('pipImg', !!cells);
+  setPip('pipSvg', icons.length > 0, /* nudge when missing: */ true);
+  setPip('pipReady', !!lastSvg);
+  $('pipImg').setAttribute('aria-label', cells ? 'picture: loaded ♡' : 'picture: not loaded');
+  $('pipSvg').setAttribute('aria-label', icons.length ? 'icon .svg: ready ✦' : 'icon .svg: none yet — add one!');
+  $('pipReady').setAttribute('aria-label', lastSvg ? 'render: ready to save ✦' : 'render: not ready');
+}
+function setStatus(s: 'idle' | 'rendering' | 'ready' | 'exporting') {
+  $('sysbar').setAttribute('data-status', s);
+  const txt = $('progText');
+  if (s === 'idle') txt.textContent = '☆ Netscape Now! · best viewed at 800×600 ☆';
+  else if (s === 'rendering') txt.textContent = 'RENDERING…';
+  else if (s === 'ready') txt.textContent = 'READY.';
+  else txt.textContent = 'EXPORTING… please hold ⏳';
+}
+function setProg(pct: number) {
+  $('sysbar').style.setProperty('--prog', `${Math.round(pct)}%`);
+}
 
 // Maximize/restore the CRT: click the screen to fill the vertical space over the
 // windows; click again, Enter/Space (it's role=button), or Esc to restore.
@@ -396,3 +454,67 @@ crt.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && crt.classList.contains('maximized')) toggleMax(false);
 });
+
+// --- taskbar: Start menu, quick-save proxy, task scroll-spy ------------------
+
+const startBtn = $('startBtn');
+const startMenu = $('startMenu');
+function setStart(open: boolean) {
+  startMenu.hidden = !open;
+  startBtn.setAttribute('aria-expanded', String(open));
+  if (open) (startMenu.querySelector('[role=menuitem]') as HTMLElement)?.focus();
+}
+startBtn.addEventListener('click', () => setStart(startMenu.hidden));
+// close on outside-click / Esc / selecting an item
+document.addEventListener('click', (e) => {
+  if (!startMenu.hidden && !startMenu.contains(e.target as Node) && e.target !== startBtn)
+    setStart(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !startMenu.hidden) { setStart(false); startBtn.focus(); }
+});
+startMenu.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('[role=menuitem]')) setStart(false);
+});
+
+// quick-save split button: proxies click the canonical export buttons in Export.exe.
+const quickSave = $('quickSave') as HTMLButtonElement;
+const qsMenu = $('quickSaveMenu');
+quickSave.addEventListener('click', () => {
+  qsMenu.hidden = !qsMenu.hidden;
+  quickSave.setAttribute('aria-expanded', String(!qsMenu.hidden));
+});
+document.addEventListener('click', (e) => {
+  if (!qsMenu.hidden && !qsMenu.contains(e.target as Node) && e.target !== quickSave) qsMenu.hidden = true;
+});
+qsMenu.querySelectorAll<HTMLButtonElement>('.qs-item').forEach((item) => {
+  item.addEventListener('click', () => {
+    ($(item.dataset.proxy!) as HTMLButtonElement).click(); // fire the real export
+    qsMenu.hidden = true;
+  });
+});
+// keep proxy items' disabled state mirrored from the canonical buttons. Queries
+// the DOM lazily (not a closed-over const) so it's safe to call during startup,
+// before the quick-save const below is initialized (avoids a TDZ ReferenceError).
+function syncQuickSave() {
+  document.querySelectorAll<HTMLButtonElement>('.qs-item').forEach((item) => {
+    const real = $(item.dataset.proxy!) as HTMLButtonElement;
+    item.disabled = real.disabled || real.hidden;
+  });
+}
+
+// task buttons: click scrolls to that window; IntersectionObserver lights the active one.
+const tasks = Array.from(document.querySelectorAll<HTMLButtonElement>('.task'));
+tasks.forEach((t) => t.addEventListener('click', () => {
+  $(t.dataset.win!).scrollIntoView({ behavior: 'smooth', block: 'center' });
+}));
+const byWin = new Map(tasks.map((t) => [t.dataset.win!, t]));
+const spy = new IntersectionObserver((entries) => {
+  for (const en of entries) {
+    if (en.isIntersecting) {
+      tasks.forEach((t) => t.classList.remove('active'));
+      byWin.get(en.target.id)?.classList.add('active');
+    }
+  }
+}, { threshold: 0.5 });
+tasks.forEach((t) => { const w = document.getElementById(t.dataset.win!); if (w) spy.observe(w); });

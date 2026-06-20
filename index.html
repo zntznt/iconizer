@@ -12,7 +12,7 @@
         --bevel-down: inset 1px 1px #808080, inset -1px -1px #fff, inset 2px 2px #000, inset -2px -2px #dfdfdf;
         --cursive: "Comic Sans MS", "Comic Sans", "Chalkboard SE", cursive;
         --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
-        --taskbar-h: 92px;
+        --taskbar-h: 42px;
       }
       * { box-sizing: border-box; }
       html, body { overflow-x: hidden; min-height: 100%; }
@@ -51,15 +51,42 @@
       @keyframes twinkle { 0%,100% { opacity: .9; } 50% { opacity: .72; } }
       @keyframes gridrun { from { background-position: 0 0; } to { background-position: 0 40px; } }
 
-      /* ---- top marquee banner (decorative) ---- */
-      .banner {
-        position: sticky; top: 0; z-index: 40; overflow: hidden; white-space: nowrap;
-        background: linear-gradient(90deg, var(--navy), var(--sky));
-        color: #fff; font-family: var(--cursive); border-bottom: 2px solid #000;
-        padding: 4px 0; text-shadow: 1px 1px #000;
+      /* ---- header system status bar (live, not a decorative scroller) ---- */
+      .sysbar {
+        position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 10px;
+        background: linear-gradient(90deg, var(--navy), var(--sky)); color: #fff;
+        border-bottom: 2px solid #000; padding: 3px 8px; text-shadow: 1px 1px #000;
+        font-family: var(--cursive); white-space: nowrap; height: 30px;
       }
-      .banner span { display: inline-block; padding-left: 100%; animation: scroll 18s linear infinite; }
-      @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+      .sysbar-cap { flex: none; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; }
+      .pips { flex: none; display: flex; gap: 5px; }
+      .pip { width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #777, #333); box-shadow: inset 0 0 2px #000; }
+      .pip.on { background: radial-gradient(circle at 35% 30%, #b6ff7a, var(--lime)); box-shadow: 0 0 6px var(--lime); }
+      .pip.nudge { animation: pipblink 1.1s steps(1) infinite; }
+      @keyframes pipblink { 0%,60% { opacity: 1; } 61%,100% { opacity: .3; } }
+      /* segmented install/progress bar */
+      .prog {
+        flex: 1; min-width: 40px; position: relative; height: 16px; overflow: hidden;
+        background: #001a00; box-shadow: var(--bevel-down);
+      }
+      .prog-fill {
+        position: absolute; inset: 0; width: var(--prog, 0%);
+        background: repeating-linear-gradient(90deg, var(--lime) 0 8px, #0a0 8px 10px);
+        transition: width .1s linear;
+      }
+      .prog-text {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-family: monospace; font-size: 11px; color: #9bbc0f; text-shadow: none; z-index: 1;
+      }
+      .sysbar[data-status="rendering"] .prog-fill { width: 100%; animation: barber .6s linear infinite; }
+      @keyframes barber { from { background-position: 0 0; } to { background-position: 18px 0; } }
+      .lcd-led {
+        position: relative; text-shadow: 0 0 4px currentColor; flex: none;
+      }
+      .lcd-led::after {
+        content: ""; position: absolute; inset: 0; pointer-events: none;
+        background: repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.35) 2px 3px);
+      }
 
       /* ---- wallpaper / preview hero (the point of the app) ---- */
       .hero { display: flex; justify-content: center; align-items: flex-start; min-width: 0; }
@@ -201,6 +228,14 @@
       input[type="color"] { width: 42px; height: 26px; min-width: 0; padding: 0; border: 2px solid #808080; flex: none; }
       input[type="file"] { width: 100%; min-width: 0; font-size: 12px; }
 
+      /* Export.exe "Save as…" rows: full-width stacked buttons with a caption */
+      .save-row {
+        display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+        width: 100%; text-align: left; padding: 6px 10px;
+      }
+      .save-row small { color: #5a6a3a; font-size: 11px; font-weight: normal; }
+      .save-row:disabled small { color: #999; }
+
       /* sunken "properties" inset = revealed conditional sub-region */
       .inset {
         background: var(--face); box-shadow: var(--bevel-down); padding: 9px; margin-top: 2px;
@@ -224,36 +259,71 @@
       .btn98:disabled { color: #808080; box-shadow: var(--bevel-up); cursor: default; }
 
       /* ---- taskbar / system tray ---- */
+      /* STRICT single-row taskbar — never wraps into a tall stack */
       .taskbar {
-        position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; min-height: var(--taskbar-h);
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; height: var(--taskbar-h);
         background: var(--face); box-shadow: var(--bevel-up); border-top: 2px solid #fff;
-        display: flex; align-items: center; gap: 8px; padding: 6px 8px; flex-wrap: wrap;
+        display: flex; align-items: center; gap: 6px; padding: 4px 6px; flex-wrap: nowrap;
       }
-      .start {
-        font-family: var(--cursive); font-weight: bold; display: flex; align-items: center; gap: 6px;
-      }
-      .start .flag {
-        width: 16px; height: 16px;
+      .start-btn { flex: none; font-family: var(--cursive); font-weight: bold; display: flex; align-items: center; gap: 6px; padding: 4px 12px; }
+      .flag {
+        width: 16px; height: 16px; flex: none;
         background:
           linear-gradient(135deg, #f00 0 50%, transparent 50%),
           linear-gradient(-135deg, #0c0 0 50%, transparent 50%),
           linear-gradient(45deg, #00f 0 50%, transparent 50%),
           linear-gradient(-45deg, #fc0 0 50%, transparent 50%);
       }
-      .webring { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      /* tasks: the only flexible region, horizontally scrollable */
+      .tasks { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+      .task { flex: none; white-space: nowrap; padding: 4px 10px; font-size: 12px; }
+      .task.active { box-shadow: var(--bevel-down); }
+      /* quick-save split button pinned right, always visible */
+      .quick-save { flex: none; position: relative; }
+      .qs-menu {
+        position: absolute; bottom: calc(100% + 4px); right: 0; z-index: 55;
+        background: var(--face); box-shadow: var(--bevel-up); display: flex; flex-direction: column; min-width: 120px;
+      }
+      .qs-item { background: var(--face); border: 0; box-shadow: var(--bevel-up); padding: 6px 10px; text-align: left; cursor: pointer; font-size: 13px; }
+      .qs-item:disabled { color: #808080; cursor: default; }
+
+      /* Start menu */
+      .start-menu {
+        position: fixed; bottom: var(--taskbar-h); left: 4px; z-index: 56;
+        display: flex; background: var(--face); box-shadow: var(--bevel-up), 0 4px 16px rgba(0,0,0,.5);
+        max-height: calc(100vh - var(--taskbar-h) - 12px); width: min(280px, calc(100vw - 12px));
+      }
+      .sm-spine {
+        writing-mode: vertical-rl; transform: rotate(180deg); text-align: center;
+        background: linear-gradient(var(--sky), var(--navy)); color: #fff; font-family: var(--cursive);
+        font-weight: bold; font-size: 18px; padding: 10px 6px; letter-spacing: 2px; flex: none;
+      }
+      .sm-body { flex: 1; min-width: 0; overflow-y: auto; padding: 4px; }
+      .sm-banner { font-family: var(--cursive); font-size: 11px; color: var(--navy); text-align: center; padding: 4px; border-bottom: 1px solid #808080; }
+      .sm-group { font-size: 11px; font-weight: bold; color: #555; padding: 6px 6px 2px; }
+      .sm-link, .sm-about { display: block; padding: 6px 10px; text-decoration: none; color: var(--ink); font-size: 13px; }
+      .sm-link:hover { background: var(--navy); color: #fff; }
+      .sm-about { color: #555; font-style: italic; font-size: 12px; }
+      .arcade-btn {
+        display: block; width: calc(100% - 8px); margin: 4px; padding: 8px 12px; border: 0; cursor: pointer;
+        font-size: 14px; font-weight: bold; color: #fff; border-radius: 8px;
+        background: radial-gradient(circle at 50% 30%, #5ad, #28a 60%, #036);
+        box-shadow: 0 3px 0 #024, var(--bevel-up); position: relative;
+      }
+      .arcade-btn::before { content: ""; position: absolute; inset: 3px 6px auto 6px; height: 35%; border-radius: 6px; background: linear-gradient(rgba(255,255,255,.5), transparent); }
+      .arcade-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #024, var(--bevel-down); }
+      #share.arcade-btn { background: radial-gradient(circle at 50% 30%, #d7a, #a39 60%, #639); box-shadow: 0 3px 0 #527, var(--bevel-up); }
       .lcd {
         font-family: monospace; color: #33ff66; background: #001a00; box-shadow: var(--bevel-down);
         padding: 4px 8px; font-size: 12px;
       }
-      .tray { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-      .tray label { display: flex; align-items: center; gap: 4px; }
 
       :focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
 
       /* ---- responsive ---- */
       @media (max-width: 640px) {
-        :root { --taskbar-h: 76px; }
-        .hero { position: sticky; top: 32px; z-index: 30; padding: 8px; }
+        :root { --taskbar-h: 48px; }
+        .hero { position: sticky; top: 30px; z-index: 30; padding: 8px; }
         .desktop { grid-template-columns: 1fr; padding: 0 8px 8px; }
         .row { flex-direction: column; align-items: stretch; }
         .row > label { flex-direction: column; align-items: stretch; gap: 4px; }
@@ -265,8 +335,8 @@
         input[type="range"] { height: 28px; }
       }
       @media (prefers-reduced-motion: reduce) {
-        .banner span, .led, body::before, body::after, .crt-screen::before, .ring-track { animation: none !important; }
-        .banner span { padding-left: 0; }
+        .led, body::before, body::after, .crt-screen::before, .ring-track,
+        .pip.nudge, .prog-fill, .dw-face, .dw-cur, .arcade-btn { animation: none !important; }
       }
       /* ---- Geocities webring banner ---- */
       .ringbox {
@@ -315,9 +385,18 @@
     </style>
   </head>
   <body>
-    <div class="banner" role="presentation" aria-hidden="true">
-      <span>★ UNDER CONSTRUCTION 🚧 ★ best viewed at 800×600 ★ Netscape Now! ★ welcome to Iconizer ★ ⏳ ★&nbsp;&nbsp;&nbsp;&nbsp;</span>
-    </div>
+    <!-- HEADER: live system status bar (caption · readiness pips · progress · LEDs) -->
+    <header class="sysbar" data-status="idle">
+      <span class="sysbar-cap" role="status" aria-live="polite">Iconizer — [<span id="srcName">no image</span>]</span>
+      <span class="pips">
+        <span class="pip" id="pipImg" aria-label="picture: not loaded" title="picture"></span>
+        <span class="pip nudge" id="pipSvg" aria-label="icon .svg: none yet — add one!" title="icon svg"></span>
+        <span class="pip" id="pipReady" aria-label="render: not ready" title="render"></span>
+      </span>
+      <span class="prog" aria-hidden="true"><span class="prog-fill"></span><span class="prog-text" id="progText">☆ Netscape Now! · best viewed at 800×600 ☆</span></span>
+      <span class="lcd lcd-led sysbar-meta" aria-hidden="true">TIME ▸ <span id="clock">--:--</span></span>
+      <span class="lcd lcd-led sysbar-meta" aria-hidden="true">HITS ▸ <span id="visitorCount">#000000</span></span>
+    </header>
 
     <main class="desktop">
       <!-- PREVIEW HERO: first in source (pins to top on mobile), spans the
@@ -348,7 +427,7 @@
       </div>
 
       <!-- WINDOW A -->
-      <section class="win">
+      <section class="win" id="winPics">
         <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
         <div class="win-body">
           <div class="row"><label>pick a picture… <input id="image" type="file" accept="image/*" /></label></div>
@@ -358,7 +437,7 @@
       </section>
 
       <!-- WINDOW B -->
-      <section class="win">
+      <section class="win" id="winGrid">
         <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
         <div class="win-body">
           <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
@@ -376,7 +455,7 @@
       </section>
 
       <!-- WINDOW C -->
-      <section class="win">
+      <section class="win" id="winLayer">
         <div class="win-bar"><span class="cap">🌈 Layered Color.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
         <div class="win-body">
           <div class="row"><label><input id="layered" type="checkbox" /> layered (quasi-RGB)</label></div>
@@ -395,7 +474,7 @@
       </section>
 
       <!-- WINDOW D -->
-      <section class="win">
+      <section class="win" id="winScheme">
         <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
         <div class="win-body">
           <div class="row"><label>scheme
@@ -423,7 +502,7 @@
       </section>
 
       <!-- WINDOW E -->
-      <section class="win">
+      <section class="win" id="winMotion">
         <div class="win-bar"><span class="cap">✨ Motion FX.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
         <div class="win-body">
           <div class="row"><label>motion
@@ -442,6 +521,21 @@
                 <option value="brightness">brightness</option><option value="random">random</option>
               </select></label></div>
           </div>
+        </div>
+      </section>
+
+      <!-- WINDOW F — Export.exe (canonical home for the export controls) -->
+      <section class="win" id="winExport">
+        <div class="win-bar"><span class="cap">💾 Export.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-body">
+          <div class="inset" id="exportSizeBox"><span class="dw-step" style="font-family:monospace">OUTPUT ▸ <span id="exportSize">— add media to begin —</span></span></div>
+          <div class="row"><label>output scale
+            <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+          </label></div>
+          <div class="divider">✦ ✦ ✦</div>
+          <button id="dlSvg" class="btn98 save-row" type="button" disabled>💾 Save as .SVG <small>vector · crisp · tiny</small></button>
+          <button id="dlPng" class="btn98 save-row" type="button" disabled>🖼️ Save as .PNG <small>raster image · @ current scale</small></button>
+          <button id="dlGif" class="btn98 save-row" type="button" disabled>🎞️ Save as .GIF <small id="gifNote">animated · needs Motion FX</small></button>
         </div>
       </section>
     </main>
@@ -483,22 +577,45 @@
       <div class="ring-foot">this site is a proud member ·  ★ best viewed with an SVG ★</div>
     </aside>
 
-    <!-- TASKBAR -->
+    <!-- START MENU (opened by the Start button; holds actions + webring links) -->
+    <nav id="startMenu" class="start-menu" role="menu" hidden>
+      <div class="sm-spine">Iconizer</div>
+      <div class="sm-body">
+        <div class="sm-banner">★ Welcome to Iconizer ★ Netscape Now!</div>
+        <div class="sm-group">Programs</div>
+        <button id="surprise" class="arcade-btn" type="button" role="menuitem">🎲 Surprise Me!</button>
+        <button id="share" class="arcade-btn" type="button" role="menuitem" title="copies a link with these settings (not the image)">🔗 Copy Share Link</button>
+        <div class="sm-group">Network Neighborhood</div>
+        <a class="sm-link" role="menuitem" href="https://frutigeraeroarchive.org/wallpapers/old_school_anime_1" target="_blank" rel="noopener noreferrer">🖼️ Frutiger Aero Archive</a>
+        <a class="sm-link" role="menuitem" href="https://unsplash.com" target="_blank" rel="noopener noreferrer">📷 Unsplash</a>
+        <a class="sm-link" role="menuitem" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">🔣 Font Awesome Free</a>
+        <a class="sm-link" role="menuitem" href="https://lucide.dev/icons" target="_blank" rel="noopener noreferrer">✏️ Lucide</a>
+        <a class="sm-link" role="menuitem" href="https://www.svgrepo.com" target="_blank" rel="noopener noreferrer">🗂️ SVG Repo</a>
+        <div class="sm-group">Help</div>
+        <span class="sm-about" role="menuitem">About Iconizer — a for-fun mosaic toy ♡</span>
+      </div>
+    </nav>
+
+    <!-- TASKBAR: strict single row — Start (left) · tasks (scroll) · Save (right) -->
     <footer class="taskbar">
-      <span class="start"><span class="flag"></span>Iconizer</span>
-      <nav class="webring start-meta" aria-label="actions">
-        <button id="surprise" class="btn98" type="button">🎲 Surprise me</button>
-        <button id="share" class="btn98" type="button" title="copies a link with these settings (not the image)">🔗 Share link</button>
-      </nav>
-      <span class="lcd start-meta" id="visitorCount" aria-hidden="true">visitor No. 000000</span>
-      <span class="lcd start-meta" id="clock" aria-hidden="true">--:--</span>
-      <div class="tray">
-        <button id="dlSvg" class="btn98" type="button" disabled>Save .SVG</button>
-        <button id="dlPng" class="btn98" type="button" disabled>Save .PNG</button>
-        <button id="dlGif" class="btn98" type="button" hidden>Save .GIF</button>
-        <label>scale
-          <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
-        </label>
+      <button id="startBtn" class="start-btn btn98" type="button" aria-haspopup="menu" aria-expanded="false">
+        <span class="flag"></span>Start
+      </button>
+      <div class="tasks" id="tasks">
+        <button class="task btn98" type="button" data-win="winPics">🖼️ My&nbsp;Pictures</button>
+        <button class="task btn98" type="button" data-win="winGrid">⚙️ Grid</button>
+        <button class="task btn98" type="button" data-win="winLayer">🌈 Layered</button>
+        <button class="task btn98" type="button" data-win="winScheme">🎨 Scheme</button>
+        <button class="task btn98" type="button" data-win="winMotion">✨ Motion</button>
+        <button class="task btn98" type="button" data-win="winExport">💾 Export</button>
+      </div>
+      <div class="quick-save">
+        <button id="quickSave" class="btn98" type="button" aria-haspopup="menu" aria-expanded="false">💾 Save ▾</button>
+        <div id="quickSaveMenu" class="qs-menu" hidden>
+          <button class="qs-item" type="button" data-proxy="dlSvg">💾 .SVG</button>
+          <button class="qs-item" type="button" data-proxy="dlPng">🖼️ .PNG</button>
+          <button class="qs-item" type="button" data-proxy="dlGif">🎞️ .GIF</button>
+        </div>
       </div>
     </footer>
 
