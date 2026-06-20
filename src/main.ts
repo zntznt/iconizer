@@ -324,8 +324,7 @@ syncControls();
 if (settings.layered && settings.motion !== 'none') heavyAccepted = true;
 
 $('surprise').addEventListener('click', () => {
-  Object.assign(settings, rollRandom());
-  heavyAccepted = true; // a random roll may hit the combo — that's on the dice, no nag
+  Object.assign(settings, rollRandom()); // rollRandom never produces the heavy combo
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
 });

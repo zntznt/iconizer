@@ -57,6 +57,13 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   else if (kind === 'duotone') scheme = { kind, dark: rgb(randHex(pick)), light: rgb(randHex(pick)) };
   else scheme = { kind } as Scheme;
 
+  // layered + motion together is the heavy combo (we warn about it) — so a roll
+  // picks AT MOST ONE of them: a 'flavor' of layered, motion, or plain.
+  const flavor = choose(['layered', 'motion', 'plain'] as const);
+  const layered = flavor === 'layered';
+  const ANIMS = MOTIONS.filter((m) => m !== 'none');
+  const motion = flavor === 'motion' ? choose(ANIMS) : 'none';
+
   return {
     ...defaults,
     cols: 12 + pick(64), // 12..75 — keeps it legible, not absurdly fine
@@ -64,11 +71,11 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     iconScale: +(0.6 + rnd() * 1.8).toFixed(1), // 0.6..2.4
     sizeByBrightness: rnd() < 0.5,
     background: rnd() < 0.7 ? '#ffffff' : randHex(pick),
-    layered: rnd() < 0.5,
+    layered,
     layerStyle: rnd() < 0.5 ? 'cmy' : 'rgb',
     layerOffset: rnd() < 0.5 ? 0 : pick(4),
     scheme,
-    motion: choose(MOTIONS),
+    motion,
     motionSpeed: +(0.5 + rnd() * 3).toFixed(1), // 0.5..3.5
     staggerMode: choose(STAGGERS),
   };

@@ -31,4 +31,13 @@ assert.ok(a.iconScale >= 0.6 && a.iconScale <= 2.4, `iconScale in range, got ${a
 // a rolled settings must itself round-trip (no un-encodable values).
 assert.deepEqual(decodeSettings('#' + encodeSettings(a)), a, 'rolled settings round-trips');
 
-console.log('permalink.test.ts: ok (round-trip, compat, garbage, deterministic roll)');
+// rollRandom must NEVER produce the heavy combo (layered + motion together).
+// Sweep many rnd sequences to exercise the flavor branch.
+for (let s = 0; s < 200; s++) {
+  let k = s;
+  const r = rollRandom(() => { k = (k * 1103515245 + 12345) & 0x7fffffff; return (k % 1000) / 1000; });
+  assert.ok(!(r.layered && r.motion !== 'none'),
+    `roll #${s} must not enable layered + motion together (got layered=${r.layered}, motion=${r.motion})`);
+}
+
+console.log('permalink.test.ts: ok (round-trip, compat, garbage, roll never heavy-combo)');
