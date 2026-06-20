@@ -118,11 +118,12 @@
          the viewport caps + aspect-ratio makes the browser keep the image ratio and
          scale to the binding cap (fills viewport, no letterbox); the bezel hugs it. */
       .crt.maximized #out svg {
-        /* fill the viewport keeping ratio: width = the smaller of (width cap) and
-           (height cap x aspect-ratio). --ar is the image's W/H, passed from render()
-           since CSS can't read it. height follows from aspect-ratio. No max-* clamp
-           (which would break the ratio) — the min() already bounds both axes. */
-        width: min(calc(100vw - 52px), calc((100vh - 52px) * var(--ar, 1)));
+        /* Fill the horizontal space. Width is the width cap (the whole viewport),
+           so a tall image grows to occupy the width and its height follows from the
+           aspect ratio — it may exceed the viewport height and the bezel scrolls/
+           overflows, which is fine: the user wants the picture BIG, not letterboxed.
+           --ar is the image's W/H from render() (CSS can't read it). */
+        width: calc(100vw - 52px);
         height: auto; max-width: none; max-height: none; margin: 0;
       }
       /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
