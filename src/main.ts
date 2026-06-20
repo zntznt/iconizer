@@ -64,13 +64,32 @@ function scheduleRedraw() {
   timer = setTimeout(redraw, 50);
 }
 
-$('image').addEventListener('change', async (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
+async function loadImage(file: File) {
+  if (!file.type.startsWith('image/')) return;
   const bitmap = await createImageBitmap(file);
   cells = sample(bitmap, settings);
   bitmap.close();
   redraw();
+}
+
+$('image').addEventListener('change', (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (file) loadImage(file);
+});
+
+// Empty-state drop-well: drag an image onto the CRT to load it (the click-to-pick
+// is native via the <label for="image">). drop-hot class lights the dashed frame.
+const dropwell = $('dropwell');
+['dragenter', 'dragover'].forEach((ev) =>
+  dropwell.addEventListener(ev, (e) => { e.preventDefault(); dropwell.classList.add('drop-hot'); }),
+);
+['dragleave', 'drop'].forEach((ev) =>
+  dropwell.addEventListener(ev, () => dropwell.classList.remove('drop-hot')),
+);
+dropwell.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = (e as DragEvent).dataTransfer?.files?.[0];
+  if (file) loadImage(file);
 });
 
 // Render the icon list with remove buttons. Order = dark->light draw order.

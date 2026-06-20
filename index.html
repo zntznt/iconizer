@@ -127,16 +127,32 @@
          ratio. The available width is bounded by .crt's own max-width (set on the
          bezel below), so 100% resolves to the cell — no overflow, no black bars. */
       #out svg { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; }
-      .mascot {
-        display: none; color: #9bbc0f; font-family: var(--cursive); text-align: center;
-        padding: 40px 16px; font-size: 15px;
+      /* empty-state drop-well: SUNKEN + dashed lime = "droppable, not a button".
+         Fills the phosphor; shown only while #out is empty. The whole .dw-main is a
+         label[for=image] so a click anywhere opens the real picker. */
+      .dropwell {
+        display: none; position: absolute; inset: 8px; flex-direction: column;
+        align-items: center; justify-content: center; gap: 10px; padding: 16px;
+        box-shadow: var(--bevel-down) inset; border: 2px dashed var(--lime); border-radius: 4px;
+        color: #9bbc0f; text-align: center;
       }
-      #out:empty + .mascot { display: block; }
-      .mascot .face { font-size: 54px; display: block; margin-bottom: 8px; }
-      .mascot .bubble {
-        display: inline-block; background: var(--face); color: var(--ink);
-        box-shadow: var(--bevel-up); padding: 6px 12px; border-radius: 4px; margin-top: 6px;
+      #out:empty + .dropwell { display: flex; }
+      .dropwell.drop-hot { border-color: #d4ff7a; box-shadow: inset 0 0 30px rgba(57,255,20,.25); }
+      .dw-main {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        cursor: pointer; width: 100%;
       }
+      .dw-face { font-size: 52px; animation: bob 3s ease-in-out infinite; }
+      .dw-headline { font-family: monospace; font-size: clamp(14px, 3vw, 20px); color: var(--lime); }
+      .dw-cur { animation: dosblink 1s steps(1) infinite; }
+      .dw-disk { font-family: monospace; font-size: 11px; color: #6a8a2a; }
+      .dw-sub { font-family: var(--cursive); font-size: 13px; color: #9bbc0f; }
+      .dw-list { display: flex; flex-direction: column; gap: 4px; font-family: monospace; font-size: 13px; }
+      .dw-step { color: #9bbc0f; }
+      .dw-svglink { color: var(--cyan); text-decoration: underline; cursor: pointer; }
+      .dw-svglink:hover { color: #fff; }
+      @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+      @keyframes dosblink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
       .led { position: absolute; right: 12px; bottom: 8px; width: 9px; height: 9px; border-radius: 50%;
         background: var(--lime); box-shadow: 0 0 6px var(--lime); animation: blink 1.6s steps(1) infinite; }
       @keyframes blink { 0%,60% { opacity: 1; } 61%,100% { opacity: .25; } }
@@ -310,7 +326,22 @@
         <div class="crt" id="crt" role="button" aria-pressed="false" aria-label="click to maximize or restore the screen" tabindex="0">
           <div class="crt-screen">
             <div id="out"></div>
-            <div class="mascot"><span class="face">👾</span><span class="bubble">feed me a picture! ♡</span></div>
+            <!-- empty state: a label[for=image] drop-well (click/drop to upload the
+                 picture) + a sibling checklist whose step 2 is its OWN label[for=svg]
+                 (siblings, not nested — nested labels are invalid). Shown while #out
+                 is empty. drag/drop wired in JS to the same #image handler. -->
+            <div class="dropwell" id="dropwell">
+              <label class="dw-main" for="image">
+                <span class="dw-face">👾</span>
+                <span class="dw-headline">C:\&gt; feed me a picture<span class="dw-cur">_</span></span>
+                <span class="dw-disk">★ INSERT DISK 1 OF 1 ★</span>
+                <span class="dw-sub">click anywhere or drop an image here</span>
+              </label>
+              <div class="dw-list" aria-hidden="false">
+                <span class="dw-step">[1] 💾 drop a picture ↑</span>
+                <label class="dw-step dw-svglink" for="svg">[2] ✶ add an icon .svg</label>
+              </div>
+            </div>
           </div>
           <span class="led" aria-hidden="true"></span>
         </div>
