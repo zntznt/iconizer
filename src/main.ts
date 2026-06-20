@@ -297,3 +297,22 @@ setInterval(tick, 15000);
 const n = (Number(localStorage.getItem('iconizer.visits')) || 0) + 1;
 localStorage.setItem('iconizer.visits', String(n));
 $('visitorCount').textContent = `visitor No. ${String(n).padStart(6, '0')}`;
+
+// Maximize/restore the CRT: click the screen (or the ⛶ button) to fill the
+// viewport over the windows; click again or press Esc to restore.
+const crt = $('crt');
+const zoomBtn = $('zoomBtn') as HTMLButtonElement;
+function toggleMax(on?: boolean) {
+  const next = on ?? !crt.classList.contains('maximized');
+  crt.classList.toggle('maximized', next);
+  zoomBtn.setAttribute('aria-pressed', String(next));
+}
+crt.addEventListener('click', (e) => {
+  // the zoom button has its own handler; let it toggle once, not twice.
+  if ((e.target as HTMLElement).closest('#zoomBtn')) return;
+  toggleMax();
+});
+zoomBtn.addEventListener('click', () => toggleMax());
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && crt.classList.contains('maximized')) toggleMax(false);
+});
