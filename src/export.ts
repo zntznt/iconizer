@@ -103,11 +103,16 @@ export async function downloadGif(
   const W = Math.round(w * scale), H = Math.round(h * scale);
   const delayMs = Math.max(20, Math.round((periodSec * 1000) / frames));
 
-  const [{ default: GIF }, workerUrl] = await Promise.all([
+  // Load gif.js + its worker SOURCE inlined as a string (?raw). gif.js does
+  // `new Worker(workerScript)` internally; we wrap the inlined source in a same-
+  // origin blob URL. ?raw works identically in dev and build (no separate worker
+  // file to 404, no CORS) — unlike ?url+fetch, which failed in dev and hung render.
+  const [{ default: GIF }, { default: workerSrc }] = await Promise.all([
     import('gif.js'),
-    import('gif.js/dist/gif.worker.js?url').then((m) => m.default),
+    import('gif.js/dist/gif.worker.js?raw'),
   ]);
-  const gif = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerUrl, repeat: 0 });
+  const workerBlobUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
+  const gif = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
 
   // Mount the live mosaic offscreen so its CSS animation actually runs.
   const stage = document.createElement('div');
@@ -145,11 +150,19 @@ export async function downloadGif(
     stage.remove();
   }
 
-  const blob: Blob = await new Promise((resolve) => {
-    gif.on('finished', resolve);
-    gif.render();
-  });
-  downloadBlob(blob, filename);
+  try {
+    const blob: Blob = await new Promise((resolve, reject) => {
+      gif.on('finished', resolve);
+      gif.on('abort', () => reject(new Error('gif encode aborted')));
+      // guard: if the worker never reports back, fail loudly instead of hanging.
+      const timer = setTimeout(() => reject(new Error('gif encode timed out')), 30000);
+      gif.on('finished', () => clearTimeout(timer));
+      gif.render();
+    });
+    downloadBlob(blob, filename);
+  } finally {
+    URL.revokeObjectURL(workerBlobUrl);
+  }
 }
 
 /** "matrix(a, b, c, d, e, f)" (computed CSS) -> SVG transform "matrix(a b c d e f)". */

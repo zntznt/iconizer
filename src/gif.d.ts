@@ -9,10 +9,15 @@ declare module 'gif.js' {
     constructor(opts?: GifOpts);
     addFrame(image: ImageData | CanvasImageSource, opts?: FrameOpts): void;
     on(event: 'finished', cb: (blob: Blob) => void): void;
+    on(event: 'abort' | 'progress', cb: (arg?: unknown) => void): void;
     render(): void;
   }
 }
 declare module '*?url' {
   const url: string;
   export default url;
+}
+declare module '*?raw' {
+  const src: string;
+  export default src;
 }
