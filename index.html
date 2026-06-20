@@ -73,11 +73,17 @@
       /* there's a render -> the screen is clickable to maximize */
       .crt:not(:has(#out:empty)) { cursor: zoom-in; }
       .crt.maximized { cursor: zoom-out; }
-      /* IDLE (no image): the CRT fills the vertical space, centered, with the same
-         padding below as the grid's 14px top — so it sits in a tall, balanced void. */
-      .hero:has(#out:empty) { min-height: calc(100vh - var(--taskbar-h) - 28px - 36px); align-items: stretch; }
-      .hero:has(#out:empty) .crt { display: flex; flex-direction: column; }
-      .hero:has(#out:empty) .crt-screen { flex: 1; }
+      /* IDLE (no image): the CRT sits in the vertical space as a proper LANDSCAPE
+         monitor (4:3), not a tall phone-shaped sliver. The screen takes a 4:3 box
+         sized from the available height (capped), and the bezel hugs it. */
+      .hero:has(#out:empty) { min-height: calc(100vh - var(--taskbar-h) - 28px - 36px); align-items: center; }
+      .hero:has(#out:empty) .crt-screen {
+        aspect-ratio: 4 / 3;
+        /* width = smaller of 640px and (available height x 4/3) so the 4:3 box never
+           overflows vertically; height derives from aspect-ratio. Always landscape. */
+        width: min(640px, calc((100vh - var(--taskbar-h) - 140px) * 4 / 3));
+        height: auto;
+      }
       /* maximized: pop out of the grid, fill the VERTICAL space. Width follows the
          image (centered) — borders hug the picture, not the viewport edges. */
       /* centered in the viewport; sizes to the (capped) SVG so the bezel hugs it
