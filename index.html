@@ -187,26 +187,23 @@
         background: var(--lime); box-shadow: 0 0 6px var(--lime); animation: blink 1.6s steps(1) infinite; }
       @keyframes blink { 0%,60% { opacity: 1; } 61%,100% { opacity: .25; } }
 
-      /* ---- the window grid: windows flow around a centred CRT ---- */
+      /* ---- desktop layout: CRT flanked by two rails of windows ---- */
       .desktop {
-        display: grid; gap: 14px; padding: 14px; margin: 0 auto;
-        max-width: 1400px; align-items: start;
-        /* single column by default (mobile); CRT first in source -> pins on top */
-        grid-template-columns: 1fr;
+        display: flex; flex-direction: column; gap: 14px; padding: 14px;
+        margin: 0 auto; max-width: 1400px; align-items: stretch;
       }
-      /* 2 columns: CRT spans the full width on top, windows tile below */
-      @media (min-width: 641px) {
-        .desktop { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .hero { grid-column: 1 / -1; } /* CRT full-width banner above the windows */
-      }
-      /* 3+ columns: CRT sits in the MIDDLE column spanning rows; windows fill the
-         left & right columns around it via dense auto-flow. */
+      /* below 1000px the rails 'dissolve' so their windows stack in the single
+         flex column (hero first in source -> pinned on top for mobile). */
+      .rail { display: contents; }
+      /* >=1000px: three columns — left rail · CRT · right rail. Each RAIL is its
+         own flex column, so its windows pack to NATURAL height independently (a
+         short window never inherits a tall neighbour's row -> no big gaps). */
       @media (min-width: 1000px) {
-        .desktop {
-          grid-template-columns: minmax(0, 1fr) minmax(360px, 1.4fr) minmax(0, 1fr);
-          grid-auto-flow: row dense;
-        }
-        .hero { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; }
+        .desktop { flex-direction: row; align-items: flex-start; }
+        .rail { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 0; }
+        .rail-left { order: 1; }
+        .hero { order: 2; flex: 0 1 auto; align-self: stretch; }
+        .rail-right { order: 3; }
       }
       /* the transition lives on .win (always present) so BOTH directions animate:
          adding .minimizing genies to shrunk, removing it (restore) genies back. */
@@ -457,6 +454,8 @@
         </div>
       </div>
 
+      <!-- LEFT RAIL -->
+      <div class="rail rail-left">
       <!-- WINDOW A -->
       <section class="win" id="winPics">
         <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
@@ -503,7 +502,10 @@
           </div>
         </div>
       </section>
+      </div><!-- /rail-left -->
 
+      <!-- RIGHT RAIL -->
+      <div class="rail rail-right">
       <!-- WINDOW D -->
       <section class="win" id="winScheme">
         <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
@@ -569,6 +571,7 @@
           <button id="dlGif" class="btn98 save-row" type="button" disabled>🎞️ Save as .GIF <small id="gifNote">animated · needs Motion FX</small></button>
         </div>
       </section>
+      </div><!-- /rail-right -->
     </main>
 
     <!-- WEBRING banner: scrolling marquee of free image + icon sources -->
