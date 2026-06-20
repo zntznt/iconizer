@@ -252,6 +252,23 @@
         .banner span, .led, body::before, body::after, .crt-screen::before { animation: none !important; }
         .banner span { padding-left: 0; }
       }
+      /* ---- Win98 heavy-combo warning dialog ---- */
+      .modal-backdrop {
+        position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,40,.45); padding: 16px;
+      }
+      .dialog { background: var(--face); box-shadow: var(--bevel-up); max-width: 440px; width: 100%; }
+      .dialog-bar {
+        display: flex; align-items: center; padding: 3px 4px; font-family: var(--cursive); text-shadow: 1px 1px #000;
+        background: linear-gradient(90deg, #8a0000, #d04040); color: #fff; /* red = warning */
+      }
+      .dialog-bar span:first-child { flex: 1; }
+      .dialog-bar .btns i { display: inline-block; width: 18px; height: 16px; background: var(--face); box-shadow: var(--bevel-up); font-style: normal; font-size: 10px; line-height: 16px; text-align: center; color: #000; }
+      .dialog-body { padding: 14px; font-size: 13px; }
+      .dialog-body p { margin: 0 0 10px; }
+      .dialog-body .warn-ico { font-size: 18px; }
+      .dialog-body .reqs { font-family: monospace; font-size: 12px; background: #fff; box-shadow: var(--bevel-down); padding: 8px; }
+      .dialog-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
     </style>
   </head>
   <body>
@@ -390,6 +407,28 @@
         </label>
       </div>
     </footer>
+
+    <!-- Win98 "system requirements" warning for the heavy layered+motion combo -->
+    <div id="heavyModal" class="modal-backdrop" hidden>
+      <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="heavyTitle">
+        <div class="dialog-bar"><span id="heavyTitle">⚠️ System Requirements.exe</span><span class="btns" aria-hidden="true"><i>×</i></span></div>
+        <div class="dialog-body">
+          <p><span class="warn-ico">⚠️</span> <b>WHOA THERE, POWER USER.</b></p>
+          <p>You're about to run <b>Layered Color</b> AND <b>Motion FX</b> at the same time. This is, technically speaking, <b>super duper resource intensive</b> — every little icon is doing blend-mode math <i>and</i> animating, all at once. 💀</p>
+          <p class="reqs">RECOMMENDED SPECS:<br>
+            ▸ Intel Pentium 4 @ 3.0GHz (or a toaster from the future)<br>
+            ▸ 512 MB RAM (one whole gigabyte for comfort)<br>
+            ▸ a GPU that has seen things<br>
+            ▸ the patience of a 56k modem
+          </p>
+          <p>For real though — it <b>will</b> chug on a big grid. Drop your <b>columns</b> if it stutters. Proceed?</p>
+          <div class="dialog-buttons">
+            <button id="heavyOk" class="btn98" type="button">⚡ I have the specs, send it</button>
+            <button id="heavyCancel" class="btn98" type="button">nevermind, my PC is fragile</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

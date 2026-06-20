@@ -9,6 +9,37 @@ import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const out = $('out');
+
+// --- "heavy combo" warning (layered + motion) -------------------------------
+
+// Show the Win98 system-requirements modal; resolve true if the user proceeds.
+function confirmHeavy(): Promise<boolean> {
+  const modal = $('heavyModal');
+  modal.hidden = false;
+  return new Promise((resolve) => {
+    const done = (ok: boolean) => {
+      modal.hidden = true;
+      $('heavyOk').removeEventListener('click', onOk);
+      $('heavyCancel').removeEventListener('click', onCancel);
+      resolve(ok);
+    };
+    const onOk = () => done(true);
+    const onCancel = () => done(false);
+    $('heavyOk').addEventListener('click', onOk);
+    $('heavyCancel').addEventListener('click', onCancel);
+  });
+}
+
+// Once the user accepts (or already runs the combo), don't nag again this session.
+let heavyAccepted = false;
+/** True if turning on `next` would create the layered+motion combo for the first
+ *  time and the user hasn't already accepted it. */
+function needsHeavyWarning(next: { layered?: boolean; motion?: boolean }): boolean {
+  if (heavyAccepted) return false;
+  const willLayer = next.layered ?? settings.layered;
+  const willMove = (next.motion ?? settings.motion !== 'none');
+  return willLayer && willMove;
+}
 // Load settings from the URL hash (a shared permalink) if present, else defaults.
 const settings: Settings = settingsFromUrl() ?? { ...defaults };
 
@@ -130,9 +161,14 @@ $('sizeMax').addEventListener('input', (e) => {
   scheduleRedraw();
 });
 
-$('layered').addEventListener('change', (e) => {
-  settings.layered = (e.target as HTMLInputElement).checked;
-  disclose('p-layered', (e.target as HTMLInputElement).checked);
+$('layered').addEventListener('change', async (e) => {
+  const cb = e.target as HTMLInputElement;
+  if (cb.checked && needsHeavyWarning({ layered: true })) {
+    if (!(await confirmHeavy())) { cb.checked = false; return; } // cancelled -> revert
+    heavyAccepted = true;
+  }
+  settings.layered = cb.checked;
+  disclose('p-layered', cb.checked);
   scheduleRedraw();
 });
 $('layerStyle').addEventListener('change', (e) => {
@@ -201,9 +237,15 @@ for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pa
   });
 }
 
-$('motion').addEventListener('change', (e) => {
-  settings.motion = (e.target as HTMLSelectElement).value as Settings['motion'];
-  disclose('p-motion', (e.target as HTMLSelectElement).value !== 'none');
+$('motion').addEventListener('change', async (e) => {
+  const sel = e.target as HTMLSelectElement;
+  const val = sel.value as Settings['motion'];
+  if (val !== 'none' && needsHeavyWarning({ motion: true })) {
+    if (!(await confirmHeavy())) { sel.value = 'none'; return; } // cancelled -> revert
+    heavyAccepted = true;
+  }
+  settings.motion = val;
+  disclose('p-motion', val !== 'none');
   $('dlGif').hidden = settings.motion === 'none'; // GIF export only when animated
   scheduleRedraw();
 });
@@ -277,9 +319,13 @@ function syncControls() {
 
 // Apply settings loaded from a permalink to the controls on startup.
 syncControls();
+// A permalink or roll can arrive with the heavy combo already on; don't nag about
+// a state the user didn't just create by hand.
+if (settings.layered && settings.motion !== 'none') heavyAccepted = true;
 
 $('surprise').addEventListener('click', () => {
   Object.assign(settings, rollRandom());
+  heavyAccepted = true; // a random roll may hit the combo — that's on the dice, no nag
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
 });
