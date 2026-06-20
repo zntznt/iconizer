@@ -26,6 +26,29 @@ function svgSize(svg: string): { w: number; h: number } {
   return { w: Number(w) || 0, h: Number(h) || 0 };
 }
 
+// The SVG's nominal size is small (cols*16 ≈ 512px), but it's VECTOR — it
+// rasterizes crisp at any size. So exports target an absolute base resolution
+// instead of the tiny native size, keeping aspect ratio. scale multiplies it.
+const PNG_BASE = 1500; // sharp default for PNG/SVG (the longest side)
+const GIF_BASE = 720; // capped so animated GIFs stay shareable in size
+
+/** Export pixel dimensions: scale the SVG to `base` on its longest side (× scale),
+ *  preserving aspect ratio. */
+function exportSize(svg: string, base: number, scale: number): { w: number; h: number } {
+  const { w, h } = svgSize(svg);
+  const k = (base * scale) / Math.max(w, h);
+  return { w: Math.round(w * k), h: Math.round(h * k) };
+}
+
+/** A 2d context with high-quality image smoothing (the default is "low"). */
+function hqContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2d canvas context unavailable');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return ctx;
+}
+
 /**
  * Rasterize the SVG to PNG via canvas and download it.
  * Invariant: output PNG size = svg size * scale.
@@ -34,7 +57,7 @@ function svgSize(svg: string): { w: number; h: number } {
  * Not unit-tested — jsdom has no canvas and a polyfill isn't worth a dep.
  */
 export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.png'): Promise<void> {
-  const { w, h } = svgSize(svg);
+  const { w, h } = exportSize(svg, PNG_BASE, scale); // sharp absolute resolution
   const url = URL.createObjectURL(svgBlob(svg));
   try {
     const img = new Image();
@@ -42,10 +65,9 @@ export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.p
     await img.decode();
 
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(w * scale);
-    canvas.height = Math.round(h * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('2d canvas context unavailable');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = hqContext(canvas);
     // ponytail: never taints — our render() SVG is fully self-contained (inline
     // symbol/use, no external image/font/CSS refs). If a later phase lets SVGs
     // pull external fonts/images, toBlob() can throw SecurityError; inline them then.
@@ -70,7 +92,7 @@ async function rasterize(svg: string, w: number, h: number): Promise<ImageData> 
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = hqContext(canvas);
     ctx.drawImage(img, 0, 0, w, h);
     return ctx.getImageData(0, 0, w, h);
   } finally {
@@ -113,8 +135,8 @@ function motionRuleAt(motion: string, p: number): string {
 export async function downloadGif(
   svg: string, motion: string, periodSec: number, scale = 1, frames = 20, filename = 'iconizer.gif',
 ): Promise<void> {
-  const { w, h } = svgSize(svg);
-  const W = Math.round(w * scale), H = Math.round(h * scale);
+  // GIF caps at a smaller base than PNG so animated files stay shareable.
+  const { w: W, h: H } = exportSize(svg, GIF_BASE, scale);
   const delayMs = Math.max(20, Math.round((periodSec * 1000) / frames));
 
   // gif.js worker inlined via ?raw -> blob URL (works in dev and build; ?url+fetch
@@ -124,7 +146,8 @@ export async function downloadGif(
     import('gif.js/dist/gif.worker.js?raw'),
   ]);
   const workerBlobUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
-  const gif = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
+  // quality: lower = better (1 best, 30 default). 5 is a good sharpness/size balance.
+  const gif = new GIF({ workers: 2, quality: 5, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
 
   // Drop the live <style> (its animation/reduce-motion rules are inert in a static
   // image and would conflict). We bake a PER-CELL static transform instead — each
