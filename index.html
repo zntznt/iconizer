@@ -105,7 +105,7 @@
          sized from the available height (capped), and the bezel hugs it. */
       /* reserve the viewport MINUS the sysbar (30), taskbar, webring (~95), and the
          desktop padding (28) so the idle CRT + webring fit without page scroll. */
-      .hero:has(#out:empty) { min-height: calc(100vh - var(--taskbar-h) - 30px - 90px - 16px); align-items: center; }
+      .hero:has(#out:empty) { min-height: calc(100vh - var(--taskbar-h) - 30px - 110px - 16px); align-items: center; }
       /* idle screen is a landscape 4:3 box that fits WITHIN the column (never
          overflows onto neighbouring windows). Width = the full column; height
          derives from 4:3. The bezel stays column-bound. */
@@ -366,7 +366,7 @@
       }
       /* ---- Geocities webring banner ---- */
       .ringbox {
-        max-width: 720px; margin: 0 auto 4px; padding: 6px 8px; text-align: center;
+        max-width: 720px; margin: 14px auto 6px; padding: 6px 8px; text-align: center;
         background: #100022; box-shadow: var(--bevel-up), 0 0 0 2px var(--magenta);
         font-family: var(--cursive); color: var(--cyan);
       }
