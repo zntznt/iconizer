@@ -63,10 +63,12 @@
 
       /* ---- wallpaper / preview hero (the point of the app) ---- */
       .hero { display: flex; justify-content: center; align-items: flex-start; min-width: 0; }
+      /* The bezel sizes to the SVG inside it (so the glass hugs the image at any
+         ratio — no black bars). It shrinks to content, capped at the column width. */
       .crt {
         position: relative; background: #2b2b2b; border-radius: 14px; padding: 14px;
         box-shadow: var(--bevel-up), 0 0 0 4px #111, 0 8px 24px rgba(0,0,0,.6);
-        max-width: min(680px, 100%); width: 100%; cursor: default;
+        width: fit-content; max-width: 100%; cursor: default;
       }
       /* there's a render -> the screen is clickable to maximize */
       .crt:not(:has(#out:empty)) { cursor: zoom-in; }
@@ -78,16 +80,22 @@
       .hero:has(#out:empty) .crt-screen { flex: 1; }
       /* maximized: pop out of the grid, fill the VERTICAL space. Width follows the
          image (centered) — borders hug the picture, not the viewport edges. */
+      /* centered in the viewport; sizes to the (capped) SVG so the bezel hugs it
+         on every side, covering the taskbar. No top/bottom pin -> no stretch. */
       .crt.maximized {
-        position: fixed; top: 12px; bottom: 12px;
-        left: 50%; transform: translateX(-50%);
-        z-index: 60; width: auto; max-width: calc(100vw - 24px); cursor: zoom-out;
-        display: flex; flex-direction: column;
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        z-index: 60; width: fit-content; height: fit-content;
+        max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); cursor: zoom-out;
       }
-      .crt.maximized .crt-screen { flex: 1; min-height: 0; display: flex; }
-      .crt.maximized .crt-screen #out { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-      /* fill the available height; width follows the SVG's aspect ratio */
-      .crt.maximized #out svg { height: 100%; width: auto; max-width: 100%; max-height: 100%; margin: 0; }
+      /* maximized: SVG grows to fill the viewport keeping its ratio; bezel hugs it.
+         height drives the size, width follows via the SVG's own viewBox ratio
+         (height:auto NOT used — we set height big, width:auto follows), and
+         max-width clamps wide images so they fill width instead. */
+      .crt.maximized #out svg {
+        height: calc(100vh - 52px); width: auto;
+        max-width: calc(100vw - 52px); max-height: calc(100vh - 52px);
+        margin: 0;
+      }
       /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
          No min-height here so the glass shrink-wraps the rendered SVG (no black
          letterbox at odd ratios); the empty state gets its height from :has() below. */
@@ -108,6 +116,9 @@
          odd ratios). The screen centres it; the SVG caps at the screen width and a
          sane max height, keeping its aspect ratio. */
       #out { position: relative; z-index: 1; display: flex; }
+      /* the SVG caps at its container width and a sane viewport height, keeping its
+         ratio. The available width is bounded by .crt's own max-width (set on the
+         bezel below), so 100% resolves to the cell — no overflow, no black bars. */
       #out svg { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; }
       .mascot {
         display: none; color: #9bbc0f; font-family: var(--cursive); text-align: center;
