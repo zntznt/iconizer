@@ -503,15 +503,57 @@ function syncQuickSave() {
   });
 }
 
-// task buttons: click scrolls to that window; IntersectionObserver lights the active one.
+// --- minimize / restore windows (genie animation) ---------------------------
+
 const tasks = Array.from(document.querySelectorAll<HTMLButtonElement>('.task'));
-tasks.forEach((t) => t.addEventListener('click', () => {
-  $(t.dataset.win!).scrollIntoView({ behavior: 'smooth', block: 'center' });
-}));
 const byWin = new Map(tasks.map((t) => [t.dataset.win!, t]));
+const taskFor = (win: HTMLElement) => byWin.get(win.id);
+
+// Two-phase genie: .minimizing runs the transform/fade transition while the window
+// still holds its grid slot; on transitionend, .minimized (display:none) drops it
+// out so the grid reflows. Restore reverses.
+function minimizeWin(win: HTMLElement) {
+  if (win.classList.contains('minimized') || win.classList.contains('minimizing')) return;
+  taskFor(win)?.classList.add('stowed');
+  // reduced-motion: skip the genie, hide instantly.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { win.classList.add('minimized'); return; }
+  win.classList.add('minimizing');
+  win.addEventListener('transitionend', function onEnd() {
+    win.removeEventListener('transitionend', onEnd);
+    win.classList.add('minimized');
+    win.classList.remove('minimizing');
+  }, { once: true });
+}
+function restoreWin(win: HTMLElement) {
+  taskFor(win)?.classList.remove('stowed');
+  if (!win.classList.contains('minimized')) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { win.classList.remove('minimized'); return; }
+  // pop back into the grid at the shrunk state, then release on next frame to genie up.
+  win.classList.add('minimizing');
+  win.classList.remove('minimized');
+  requestAnimationFrame(() => requestAnimationFrame(() => win.classList.remove('minimizing')));
+  win.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// win-bar _ and × buttons minimize their window (it's a toy — × just stows it too).
+document.querySelectorAll<HTMLElement>('.win .mini').forEach((btn) => {
+  const win = btn.closest('.win') as HTMLElement;
+  const go = () => minimizeWin(win);
+  btn.addEventListener('click', go);
+  btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+});
+
+// taskbar task button: minimized -> restore; visible -> minimize (Win98 toggle).
+tasks.forEach((t) => t.addEventListener('click', () => {
+  const win = $(t.dataset.win!);
+  if (win.classList.contains('minimized')) restoreWin(win);
+  else minimizeWin(win);
+}));
+
+// IntersectionObserver lights the in-view (non-minimized) window's task button.
 const spy = new IntersectionObserver((entries) => {
   for (const en of entries) {
-    if (en.isIntersecting) {
+    if (en.isIntersecting && !(en.target as HTMLElement).classList.contains('minimized')) {
       tasks.forEach((t) => t.classList.remove('active'));
       byWin.get(en.target.id)?.classList.add('active');
     }

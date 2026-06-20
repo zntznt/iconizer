@@ -206,6 +206,18 @@
         .hero { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; }
       }
       .win { background: var(--face); box-shadow: var(--bevel-up); min-width: 0; }
+      /* minimize: genie toward the taskbar (shrink + slide down + fade), then leave
+         the grid so others reflow. transform-origin bottom = it shrinks downward. */
+      .win.minimizing {
+        transition: transform .28s cubic-bezier(.5,0,.75,0), opacity .28s ease;
+        transform: translateY(60vh) scale(.04); opacity: 0; transform-origin: 50% 100%;
+        pointer-events: none;
+      }
+      .win.minimized { display: none; }
+      .win-bar .btns .mini { cursor: pointer; }
+      .win-bar .btns .mini:hover { box-shadow: var(--bevel-down); }
+      /* taskbar button showing a minimized window: pressed-in look */
+      .task.stowed { box-shadow: var(--bevel-down); opacity: .7; }
       .win-bar {
         display: flex; align-items: center; gap: 6px; padding: 3px 4px;
         background: linear-gradient(90deg, var(--navy), var(--sky)); color: #fff;
@@ -428,7 +440,7 @@
 
       <!-- WINDOW A -->
       <section class="win" id="winPics">
-        <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label>pick a picture… <input id="image" type="file" accept="image/*" /></label></div>
           <div class="row"><label>add icon SVG(s) ➕ <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label></div>
@@ -438,7 +450,7 @@
 
       <!-- WINDOW B -->
       <section class="win" id="winGrid">
-        <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
           <div class="row"><label>block (merge N×N) <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /></label><span class="val" id="blockVal">1×1</span></div>
@@ -456,7 +468,7 @@
 
       <!-- WINDOW C -->
       <section class="win" id="winLayer">
-        <div class="win-bar"><span class="cap">🌈 Layered Color.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-bar"><span class="cap">🌈 Layered Color.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label><input id="layered" type="checkbox" /> layered (quasi-RGB)</label></div>
           <div class="inset" id="p-layered" hidden aria-hidden="true">
@@ -475,7 +487,7 @@
 
       <!-- WINDOW D -->
       <section class="win" id="winScheme">
-        <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label>scheme
             <select id="scheme">
@@ -503,7 +515,7 @@
 
       <!-- WINDOW E -->
       <section class="win" id="winMotion">
-        <div class="win-bar"><span class="cap">✨ Motion FX.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-bar"><span class="cap">✨ Motion FX.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label>motion
             <select id="motion">
@@ -526,7 +538,7 @@
 
       <!-- WINDOW F — Export.exe (canonical home for the export controls) -->
       <section class="win" id="winExport">
-        <div class="win-bar"><span class="cap">💾 Export.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-bar"><span class="cap">💾 Export.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="inset" id="exportSizeBox"><span class="dw-step" style="font-family:monospace">OUTPUT ▸ <span id="exportSize">— add media to begin —</span></span></div>
           <div class="row"><label>output scale
