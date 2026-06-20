@@ -196,11 +196,12 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
   const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) => emitCell(c, settings, i, icons.length)).join('');
 
-  // aspect-ratio (from the un-pooled canvas) locks the SVG element's display box to
-  // the image's ratio, so CSS max-width/max-height caps never letterbox the content
-  // inside a mismatched box. width/height attrs stay for the PNG export raster size.
+  // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
+  // lets the maximized CSS size it correctly with min() (CSS can't read a ratio at
+  // runtime, so we pass it in). width/height attrs stay for the PNG export raster.
+  const ar = r2(outW / outH);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +
-    `width="${outW}" height="${outH}" style="aspect-ratio:${outW}/${outH}">${style}${defs}${bg}${uses}</svg>`;
+    `width="${outW}" height="${outH}" style="aspect-ratio:${outW}/${outH};--ar:${ar}">${style}${defs}${bg}${uses}</svg>`;
 }
 
 export { emitCell };

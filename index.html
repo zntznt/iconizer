@@ -91,9 +91,12 @@
          the viewport caps + aspect-ratio makes the browser keep the image ratio and
          scale to the binding cap (fills viewport, no letterbox); the bezel hugs it. */
       .crt.maximized #out svg {
-        width: auto; height: auto;
-        max-width: calc(100vw - 52px); max-height: calc(100vh - 52px);
-        margin: 0;
+        /* fill the viewport keeping ratio: width = the smaller of (width cap) and
+           (height cap x aspect-ratio). --ar is the image's W/H, passed from render()
+           since CSS can't read it. height follows from aspect-ratio. No max-* clamp
+           (which would break the ratio) — the min() already bounds both axes. */
+        width: min(calc(100vw - 52px), calc((100vh - 52px) * var(--ar, 1)));
+        height: auto; max-width: none; max-height: none; margin: 0;
       }
       /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
          No min-height here so the glass shrink-wraps the rendered SVG (no black
