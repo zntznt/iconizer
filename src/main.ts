@@ -129,7 +129,7 @@ $('svg').addEventListener('change', async (e) => {
     try {
       icons.push({ name: file.name, svg: parseSvg(await file.text()) });
     } catch {
-      alert(`Couldn't parse ${file.name} — skipped.`);
+      alert(`Couldn't parse ${file.name} ··· skipped.`);
     }
   }
   (e.target as HTMLInputElement).value = ''; // allow re-adding the same file
@@ -420,7 +420,7 @@ function refreshPips() {
   setPip('pipSvg', icons.length > 0, /* nudge when missing: */ true);
   setPip('pipReady', !!lastSvg);
   $('pipImg').setAttribute('aria-label', cells ? 'picture: loaded ♡' : 'picture: not loaded');
-  $('pipSvg').setAttribute('aria-label', icons.length ? 'icon .svg: ready ✦' : 'icon .svg: none yet — add one!');
+  $('pipSvg').setAttribute('aria-label', icons.length ? 'icon .svg: ready ✦' : 'icon .svg: none yet, add one!');
   $('pipReady').setAttribute('aria-label', lastSvg ? 'render: ready to save ✦' : 'render: not ready');
 }
 function setStatus(s: 'idle' | 'rendering' | 'ready' | 'exporting') {
