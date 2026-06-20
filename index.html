@@ -252,6 +252,26 @@
         .banner span, .led, body::before, body::after, .crt-screen::before { animation: none !important; }
         .banner span { padding-left: 0; }
       }
+      /* ---- Geocities webring banner ---- */
+      .ringbox {
+        max-width: 720px; margin: 0 auto 16px; padding: 8px; text-align: center;
+        background: #100022; box-shadow: var(--bevel-up), 0 0 0 2px var(--magenta);
+        font-family: var(--cursive); color: var(--cyan);
+      }
+      .ring-title { font-size: 14px; color: var(--lime); text-shadow: 0 0 4px var(--lime); letter-spacing: 1px; }
+      .ring-row {
+        display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+        margin: 6px 0; font-family: var(--sans);
+      }
+      .ring-nav { color: #888; font-size: 12px; }
+      .ring-site {
+        background: var(--face); color: var(--navy); box-shadow: var(--bevel-up);
+        padding: 5px 10px; text-decoration: none; font-weight: bold; font-size: 13px; min-width: 0;
+      }
+      .ring-site:hover { box-shadow: var(--bevel-down); color: var(--magenta); }
+      .ring-foot { font-size: 11px; color: var(--magenta); margin-top: 2px; }
+      @media (max-width: 640px) { .ringbox { margin-bottom: 8px; } }
+
       /* ---- Win98 heavy-combo warning dialog ---- */
       .modal-backdrop {
         position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
@@ -387,6 +407,19 @@
         </div>
       </section>
     </main>
+
+    <!-- WEBRING banner: points users to free SVGs (Font Awesome) in classic ring style -->
+    <aside class="ringbox">
+      <div class="ring-title">✦ ☆ ✦  the IcoNiZeR webRing  ✦ ☆ ✦</div>
+      <div class="ring-row">
+        <span class="ring-nav">‹ prev</span>
+        <a class="ring-site" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">
+          🔣 Font Awesome Free — 2,000+ free SVG icons! grab one &amp; drop it above ♡
+        </a>
+        <span class="ring-nav">next ›</span>
+      </div>
+      <div class="ring-foot">this site is a proud member ·  ★ best viewed with an SVG ★</div>
+    </aside>
 
     <!-- TASKBAR -->
     <footer class="taskbar">
