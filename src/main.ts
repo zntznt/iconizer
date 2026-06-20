@@ -301,7 +301,11 @@ $('visitorCount').textContent = `visitor No. ${String(n).padStart(6, '0')}`;
 // Maximize/restore the CRT: click the screen to fill the vertical space over the
 // windows; click again, Enter/Space (it's role=button), or Esc to restore.
 const crt = $('crt');
+// Only maximize when there's actually a rendered mosaic — the empty/mascot state
+// has nothing to zoom into. #out is empty until the first successful render.
+const hasRender = () => out.childElementCount > 0;
 function toggleMax(on?: boolean) {
+  if (on !== false && !hasRender()) return; // ignore maximize requests with no image
   const next = on ?? !crt.classList.contains('maximized');
   crt.classList.toggle('maximized', next);
   crt.setAttribute('aria-pressed', String(next));
