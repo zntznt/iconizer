@@ -20,31 +20,24 @@
 
       body {
         margin: 0; font: 14px/1.4 var(--sans); color: var(--ink);
-        background: #11002a; /* base under the animated layers */
+        background: #000; /* flat Space Jam void; p5 canvas (z-index -3) owns the backdrop */
         padding-bottom: var(--taskbar-h);
       }
-      /* ---- loud animated Y2K backdrop, zero images, fixed behind everything ---- */
+      /* The p5 Space Jam canvas (public/spacejam.js, z-index -3) now owns the backdrop.
+         body::before (oil-slick conic) is blanked — it was the gradient-realism the
+         Space Jam look forbids. body::after (neon grid floor) is kept but dimmed so a
+         faint perspective grid still reads over the starfield. */
       body::before {
         content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
-        background:
-          /* twinkling stars */
-          radial-gradient(circle at 20% 30%, #fff 0 1px, transparent 2px) 0 0 / 90px 90px,
-          radial-gradient(circle at 70% 60%, #fff 0 1px, transparent 2px) 0 0 / 130px 110px,
-          radial-gradient(circle at 45% 85%, #b6f 0 1px, transparent 2px) 0 0 / 70px 70px,
-          /* holographic oil-slick wash */
-          conic-gradient(from 0deg at 30% 30%, #ff00cc, #3300ff, #00ffe0, #ff00cc),
-          linear-gradient(135deg, #1a0033, #3d0066 40%, #00264d 75%, #1a0033);
-        background-blend-mode: screen, screen, screen, soft-light, normal;
-        opacity: .9;
-        animation: holo 24s ease-in-out infinite, twinkle 6s steps(2) infinite;
+        background: none; opacity: 0; animation: none;
       }
-      /* perspective neon grid floor, fixed, drifting toward the viewer */
+      /* perspective neon grid floor, faint over the p5 starfield */
       body::after {
         content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
         background:
           repeating-linear-gradient(transparent 0 38px, rgba(0,255,224,.18) 38px 40px),
           repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,0,204,.14) 38px 40px);
-        background-size: 40px 40px;
+        background-size: 40px 40px; opacity: .25;
         animation: gridrun 3.5s linear infinite;
       }
       @keyframes holo { 0%,100% { background-position: 0 0,0 0,0 0,0% 50%,0 0; } 50% { background-position: 40px 30px,-50px 20px,30px -40px,100% 50%,0 0; } }
@@ -680,6 +673,11 @@
       </div>
     </div>
 
+    <!-- Space Jam '96 p5 backdrop. Plain (non-module) scripts so global `p5` is
+         visible to the IIFE; it self-guards on readyState, so order vs main.ts
+         is irrelevant. spacejam.js lives in public/ -> served at /iconizer/. -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+    <script src="/iconizer/spacejam.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
