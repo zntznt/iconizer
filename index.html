@@ -87,12 +87,11 @@
         z-index: 60; width: fit-content; height: fit-content;
         max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); cursor: zoom-out;
       }
-      /* maximized: SVG grows to fill the viewport keeping its ratio; bezel hugs it.
-         height drives the size, width follows via the SVG's own viewBox ratio
-         (height:auto NOT used — we set height big, width:auto follows), and
-         max-width clamps wide images so they fill width instead. */
+      /* maximized: the SVG carries aspect-ratio (from render). Setting both axes to
+         the viewport caps + aspect-ratio makes the browser keep the image ratio and
+         scale to the binding cap (fills viewport, no letterbox); the bezel hugs it. */
       .crt.maximized #out svg {
-        height: calc(100vh - 52px); width: auto;
+        width: auto; height: auto;
         max-width: calc(100vw - 52px); max-height: calc(100vh - 52px);
         margin: 0;
       }
