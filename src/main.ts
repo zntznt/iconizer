@@ -2,7 +2,7 @@ import { defaults, type Settings } from './settings.ts';
 import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
-import { downloadSvg, downloadPng } from './export.ts';
+import { downloadSvg, downloadPng, downloadGif } from './export.ts';
 import type { Scheme, RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 
@@ -190,6 +190,7 @@ function syncDisclosure() {
   disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
+  $('dlGif').hidden = ($('motion') as HTMLSelectElement).value === 'none';
 }
 
 for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pal2']) {
@@ -203,6 +204,7 @@ for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pa
 $('motion').addEventListener('change', (e) => {
   settings.motion = (e.target as HTMLSelectElement).value as Settings['motion'];
   disclose('p-motion', (e.target as HTMLSelectElement).value !== 'none');
+  $('dlGif').hidden = settings.motion === 'none'; // GIF export only when animated
   scheduleRedraw();
 });
 $('motionSpeed').addEventListener('input', (e) => {
@@ -218,6 +220,19 @@ $('dlSvg').addEventListener('click', () => {
 });
 $('dlPng').addEventListener('click', () => {
   if (lastSvg) downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+});
+$('dlGif').addEventListener('click', async () => {
+  if (!lastSvg || settings.motion === 'none') return;
+  const btn = $('dlGif') as HTMLButtonElement;
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'encoding…';
+  try {
+    await downloadGif(lastSvg, settings.motionSpeed, +($('scale') as HTMLSelectElement).value);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
 });
 
 // --- Settings -> DOM controls (for permalink load + surprise me) ------------
