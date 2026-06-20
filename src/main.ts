@@ -118,6 +118,7 @@ $('background').addEventListener('input', async (e) => {
 
 $('sizeByBrightness').addEventListener('change', (e) => {
   settings.sizeByBrightness = (e.target as HTMLInputElement).checked;
+  disclose('p-sizeRange', (e.target as HTMLInputElement).checked);
   scheduleRedraw();
 });
 $('sizeMin').addEventListener('input', (e) => {
@@ -131,6 +132,7 @@ $('sizeMax').addEventListener('input', (e) => {
 
 $('layered').addEventListener('change', (e) => {
   settings.layered = (e.target as HTMLInputElement).checked;
+  disclose('p-layered', (e.target as HTMLInputElement).checked);
   scheduleRedraw();
 });
 $('layerStyle').addEventListener('change', (e) => {
@@ -168,11 +170,26 @@ function readScheme(): Scheme {
   }
 }
 
+// Toggle a disclosure wrapper: native [hidden] + aria-hidden in lockstep so
+// collapsed controls leave the tab order / AT.
+function disclose(id: string, show: boolean) {
+  const el = $(id);
+  el.hidden = !show;
+  el.setAttribute('aria-hidden', String(!show));
+}
+
 function syncSchemeUI() {
   const kind = ($('scheme') as HTMLSelectElement).value;
-  ($('p-levels') as HTMLElement).hidden = kind !== 'posterize';
-  ($('p-duotone') as HTMLElement).hidden = kind !== 'duotone';
-  ($('p-palette') as HTMLElement).hidden = kind !== 'palette';
+  disclose('p-levels', kind === 'posterize');
+  disclose('p-duotone', kind === 'duotone');
+  disclose('p-palette', kind === 'palette');
+}
+
+// The three NEW disclosure insets (scheme insets are handled by syncSchemeUI).
+function syncDisclosure() {
+  disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
+  disclose('p-layered', ($('layered') as HTMLInputElement).checked);
+  disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
 }
 
 for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pal2']) {
@@ -185,6 +202,7 @@ for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pa
 
 $('motion').addEventListener('change', (e) => {
   settings.motion = (e.target as HTMLSelectElement).value as Settings['motion'];
+  disclose('p-motion', (e.target as HTMLSelectElement).value !== 'none');
   scheduleRedraw();
 });
 $('motionSpeed').addEventListener('input', (e) => {
@@ -239,6 +257,7 @@ function syncControls() {
     settings.scheme.colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
   }
   syncSchemeUI();
+  syncDisclosure(); // restore the 3 new insets from current control values
 }
 
 // Apply settings loaded from a permalink to the controls on startup.
@@ -262,3 +281,19 @@ $('share').addEventListener('click', async () => {
     prompt('Copy this link:', location.href);
   }
 });
+
+// --- decorative taskbar chrome (no render-path impact) ----------------------
+
+// Live LCD clock.
+const clock = $('clock');
+function tick() {
+  const d = new Date();
+  clock.textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+tick();
+setInterval(tick, 15000);
+
+// Honest localStorage visitor counter — counts THIS browser's visits, odometer-padded.
+const n = (Number(localStorage.getItem('iconizer.visits')) || 0) + 1;
+localStorage.setItem('iconizer.visits', String(n));
+$('visitorCount').textContent = `visitor No. ${String(n).padStart(6, '0')}`;

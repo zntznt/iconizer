@@ -3,107 +3,301 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iconizer</title>
+    <title>iconizer 98 — a desktop from the year the web was fun</title>
     <style>
-      body { font: 14px system-ui, sans-serif; margin: 1.5rem; }
-      .controls { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; margin: 1rem 0; }
-      .controls label { display: flex; gap: 0.4rem; align-items: center; }
-      #out { margin-top: 1rem; max-width: 100%; }
-      #out svg { max-width: 100%; height: auto; border: 1px solid #ddd; }
-      #iconList { display: flex; flex-direction: column; gap: 0.2rem; }
-      .icon-row { display: flex; gap: 0.5rem; align-items: center; font-size: 13px; }
-      .icon-row button { cursor: pointer; line-height: 1; }
+      :root {
+        --face: #c0c0c0; --ink: #1a1a1a; --navy: #000080; --sky: #1084d0;
+        --magenta: #ff00ff; --cyan: #00ffff; --lime: #39ff14;
+        --bevel-up: inset 1px 1px #fff, inset -1px -1px #808080, inset 2px 2px #dfdfdf, inset -2px -2px #000;
+        --bevel-down: inset 1px 1px #808080, inset -1px -1px #fff, inset 2px 2px #000, inset -2px -2px #dfdfdf;
+        --cursive: "Comic Sans MS", "Comic Sans", "Chalkboard SE", cursive;
+        --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+        --taskbar-h: 92px;
+      }
+      * { box-sizing: border-box; }
+      html, body { overflow-x: hidden; min-height: 100%; }
+      [hidden] { display: none !important; } /* load-bearing for ALL disclosure */
+
+      body {
+        margin: 0; font: 14px/1.4 var(--sans); color: var(--ink);
+        /* tiled neon Geocities backdrop, zero images */
+        background:
+          radial-gradient(circle at 6px 6px, rgba(255,255,255,.5) 0 1px, transparent 2px) 0 0 / 24px 24px,
+          repeating-linear-gradient(45deg, #1a0033 0 16px, #2a004d 16px 32px);
+        padding-bottom: var(--taskbar-h);
+      }
+
+      /* ---- top marquee banner (decorative) ---- */
+      .banner {
+        position: sticky; top: 0; z-index: 40; overflow: hidden; white-space: nowrap;
+        background: linear-gradient(90deg, var(--navy), var(--sky));
+        color: #fff; font-family: var(--cursive); border-bottom: 2px solid #000;
+        padding: 4px 0; text-shadow: 1px 1px #000;
+      }
+      .banner span { display: inline-block; padding-left: 100%; animation: scroll 18s linear infinite; }
+      @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+      /* ---- wallpaper / preview hero (the point of the app) ---- */
+      .hero { padding: 14px; display: flex; justify-content: center; }
+      .crt {
+        position: relative; background: #2b2b2b; border-radius: 14px; padding: 14px;
+        box-shadow: var(--bevel-up), 0 0 0 4px #111, 0 8px 24px rgba(0,0,0,.6);
+        max-width: min(680px, 100%); width: 100%;
+      }
+      .crt-screen { position: relative; background: #000; border-radius: 6px; overflow: hidden; min-height: 200px; }
+      .crt-screen::after { /* scanlines */
+        content: ""; position: absolute; inset: 0; pointer-events: none;
+        background: repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.10) 2px 3px);
+      }
+      #out { display: block; }
+      #out svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+      .mascot {
+        display: none; color: #9bbc0f; font-family: var(--cursive); text-align: center;
+        padding: 40px 16px; font-size: 15px;
+      }
+      #out:empty + .mascot { display: block; }
+      .mascot .face { font-size: 54px; display: block; margin-bottom: 8px; }
+      .mascot .bubble {
+        display: inline-block; background: var(--face); color: var(--ink);
+        box-shadow: var(--bevel-up); padding: 6px 12px; border-radius: 4px; margin-top: 6px;
+      }
+      .led { position: absolute; right: 12px; bottom: 8px; width: 9px; height: 9px; border-radius: 50%;
+        background: var(--lime); box-shadow: 0 0 6px var(--lime); animation: blink 1.6s steps(1) infinite; }
+      @keyframes blink { 0%,60% { opacity: 1; } 61%,100% { opacity: .25; } }
+
+      /* ---- the window grid ---- */
+      .desktop {
+        display: grid; gap: 14px; padding: 0 14px 14px;
+        grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+        max-width: 1280px; margin: 0 auto; align-items: start;
+      }
+      .win { background: var(--face); box-shadow: var(--bevel-up); min-width: 0; }
+      .win-bar {
+        display: flex; align-items: center; gap: 6px; padding: 3px 4px;
+        background: linear-gradient(90deg, var(--navy), var(--sky)); color: #fff;
+        font-family: var(--cursive); text-shadow: 1px 1px #000;
+      }
+      .win-bar .cap { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .win-bar .btns { display: flex; gap: 2px; }
+      .win-bar .btns i {
+        width: 18px; height: 16px; background: var(--face); box-shadow: var(--bevel-up);
+        font-style: normal; font-size: 10px; line-height: 16px; text-align: center; color: #000;
+      }
+      .win-body { padding: 10px; display: flex; flex-direction: column; gap: 9px; }
+
+      /* control rows */
+      .row { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+      .row > label { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+      .row .val { font-family: monospace; margin-left: auto; }
+      input[type="range"], select { width: 100%; min-width: 0; flex: 1; accent-color: var(--sky); }
+      input[type="checkbox"] { accent-color: var(--magenta); width: 16px; height: 16px; flex: none; }
+      input[type="color"] { width: 42px; height: 26px; min-width: 0; padding: 0; border: 2px solid #808080; flex: none; }
+      input[type="file"] { width: 100%; min-width: 0; font-size: 12px; }
+
+      /* sunken "properties" inset = revealed conditional sub-region */
+      .inset {
+        background: var(--face); box-shadow: var(--bevel-down); padding: 9px; margin-top: 2px;
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .inset .teach { font-family: var(--cursive); font-size: 12px; color: #5a2d6e; }
+
+      .divider { text-align: center; color: var(--magenta); letter-spacing: 4px; font-size: 12px; }
+
+      #iconList { display: flex; flex-direction: column; gap: 3px; }
+      .icon-row { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+      .icon-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .icon-row button { cursor: pointer; line-height: 1; box-shadow: var(--bevel-up); background: var(--face); border: 0; width: 22px; height: 20px; }
+
+      /* shared 98 button */
+      .btn98 {
+        font-family: var(--sans); font-size: 13px; background: var(--face); color: var(--ink);
+        box-shadow: var(--bevel-up); border: 0; padding: 5px 12px; cursor: pointer; min-height: 28px;
+      }
+      .btn98:active { box-shadow: var(--bevel-down); }
+      .btn98:disabled { color: #808080; box-shadow: var(--bevel-up); cursor: default; }
+
+      /* ---- taskbar / system tray ---- */
+      .taskbar {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; min-height: var(--taskbar-h);
+        background: var(--face); box-shadow: var(--bevel-up); border-top: 2px solid #fff;
+        display: flex; align-items: center; gap: 8px; padding: 6px 8px; flex-wrap: wrap;
+      }
+      .start {
+        font-family: var(--cursive); font-weight: bold; display: flex; align-items: center; gap: 6px;
+      }
+      .start .flag {
+        width: 16px; height: 16px;
+        background:
+          linear-gradient(135deg, #f00 0 50%, transparent 50%),
+          linear-gradient(-135deg, #0c0 0 50%, transparent 50%),
+          linear-gradient(45deg, #00f 0 50%, transparent 50%),
+          linear-gradient(-45deg, #fc0 0 50%, transparent 50%);
+      }
+      .webring { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .lcd {
+        font-family: monospace; color: #33ff66; background: #001a00; box-shadow: var(--bevel-down);
+        padding: 4px 8px; font-size: 12px;
+      }
+      .tray { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .tray label { display: flex; align-items: center; gap: 4px; }
+
+      :focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+
+      /* ---- responsive ---- */
+      @media (max-width: 640px) {
+        :root { --taskbar-h: 76px; }
+        .hero { position: sticky; top: 32px; z-index: 30; padding: 8px; }
+        .desktop { grid-template-columns: 1fr; padding: 0 8px 8px; }
+        .row { flex-direction: column; align-items: stretch; }
+        .row > label { flex-direction: column; align-items: stretch; gap: 4px; }
+        .row .val { margin-left: 0; }
+        .start-meta { display: none; } /* hide clock+counter+webring label, keep buttons */
+      }
+      @media (pointer: coarse) {
+        .btn98, .icon-row button, .win-bar .btns i { min-height: 44px; }
+        input[type="range"] { height: 28px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .banner span, .led { animation: none !important; }
+        .banner span { padding-left: 0; }
+      }
     </style>
   </head>
   <body>
-    <h1>iconizer</h1>
-    <div class="controls">
-      <label>image <input id="image" type="file" accept="image/*" /></label>
-      <label>add icon SVG(s) <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label>
-      <div id="iconList" title="dark cells use the top icon, light cells the bottom"></div>
+    <div class="banner" role="presentation" aria-hidden="true">
+      <span>★ UNDER CONSTRUCTION 🚧 ★ best viewed at 800×600 ★ Netscape Now! ★ welcome to iconizer 98 ★ ⏳ ★ sign my guestbook ♡ ★&nbsp;&nbsp;&nbsp;&nbsp;</span>
     </div>
-    <div class="controls">
-      <label>cols <input id="cols" type="range" min="4" max="120" value="32" /><span id="colsVal">32</span></label>
-      <label>block <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /><span id="blockVal">1×1</span></label>
-      <label>icon size <input id="iconScale" type="range" min="0.2" max="3" step="0.1" value="1" /><span id="iconScaleVal">1</span>x</label>
-      <label>background <input id="background" type="color" value="#ffffff" /></label>
-      <label><input id="sizeByBrightness" type="checkbox" /> size by brightness</label>
-      <label>min <input id="sizeMin" type="range" min="0" max="1" step="0.05" value="0.3" /></label>
-      <label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label>
+
+    <!-- PREVIEW HERO (source-order first so it pins to top on mobile) -->
+    <div class="hero">
+      <div class="crt">
+        <div class="crt-screen">
+          <div id="out"></div>
+          <div class="mascot"><span class="face">👾</span><span class="bubble">feed me a picture! ♡</span></div>
+        </div>
+        <span class="led" aria-hidden="true"></span>
+      </div>
     </div>
-    <div class="controls">
-      <label><input id="layered" type="checkbox" /> layered</label>
-      <label>style
-        <select id="layerStyle">
-          <option value="cmy">CMY (multiply)</option>
-          <option value="rgb">RGB (proportion)</option>
-        </select>
-      </label>
-      <label>layers
-        <select id="layerCount">
-          <option value="3">3 — CMY</option>
-          <option value="2">2 — CM</option>
-        </select>
-      </label>
-      <label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label>
-    </div>
-    <div class="controls">
-      <label>scheme
-        <select id="scheme">
-          <option value="none">none</option>
-          <option value="grayscale">grayscale</option>
-          <option value="invert">invert</option>
-          <option value="posterize">posterize</option>
-          <option value="duotone">duotone</option>
-          <option value="palette">palette</option>
-        </select>
-      </label>
-      <label id="p-levels" hidden>levels <input id="levels" type="range" min="2" max="8" step="1" value="4" /></label>
-      <label id="p-duotone" hidden>dark <input id="duoDark" type="color" value="#0f380f" /> light <input id="duoLight" type="color" value="#9bbc0f" /></label>
-      <span id="p-palette" hidden>palette
-        <input id="pal0" type="color" value="#ff0000" />
-        <input id="pal1" type="color" value="#00ff00" />
-        <input id="pal2" type="color" value="#0000ff" />
-      </span>
-    </div>
-    <div class="controls">
-      <label>motion
-        <select id="motion">
-          <option value="none">none</option>
-          <option value="wiggle">wiggle</option>
-          <option value="swing">swing</option>
-          <option value="spin">spin</option>
-          <option value="pulse">pulse</option>
-          <option value="bob">bob</option>
-          <option value="shimmer">shimmer</option>
-        </select>
-      </label>
-      <label>speed <input id="motionSpeed" type="range" min="0.3" max="4" step="0.1" value="1.5" /></label>
-      <label>stagger
-        <select id="staggerMode">
-          <option value="ripple">ripple</option>
-          <option value="none">none</option>
-          <option value="brightness">brightness</option>
-          <option value="random">random</option>
-        </select>
-      </label>
-    </div>
-    <div class="controls">
-      <button id="surprise" type="button">🎲 Surprise me</button>
-      <button id="share" type="button" title="copies a link with these settings (not the image)">🔗 Share settings</button>
-    </div>
-    <div class="controls">
-      <button id="dlSvg" type="button" disabled>Download SVG</button>
-      <button id="dlPng" type="button" disabled>Download PNG</button>
-      <label>scale
-        <select id="scale">
-          <option value="1">1x</option>
-          <option value="2">2x</option>
-          <option value="4">4x</option>
-        </select>
-      </label>
-    </div>
-    <div id="out"></div>
+
+    <main class="desktop">
+      <!-- WINDOW A -->
+      <section class="win">
+        <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-body">
+          <div class="row"><label>pick a picture… <input id="image" type="file" accept="image/*" /></label></div>
+          <div class="row"><label>add icon SVG(s) ➕ <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label></div>
+          <div id="iconList" title="dark cells use the top icon, light cells the bottom"></div>
+        </div>
+      </section>
+
+      <!-- WINDOW B -->
+      <section class="win">
+        <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-body">
+          <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
+          <div class="row"><label>block (merge N×N) <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /></label><span class="val" id="blockVal">1×1</span></div>
+          <div class="row"><label>icon size <input id="iconScale" type="range" min="0.2" max="3" step="0.1" value="1" /></label><span class="val"><span id="iconScaleVal">1</span>×</span></div>
+          <div class="row"><label>canvas background <input id="background" type="color" value="#ffffff" /></label></div>
+          <div class="divider">✦ ✦ ✦</div>
+          <div class="row"><label><input id="sizeByBrightness" type="checkbox" /> size icons by brightness</label></div>
+          <div class="inset" id="p-sizeRange" hidden aria-hidden="true">
+            <div class="teach">▸ brightness knobs unlocked! &nbsp; how small? ~ how big?</div>
+            <div class="row"><label>min <input id="sizeMin" type="range" min="0" max="1" step="0.05" value="0.3" /></label></div>
+            <div class="row"><label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WINDOW C -->
+      <section class="win">
+        <div class="win-bar"><span class="cap">🌈 Layered Color.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-body">
+          <div class="row"><label><input id="layered" type="checkbox" /> layered (quasi-RGB)</label></div>
+          <div class="inset" id="p-layered" hidden aria-hidden="true">
+            <div class="teach">▸ extra knobs unlocked!</div>
+            <div class="row"><label>style
+              <select id="layerStyle">
+                <option value="cmy">CMY (multiply)</option>
+                <option value="rgb">RGB (additive)</option>
+              </select></label></div>
+            <div class="row"><label>layers
+              <select id="layerCount"><option value="3">3 — CMY</option><option value="2">2 — CM</option></select></label></div>
+            <div class="row"><label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WINDOW D -->
+      <section class="win">
+        <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-body">
+          <div class="row"><label>scheme
+            <select id="scheme">
+              <option value="none">none</option>
+              <option value="grayscale">grayscale</option>
+              <option value="invert">invert</option>
+              <option value="posterize">posterize</option>
+              <option value="duotone">duotone (Game Boy)</option>
+              <option value="palette">palette</option>
+            </select></label></div>
+          <div class="inset" id="p-levels" hidden aria-hidden="true">
+            <div class="teach">how many steps?</div>
+            <div class="row"><label>levels <input id="levels" type="range" min="2" max="8" step="1" value="4" /></label></div>
+          </div>
+          <div class="inset" id="p-duotone" hidden aria-hidden="true">
+            <div class="teach">dark ink / light ink ✦</div>
+            <div class="row"><label>dark <input id="duoDark" type="color" value="#0f380f" /></label><label>light <input id="duoLight" type="color" value="#9bbc0f" /></label></div>
+          </div>
+          <div class="inset" id="p-palette" hidden aria-hidden="true">
+            <div class="teach">3 colors ✦</div>
+            <div class="row"><input id="pal0" type="color" value="#ff0000" /><input id="pal1" type="color" value="#00ff00" /><input id="pal2" type="color" value="#0000ff" /></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WINDOW E -->
+      <section class="win">
+        <div class="win-bar"><span class="cap">✨ Motion FX.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
+        <div class="win-body">
+          <div class="row"><label>motion
+            <select id="motion">
+              <option value="none">none</option>
+              <option value="wiggle">wiggle</option><option value="swing">swing</option>
+              <option value="spin">spin</option><option value="pulse">pulse</option>
+              <option value="bob">bob</option><option value="shimmer">shimmer</option>
+            </select></label></div>
+          <div class="inset" id="p-motion" hidden aria-hidden="true">
+            <div class="teach">▸ how fast? ~ how staggered?</div>
+            <div class="row"><label>speed <input id="motionSpeed" type="range" min="0.3" max="4" step="0.1" value="1.5" /></label></div>
+            <div class="row"><label>stagger
+              <select id="staggerMode">
+                <option value="ripple">ripple</option><option value="none">none</option>
+                <option value="brightness">brightness</option><option value="random">random</option>
+              </select></label></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- TASKBAR -->
+    <footer class="taskbar">
+      <span class="start"><span class="flag"></span>iconizer 98</span>
+      <nav class="webring start-meta" aria-label="webring">
+        <button id="surprise" class="btn98" type="button">🎲 Random</button>
+        <span>iconizer webring</span>
+        <button id="share" class="btn98" type="button" title="copies a link with these settings (not the image)">Sign my guestbook ♡</button>
+      </nav>
+      <span class="lcd start-meta" id="visitorCount" aria-hidden="true">visitor No. 000000</span>
+      <span class="lcd start-meta" id="clock" aria-hidden="true">--:--</span>
+      <div class="tray">
+        <button id="dlSvg" class="btn98" type="button" disabled>Save .SVG</button>
+        <button id="dlPng" class="btn98" type="button" disabled>Save .PNG</button>
+        <label>scale
+          <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+        </label>
+      </div>
+    </footer>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
