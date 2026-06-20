@@ -155,27 +155,30 @@
          bezel below), so 100% resolves to the cell — no overflow, no black bars. */
       #out svg { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; }
       /* empty-state drop-well: SUNKEN + dashed lime = "droppable, not a button".
-         Fills the phosphor; shown only while #out is empty. The whole .dw-main is a
-         label[for=image] so a click anywhere opens the real picker. */
+         Two stages via data-stage; click anywhere is wired in JS to the right input. */
       .dropwell {
         display: none; position: absolute; inset: 8px; flex-direction: column;
-        align-items: center; justify-content: center; gap: 10px; padding: 16px;
+        align-items: center; justify-content: center; gap: 8px; padding: 16px;
         box-shadow: var(--bevel-down) inset; border: 2px dashed var(--lime); border-radius: 4px;
-        color: #9bbc0f; text-align: center;
+        color: #9bbc0f; text-align: center; cursor: pointer;
       }
       #out:empty + .dropwell { display: flex; }
       .dropwell.drop-hot { border-color: #d4ff7a; box-shadow: inset 0 0 30px rgba(57,255,20,.25); }
-      .dw-main {
-        display: flex; flex-direction: column; align-items: center; gap: 6px;
-        cursor: pointer; width: 100%;
-      }
+      /* show only the active stage's prompt; hide the error unless .bad */
+      .dw-stage { display: none; flex-direction: column; align-items: center; gap: 6px; }
+      .dropwell[data-stage="need-image"] .stage-image { display: flex; }
+      .dropwell[data-stage="need-svg"] .stage-svg { display: flex; }
+      .dropwell.bad .dw-stage { display: none; }
+      .dw-err { display: none; }
+      .dropwell.bad .dw-err { display: block; }
+      .dropwell.bad { border-color: #ff4444; box-shadow: inset 0 0 30px rgba(255,40,40,.25); }
+      .dw-err { font-family: monospace; font-size: clamp(14px, 3vw, 20px); color: #ff5555; }
       .dw-face { font-size: 52px; animation: bob 3s ease-in-out infinite; }
       .dw-headline { font-family: monospace; font-size: clamp(14px, 3vw, 20px); color: var(--lime); }
       .dw-cur { animation: dosblink 1s steps(1) infinite; }
       .dw-disk { font-family: monospace; font-size: 11px; color: #6a8a2a; }
       .dw-sub { font-family: var(--cursive); font-size: 13px; color: #9bbc0f; }
-      .dw-list { display: flex; flex-direction: column; gap: 4px; font-family: monospace; font-size: 13px; }
-      .dw-step { color: #9bbc0f; }
+      .dw-nudge { font-family: var(--cursive); font-size: 12px; color: #7a9a3a; }
       .dw-svglink { color: var(--cyan); text-decoration: underline; cursor: pointer; }
       .dw-svglink:hover { color: #fff; }
       @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
@@ -426,21 +429,27 @@
         <div class="crt" id="crt" role="button" aria-pressed="false" aria-label="click to maximize or restore the screen" tabindex="0">
           <div class="crt-screen">
             <div id="out"></div>
-            <!-- empty state: a label[for=image] drop-well (click/drop to upload the
-                 picture) + a sibling checklist whose step 2 is its OWN label[for=svg]
-                 (siblings, not nested — nested labels are invalid). Shown while #out
-                 is empty. drag/drop wired in JS to the same #image handler. -->
-            <div class="dropwell" id="dropwell">
-              <label class="dw-main" for="image">
-                <span class="dw-face">👾</span>
+            <!-- empty state: a TWO-STAGE drop-well. data-stage toggles which prompt
+                 shows. Stage 1 (need-image): click/drop loads a picture (disk 1 of 2).
+                 Stage 2 (need-svg): click/drop loads an icon .svg (disk 2 of 2). JS
+                 advances the stage on a valid load, flashes .bad on an invalid file,
+                 and routes click/drop to the right input. Shown while #out is empty. -->
+            <div class="dropwell" id="dropwell" data-stage="need-image">
+              <span class="dw-face">👾</span>
+              <!-- stage 1: need an image -->
+              <span class="dw-stage stage-image">
                 <span class="dw-headline">C:\&gt; feed me a picture<span class="dw-cur">_</span></span>
-                <span class="dw-disk">★ INSERT DISK 1 OF 1 ★</span>
+                <span class="dw-disk">★ INSERT DISK 1 OF 2 ★</span>
                 <span class="dw-sub">click anywhere or drop an image here</span>
-              </label>
-              <div class="dw-list" aria-hidden="false">
-                <span class="dw-step">[1] 💾 drop a picture ↑</span>
-                <label class="dw-step dw-svglink" for="svg">[2] ✶ add an icon .svg</label>
-              </div>
+              </span>
+              <!-- stage 2: image loaded, need an SVG -->
+              <span class="dw-stage stage-svg">
+                <span class="dw-headline">C:\&gt; now an icon .svg<span class="dw-cur">_</span></span>
+                <span class="dw-disk">★ INSERT DISK 2 OF 2 ★</span>
+                <span class="dw-sub">click anywhere or drop an .svg here</span>
+                <span class="dw-nudge">need one quick? grab a free .svg from the <a class="dw-svglink" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">webring ↓</a></span>
+              </span>
+              <span class="dw-err" id="dwErr">✖ BAD DISK ✖</span>
             </div>
           </div>
           <span class="led" aria-hidden="true"></span>

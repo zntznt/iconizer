@@ -79,34 +79,77 @@ function scheduleRedraw() {
   timer = setTimeout(redraw, 50);
 }
 
-async function loadImage(file: File) {
-  if (!file.type.startsWith('image/')) return;
-  const bitmap = await createImageBitmap(file);
-  cells = sample(bitmap, settings);
-  bitmap.close();
+/** Load + validate an image file. Returns true on success. */
+async function loadImage(file: File): Promise<boolean> {
+  if (!file.type.startsWith('image/')) return false;
+  try {
+    const bitmap = await createImageBitmap(file);
+    cells = sample(bitmap, settings);
+    bitmap.close();
+  } catch { return false; } // corrupt/undecodable image
   $('srcName').textContent = file.name;
-  refreshPips(); // light the picture pip even before an icon is added
+  refreshPips();
   redraw();
+  return true;
 }
 
-$('image').addEventListener('change', (e) => {
+/** Parse + add SVG files. Returns the count successfully added. */
+async function loadSvgFiles(files: FileList | File[]): Promise<number> {
+  let added = 0;
+  for (const file of Array.from(files)) {
+    try {
+      icons.push({ name: file.name, svg: parseSvg(await file.text()) });
+      added++;
+    } catch { /* invalid SVG — caller decides how to surface it */ }
+  }
+  if (added) { renderIconList(); refreshPips(); redraw(); }
+  return added;
+}
+
+$('image').addEventListener('change', async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
-  if (file) loadImage(file);
+  if (!file) return;
+  if (await loadImage(file)) setDwStage('need-svg');
+  else flashBad("that's not a valid image!");
 });
 
-// Empty-state drop-well: drag an image onto the CRT to load it (the click-to-pick
-// is native via the <label for="image">). drop-hot class lights the dashed frame.
+// --- empty-state drop-well: two-stage onboarding (image -> svg) --------------
+
 const dropwell = $('dropwell');
+const dwErr = $('dwErr');
+// stage = need-image until an image loads, then need-svg.
+function dwStage() { return dropwell.getAttribute('data-stage'); }
+function setDwStage(s: 'need-image' | 'need-svg') { dropwell.setAttribute('data-stage', s); }
+let badTimer: number | undefined;
+function flashBad(msg: string) {
+  dwErr.textContent = `✖ BAD DISK ✖  ${msg}`;
+  dropwell.classList.add('bad');
+  clearTimeout(badTimer);
+  badTimer = setTimeout(() => dropwell.classList.remove('bad'), 1600);
+}
+
+// click anywhere on the well opens the right file picker for the current stage.
+dropwell.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('a')) return; // let the webring link through
+  $(dwStage() === 'need-svg' ? 'svg' : 'image').click();
+});
 ['dragenter', 'dragover'].forEach((ev) =>
   dropwell.addEventListener(ev, (e) => { e.preventDefault(); dropwell.classList.add('drop-hot'); }),
 );
 ['dragleave', 'drop'].forEach((ev) =>
   dropwell.addEventListener(ev, () => dropwell.classList.remove('drop-hot')),
 );
-dropwell.addEventListener('drop', (e) => {
+dropwell.addEventListener('drop', async (e) => {
   e.preventDefault();
   const file = (e as DragEvent).dataTransfer?.files?.[0];
-  if (file) loadImage(file);
+  if (!file) return;
+  if (dwStage() === 'need-image') {
+    if (await loadImage(file)) setDwStage('need-svg');
+    else flashBad("that's not a valid image!");
+  } else {
+    if (await loadSvgFiles([file])) { /* render() will hide the well */ }
+    else flashBad("that's not a valid .svg!");
+  }
 });
 
 // Render the icon list with remove buttons. Order = dark->light draw order.
@@ -123,19 +166,12 @@ function renderIconList() {
 
 // Add one or more SVGs to the list (the file input allows multiple).
 $('svg').addEventListener('change', async (e) => {
-  const files = (e.target as HTMLInputElement).files;
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
   if (!files?.length) return;
-  for (const file of files) {
-    try {
-      icons.push({ name: file.name, svg: parseSvg(await file.text()) });
-    } catch {
-      alert(`Couldn't parse ${file.name} ··· skipped.`);
-    }
-  }
-  (e.target as HTMLInputElement).value = ''; // allow re-adding the same file
-  renderIconList();
-  refreshPips();
-  redraw();
+  const added = await loadSvgFiles(files);
+  if (added < files.length) flashBad("some files weren't valid .svg and were skipped");
+  input.value = ''; // allow re-adding the same file
 });
 
 // Remove an icon (event delegation on the list).
