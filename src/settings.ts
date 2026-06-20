@@ -27,7 +27,7 @@ export const defaults: Settings = {
   iconScale: 1,
   sizeByBrightness: false,
   sizeRange: [0.3, 1],
-  background: '#ffffff',
+  background: '#0d120d', // off-CRT dark phosphor (not pure black) — reads as an idle tube
   layered: false,
   layerStyle: 'cmy',
   layerCount: 3,
