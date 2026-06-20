@@ -514,15 +514,22 @@ const taskFor = (win: HTMLElement) => byWin.get(win.id);
 // out so the grid reflows. Restore reverses.
 function minimizeWin(win: HTMLElement) {
   if (win.classList.contains('minimized') || win.classList.contains('minimizing')) return;
-  taskFor(win)?.classList.add('stowed');
+  const task = taskFor(win);
+  task?.classList.add('stowed');
+  task?.classList.remove('active'); // a minimized window is not "in view"
   // reduced-motion: skip the genie, hide instantly.
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { win.classList.add('minimized'); return; }
   win.classList.add('minimizing');
-  win.addEventListener('transitionend', function onEnd() {
-    win.removeEventListener('transitionend', onEnd);
+  // guard on the transform end (two props transition) + a fallback so an interrupted
+  // transition can't leave the window stuck in .minimizing forever (the wonky state).
+  let done = false;
+  const finish = () => {
+    if (done) return; done = true;
     win.classList.add('minimized');
     win.classList.remove('minimizing');
-  }, { once: true });
+  };
+  win.addEventListener('transitionend', (e) => { if (e.propertyName === 'transform') finish(); }, { once: true });
+  setTimeout(finish, 400);
 }
 function restoreWin(win: HTMLElement) {
   taskFor(win)?.classList.remove('stowed');

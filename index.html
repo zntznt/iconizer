@@ -217,7 +217,9 @@
       .win-bar .btns .mini { cursor: pointer; }
       .win-bar .btns .mini:hover { box-shadow: var(--bevel-down); }
       /* taskbar button showing a minimized window: pressed-in look */
-      .task.stowed { box-shadow: var(--bevel-down); opacity: .7; }
+      /* minimized window: dimmed/italic stub (distinct from the active pressed look,
+         and wins over .active since a minimized window is never "in view") */
+      .task.stowed { box-shadow: var(--bevel-up); opacity: .55; font-style: italic; background: var(--face); }
       .win-bar {
         display: flex; align-items: center; gap: 6px; padding: 3px 4px;
         background: linear-gradient(90deg, var(--navy), var(--sky)); color: #fff;
@@ -289,7 +291,8 @@
       /* tasks: the only flexible region, horizontally scrollable */
       .tasks { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
       .task { flex: none; white-space: nowrap; padding: 4px 10px; font-size: 12px; }
-      .task.active { box-shadow: var(--bevel-down); }
+      /* in-view window: pressed-in with a sky tint (focused look) */
+      .task.active { box-shadow: var(--bevel-down); background: #b8c4d8; }
       /* quick-save split button pinned right, always visible */
       .quick-save { flex: none; position: relative; }
       .qs-menu {
