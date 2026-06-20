@@ -90,8 +90,17 @@
         box-shadow: var(--bevel-up), 0 0 0 4px #111, 0 8px 24px rgba(0,0,0,.6);
         width: fit-content; max-width: 100%; cursor: default;
       }
-      /* there's a render -> the screen is clickable to maximize */
+      /* there's a render -> the screen is clickable to maximize, and the bezel
+         fills its column width so a tall image doesn't collapse the CRT to a
+         narrow sliver with backdrop showing on both sides. */
+      .crt:not(:has(#out:empty)):not(.maximized) { width: 100%; }
       .crt:not(:has(#out:empty)) { cursor: zoom-in; }
+      /* unzoomed populated: the SVG fills the screen width (grows taller for a
+         tall image) so the picture occupies the horizontal space; the glass
+         hugs it so there are no side black bars. Height is capped so a very tall
+         image doesn't run off the page. */
+      .crt:not(.maximized) #out { width: 100%; justify-content: center; }
+      .crt:not(.maximized) #out svg { width: 100%; height: auto; max-height: none; }
       .crt.maximized { cursor: zoom-out; }
       /* IDLE (no image): the CRT sits in the vertical space as a proper LANDSCAPE
          monitor (4:3), not a tall phone-shaped sliver. The screen takes a 4:3 box
@@ -118,12 +127,11 @@
          the viewport caps + aspect-ratio makes the browser keep the image ratio and
          scale to the binding cap (fills viewport, no letterbox); the bezel hugs it. */
       .crt.maximized #out svg {
-        /* Fill the horizontal space. Width is the width cap (the whole viewport),
-           so a tall image grows to occupy the width and its height follows from the
-           aspect ratio — it may exceed the viewport height and the bezel scrolls/
-           overflows, which is fine: the user wants the picture BIG, not letterboxed.
-           --ar is the image's W/H from render() (CSS can't read it). */
-        width: calc(100vw - 52px);
+        /* fill the viewport keeping ratio: width = the smaller of (width cap) and
+           (height cap x aspect-ratio). --ar is the image's W/H, passed from render()
+           since CSS can't read it. height follows from aspect-ratio. No max-* clamp
+           (which would break the ratio) — the min() already bounds both axes. */
+        width: min(calc(100vw - 52px), calc((100vh - 52px) * var(--ar, 1)));
         height: auto; max-width: none; max-height: none; margin: 0;
       }
       /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
