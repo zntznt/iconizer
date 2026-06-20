@@ -38,7 +38,7 @@
       @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 
       /* ---- wallpaper / preview hero (the point of the app) ---- */
-      .hero { padding: 14px; display: flex; justify-content: center; }
+      .hero { display: flex; justify-content: center; align-items: flex-start; min-width: 0; }
       .crt {
         position: relative; background: #2b2b2b; border-radius: 14px; padding: 14px;
         box-shadow: var(--bevel-up), 0 0 0 4px #111, 0 8px 24px rgba(0,0,0,.6);
@@ -65,11 +65,26 @@
         background: var(--lime); box-shadow: 0 0 6px var(--lime); animation: blink 1.6s steps(1) infinite; }
       @keyframes blink { 0%,60% { opacity: 1; } 61%,100% { opacity: .25; } }
 
-      /* ---- the window grid ---- */
+      /* ---- the window grid: windows flow around a centred CRT ---- */
       .desktop {
-        display: grid; gap: 14px; padding: 0 14px 14px;
-        grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-        max-width: 1280px; margin: 0 auto; align-items: start;
+        display: grid; gap: 14px; padding: 14px; margin: 0 auto;
+        max-width: 1400px; align-items: start;
+        /* single column by default (mobile); CRT first in source -> pins on top */
+        grid-template-columns: 1fr;
+      }
+      /* 2 columns: CRT spans the full width on top, windows tile below */
+      @media (min-width: 641px) {
+        .desktop { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .hero { grid-column: 1 / -1; } /* CRT full-width banner above the windows */
+      }
+      /* 3+ columns: CRT sits in the MIDDLE column spanning rows; windows fill the
+         left & right columns around it via dense auto-flow. */
+      @media (min-width: 1000px) {
+        .desktop {
+          grid-template-columns: minmax(0, 1fr) minmax(360px, 1.4fr) minmax(0, 1fr);
+          grid-auto-flow: row dense;
+        }
+        .hero { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; }
       }
       .win { background: var(--face); box-shadow: var(--bevel-up); min-width: 0; }
       .win-bar {
@@ -168,18 +183,19 @@
       <span>★ UNDER CONSTRUCTION 🚧 ★ best viewed at 800×600 ★ Netscape Now! ★ welcome to iconizer 98 ★ ⏳ ★ sign my guestbook ♡ ★&nbsp;&nbsp;&nbsp;&nbsp;</span>
     </div>
 
-    <!-- PREVIEW HERO (source-order first so it pins to top on mobile) -->
-    <div class="hero">
-      <div class="crt">
-        <div class="crt-screen">
-          <div id="out"></div>
-          <div class="mascot"><span class="face">👾</span><span class="bubble">feed me a picture! ♡</span></div>
-        </div>
-        <span class="led" aria-hidden="true"></span>
-      </div>
-    </div>
-
     <main class="desktop">
+      <!-- PREVIEW HERO: first in source (pins to top on mobile), spans the
+           centre column on desktop so windows flow around it left & right. -->
+      <div class="hero">
+        <div class="crt">
+          <div class="crt-screen">
+            <div id="out"></div>
+            <div class="mascot"><span class="face">👾</span><span class="bubble">feed me a picture! ♡</span></div>
+          </div>
+          <span class="led" aria-hidden="true"></span>
+        </div>
+      </div>
+
       <!-- WINDOW A -->
       <section class="win">
         <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns" aria-hidden="true" tabindex="-1"><i>_</i><i>□</i><i>×</i></span></div>
