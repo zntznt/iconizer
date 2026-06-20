@@ -77,12 +77,15 @@
          monitor (4:3), not a tall phone-shaped sliver. The screen takes a 4:3 box
          sized from the available height (capped), and the bezel hugs it. */
       .hero:has(#out:empty) { min-height: calc(100vh - var(--taskbar-h) - 28px - 36px); align-items: center; }
+      /* idle bezel may grow past its grid column (like maximize) to wrap a proper
+         landscape screen; the .hero centers it and lets it overflow the cell. */
+      .hero:has(#out:empty) { overflow: visible; }
+      .hero:has(#out:empty) .crt { max-width: none; }
       .hero:has(#out:empty) .crt-screen {
-        aspect-ratio: 4 / 3;
-        /* width = smaller of 640px and (available height x 4/3) so the 4:3 box never
-           overflows vertically; height derives from aspect-ratio. Always landscape. */
-        width: min(640px, calc((100vh - var(--taskbar-h) - 140px) * 4 / 3));
-        height: auto;
+        aspect-ratio: 4 / 3; height: auto;
+        /* width from the available height (4:3), capped at 640 and the viewport so
+           it never overflows the page. Bezel (fit-content) wraps it -> landscape. */
+        width: min(640px, 88vw, calc((100vh - var(--taskbar-h) - 140px) * 4 / 3));
       }
       /* maximized: pop out of the grid, fill the VERTICAL space. Width follows the
          image (centered) — borders hug the picture, not the viewport edges. */
