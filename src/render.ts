@@ -85,12 +85,16 @@ function cmyBody(cell: Cell, settings: Settings, iconId: string): string {
 }
 
 /** RGB additive layered body: 3 full-size icons carrying each channel's TRUE
- *  value (r,0,0 / 0,g,0 / 0,0,b), screen-blended over black so where the shapes
- *  overlap the channels ADD back to the exact cell colour — like RGB subpixels
- *  combining. screen is the additive mirror of CMY's multiply; black backing is
- *  screen's identity (mirror of multiply's white). layerOffset spreads the
- *  channels for a chromatic-split look; at 0 the whole icon = the original colour.
- *  The cell is already scheme-transformed upstream, so the scheme's colour shows. */
+ *  value (r,0,0 / 0,g,0 / 0,0,b), screen-blended so where the shapes overlap the
+ *  channels ADD back to the exact cell colour — like RGB subpixels combining.
+ *  screen is the additive mirror of CMY's multiply. Unlike CMY, NO per-cell
+ *  backing or isolation group: screen against the ONE global black background
+ *  (forced in render() for this style) gives every cell the correct backdrop, and
+ *  screen is commutative so neighbours don't interfere. That's the fix for the
+ *  "white background" + "black square sweeping under the animation" bugs — the old
+ *  per-cell black <rect> sat INSIDE the motion group and transformed with it.
+ *  layerOffset spreads the channels for a chromatic split; at 0 the whole icon is
+ *  the original colour. The cell is scheme-transformed upstream, so the scheme shows. */
 function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
   const CHANS = [
     { fill: `rgb(${Math.round(cell.r)},0,0)`, dx: -1, dy: -1 },
@@ -106,12 +110,7 @@ function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
       `color="${ch.fill}" style="mix-blend-mode:screen"/>`;
   }
-  const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
-  // isolated group over BLACK: screen against black is identity, so the channels
-  // accumulate cleanly to (r,g,b). STATIC like CMY — animating would re-blend
-  // against the wrong backdrop.
-  return `<g style="isolation:isolate">` +
-    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#000"/>${s}</g>`;
+  return s;
 }
 
 /** A layered cell: CMY multiply stack or RGB-proportion stack, then the motion
@@ -190,8 +189,11 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
   // export: the downloaded .svg stays alive. '' when motion:'none'.
   const style = motionStyle(settings);
   // Same background the source was sampled against, so sample <-> display <->
-  // export all match. Sits behind the icons.
-  const bg = `<rect width="${w}" height="${h}" fill="${settings.background}"/>`;
+  // export all match. Sits behind the icons. RGB-additive style FORCES black: it
+  // screen-blends, and screen's identity backdrop is black — anything else washes
+  // the colours out, and a non-black page is where the old per-cell rects showed.
+  const bgFill = settings.layered && settings.layerStyle === 'rgb' ? '#000000' : settings.background;
+  const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) => emitCell(c, settings, i, icons.length)).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" ` +

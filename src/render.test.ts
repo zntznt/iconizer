@@ -113,9 +113,15 @@ assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#ico
 
 // RGB additive layered style: 3 full-size icons carrying each channel's TRUE
 // value, screen-blended over black so overlaps add back to the original colour.
-const rgbOut = render(cell, tinySvg, { ...defaults, cols: 1, layered: true, layerStyle: 'rgb' });
+// circle icon (not the rect fixture) so counting <rect> only catches backgrounds.
+const circleSvg = [{ innerSvg: '<circle r="11"/>', viewBox: '0 0 24 24' }];
+const rgbOut = render(cell, circleSvg, { ...defaults, cols: 1, layered: true, layerStyle: 'rgb', background: '#ffffff' });
 assert.equal((rgbOut.match(/mix-blend-mode:screen/g) ?? []).length, 3, 'RGB style screen-blends 3 layers');
-assert.ok(rgbOut.includes('fill="#000"'), 'RGB style has a black backing (screen identity)');
+// the global background is FORCED black (screen identity), overriding the white
+// setting — and there are NO per-cell rects (the old ones swept under animation).
+assert.equal((rgbOut.match(/<rect/g) ?? []).length, 1, 'RGB: exactly one (global) background rect');
+assert.ok(rgbOut.includes('fill="#000000"'), 'RGB forces a black global background');
+assert.ok(!rgbOut.includes('isolation:isolate'), 'RGB needs no per-cell isolation (screen on global black)');
 // cell (200,100,50) -> channel layers carry true values, NOT pure 255.
 const rgbFills = [...rgbOut.matchAll(/color="(rgb\([^)]+\))"/g)].map((m) => m[1]);
 assert.deepEqual(rgbFills, ['rgb(200,0,0)', 'rgb(0,100,0)', 'rgb(0,0,50)'],
