@@ -138,4 +138,17 @@ const grayVals = [...grayRgb.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map(
 assert.ok(grayVals.length === 3 && grayVals.every((v) => v === grayVals[0]),
   `grayscale -> equal channel values (scheme reached layered), got ${grayVals}`);
 
-console.log('render.test.ts: ok (solid + CMY + RGB-proportion + scheme reaches layered + multi-icon)');
+// RGB + motion: the screen layers get a per-cell isolation group + black backing
+// (so the blend caches once and the motion wrapper just moves the buffer), and it
+// sits INSIDE the motion <g> so the rect never moves independently. RGB without
+// motion stays un-isolated (cheaper). This is the RGB+animation perf fix.
+const rgbAnim = render(cell, circleSvg,
+  { ...defaults, cols: 1, layered: true, layerStyle: 'rgb', motion: 'pulse' });
+assert.ok(/<g class="motion"><g style="isolation:isolate">/.test(rgbAnim),
+  'RGB+motion: isolated blend group nested inside the motion wrapper');
+assert.ok(rgbAnim.includes('will-change:transform'),
+  'motion style includes will-change (GPU-cache the raster, fixes scale/pulse jank)');
+const rgbStill = render(cell, circleSvg, { ...defaults, cols: 1, layered: true, layerStyle: 'rgb' });
+assert.ok(!rgbStill.includes('isolation:isolate'), 'RGB without motion stays un-isolated (cheaper)');
+
+console.log('render.test.ts: ok (solid + CMY + RGB additive + perf isolation + scheme + multi-icon)');

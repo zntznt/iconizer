@@ -26,7 +26,11 @@ export function motionStyle(settings: Settings): string {
   return (
     `<style>` +
     `@keyframes mo{${frames}}` +
-    `.motion{transform-box:fill-box;transform-origin:${origin};` +
+    // will-change:transform GPU-promotes each animated element so the browser
+    // caches its raster and moves/scales the cached bitmap, instead of
+    // re-rasterizing every frame. This is what makes scale-based motion (pulse)
+    // smooth; without it the browser re-rasterizes each icon crisply per frame.
+    `.motion{transform-box:fill-box;transform-origin:${origin};will-change:transform;` +
     `animation:mo ${period}s ease-in-out infinite}` +
     // accessibility: respect the OS reduce-motion setting (non-negotiable).
     `@media (prefers-reduced-motion: reduce){.motion{animation:none!important}}` +
