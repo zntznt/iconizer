@@ -89,15 +89,13 @@ function cmyBody(cell: Cell, settings: Settings, iconId: string): string {
  *  channels ADD back to the exact cell colour — like RGB subpixels combining.
  *  screen is the additive mirror of CMY's multiply.
  *
- *  `animated`: when the cell will move, the 3 screen layers go in their OWN
- *  isolated group with a black backing, so the blend resolves ONCE into a cached
- *  buffer the motion wrapper just moves (no per-frame re-blend = the RGB+motion
- *  perf fix). That per-cell black rect is fine here because it sits with the icons
- *  INSIDE the static inner group and the motion is on an outer <g> — the rect
- *  never moves independently (same structure as CMY). When NOT animated, skip the
- *  isolation: screen against the global black background (forced in render()) is
- *  correct and cheaper, and nothing moves so there's no artifact. */
-function rgbBody(cell: Cell, settings: Settings, iconId: string, animated: boolean): string {
+ *  No per-cell backing or isolation: the global black background (forced in
+ *  render() for this style) is screen's identity backdrop, so the 3 layers add to
+ *  (r,g,b) without any extra nodes — fewest nodes, cheapest to composite.
+ *  Tradeoff: where motion (pulse/offset) pushes a cell over its neighbours, the
+ *  moving cell screens over their pixels and the seam can flicker. Keep offset
+ *  modest if that shows; re-add a per-cell isolation group if it ever matters. */
+function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
   const CHANS = [
     { fill: `rgb(${Math.round(cell.r)},0,0)`, dx: -1, dy: -1 },
     { fill: `rgb(0,${Math.round(cell.g)},0)`, dx: 1, dy: 1 },
@@ -112,10 +110,7 @@ function rgbBody(cell: Cell, settings: Settings, iconId: string, animated: boole
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
       `color="${ch.fill}" style="mix-blend-mode:screen"/>`;
   }
-  if (!animated) return s; // global black bg behind everything; no isolation needed
-  const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
-  return `<g style="isolation:isolate">` +
-    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#000"/>${s}</g>`;
+  return s;
 }
 
 /** A layered cell: CMY multiply stack or RGB-additive stack, then the motion
@@ -123,13 +118,13 @@ function rgbBody(cell: Cell, settings: Settings, iconId: string, animated: boole
  *  pick up the scheme for free. */
 function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
   const iconId = iconFor(cell, iconCount);
-  const mo = motionAttrs(cell, index, settings);
   const body = settings.layerStyle === 'rgb'
-    ? rgbBody(cell, settings, iconId, mo !== '')
+    ? rgbBody(cell, settings, iconId)
     : cmyBody(cell, settings, iconId);
-  // OUTER group: motion only, no blend. The (isolated) body composites to a buffer
-  // once; the wrapper transforms that buffer per frame. .motion pivots around the
-  // icon's own box. No motion -> bare body, output unchanged.
+  // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
+  // browser caches the cell's raster and moves/scales the bitmap per frame. No
+  // motion -> bare body, output unchanged.
+  const mo = motionAttrs(cell, index, settings);
   return mo ? `<g${mo}>${body}</g>` : body;
 }
 
