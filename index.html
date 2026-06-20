@@ -249,7 +249,7 @@
         input[type="range"] { height: 28px; }
       }
       @media (prefers-reduced-motion: reduce) {
-        .banner span, .led, body::before, body::after, .crt-screen::before { animation: none !important; }
+        .banner span, .led, body::before, body::after, .crt-screen::before, .ring-track { animation: none !important; }
         .banner span { padding-left: 0; }
       }
       /* ---- Geocities webring banner ---- */
@@ -259,14 +259,21 @@
         font-family: var(--cursive); color: var(--cyan);
       }
       .ring-title { font-size: 14px; color: var(--lime); text-shadow: 0 0 4px var(--lime); letter-spacing: 1px; }
-      .ring-row {
-        display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
-        margin: 6px 0; font-family: var(--sans);
+      /* scrolling marquee of member links; track is duplicated in markup for a
+         seamless loop (0 -> -50%). pauses on hover so links are clickable. */
+      .ring-marquee { overflow: hidden; margin: 6px 0; white-space: nowrap; }
+      .ring-track {
+        display: inline-flex; align-items: center; gap: 8px; font-family: var(--sans);
+        animation: ringscroll 26s linear infinite;
       }
-      .ring-nav { color: #888; font-size: 12px; }
+      .ring-marquee:hover .ring-track { animation-play-state: paused; }
+      .ring-grp { display: inline-flex; align-items: center; gap: 8px; }
+      @keyframes ringscroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      .ring-lead { color: var(--cyan); font-family: var(--cursive); font-size: 13px; }
+      .ring-dot { color: var(--magenta); }
       .ring-site {
         background: var(--face); color: var(--navy); box-shadow: var(--bevel-up);
-        padding: 5px 10px; text-decoration: none; font-weight: bold; font-size: 13px; min-width: 0;
+        padding: 5px 10px; text-decoration: none; font-weight: bold; font-size: 13px;
       }
       .ring-site:hover { box-shadow: var(--bevel-down); color: var(--magenta); }
       .ring-foot { font-size: 11px; color: var(--magenta); margin-top: 2px; }
@@ -408,15 +415,39 @@
       </section>
     </main>
 
-    <!-- WEBRING banner: points users to free SVGs (Font Awesome) in classic ring style -->
+    <!-- WEBRING banner: scrolling marquee of free image + icon sources -->
     <aside class="ringbox">
       <div class="ring-title">✦ ☆ ✦  the IcoNiZeR webRing  ✦ ☆ ✦</div>
-      <div class="ring-row">
-        <span class="ring-nav">‹ prev</span>
-        <a class="ring-site" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">
-          🔣 Font Awesome Free — 2,000+ free SVG icons! grab one &amp; drop it above ♡
-        </a>
-        <span class="ring-nav">next ›</span>
+      <div class="ring-marquee">
+        <div class="ring-track">
+          <!-- group repeated twice for a seamless scroll (animate 0 -> -50%) -->
+          <span class="ring-grp">
+            <span class="ring-lead">‹ where to grab free stuff › &nbsp;⟵&nbsp;</span>
+            <a class="ring-site" href="https://frutigeraeroarchive.org/wallpapers/old_school_anime_1" target="_blank" rel="noopener noreferrer">🖼️ Frutiger Aero Archive (source pics)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://unsplash.com" target="_blank" rel="noopener noreferrer">📷 Unsplash (free photos)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">🔣 Font Awesome Free (icons)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://lucide.dev/icons" target="_blank" rel="noopener noreferrer">✏️ Lucide (icons)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://www.svgrepo.com" target="_blank" rel="noopener noreferrer">🗂️ SVG Repo (500k+ SVGs)</a>
+            <span class="ring-lead">&nbsp;★ grab one &amp; drop it above ♡ &nbsp;&nbsp;&nbsp;&nbsp;</span>
+          </span>
+          <span class="ring-grp" aria-hidden="true">
+            <span class="ring-lead">‹ where to grab free stuff › &nbsp;⟵&nbsp;</span>
+            <a class="ring-site" href="https://frutigeraeroarchive.org/wallpapers/old_school_anime_1" target="_blank" rel="noopener noreferrer" tabindex="-1">🖼️ Frutiger Aero Archive (source pics)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://unsplash.com" target="_blank" rel="noopener noreferrer" tabindex="-1">📷 Unsplash (free photos)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer" tabindex="-1">🔣 Font Awesome Free (icons)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://lucide.dev/icons" target="_blank" rel="noopener noreferrer" tabindex="-1">✏️ Lucide (icons)</a>
+            <span class="ring-dot">·</span>
+            <a class="ring-site" href="https://www.svgrepo.com" target="_blank" rel="noopener noreferrer" tabindex="-1">🗂️ SVG Repo (500k+ SVGs)</a>
+            <span class="ring-lead">&nbsp;★ grab one &amp; drop it above ♡ &nbsp;&nbsp;&nbsp;&nbsp;</span>
+          </span>
+        </div>
       </div>
       <div class="ring-foot">this site is a proud member ·  ★ best viewed with an SVG ★</div>
     </aside>
