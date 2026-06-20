@@ -228,7 +228,7 @@ $('dlGif').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'encoding…';
   try {
-    await downloadGif(lastSvg, settings.motionSpeed, +($('scale') as HTMLSelectElement).value);
+    await downloadGif(lastSvg, settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value);
   } finally {
     btn.disabled = false;
     btn.textContent = old;

@@ -78,35 +78,47 @@ async function rasterize(svg: string, w: number, h: number): Promise<ImageData> 
   }
 }
 
+/** The CSS `.motion{...}` body that freezes the animation at phase p (0..1).
+ *  `transform-box:fill-box; transform-origin:center` makes it pivot IN PLACE even
+ *  in a static SVG image (verified). One rule covers ALL cells -> O(1) per frame,
+ *  no per-element work. Math mirrors motion.ts's keyframes + ease-in-out. */
+function motionRuleAt(motion: string, p: number): string {
+  const pivot = 'transform-box:fill-box;transform-origin:center';
+  const ease = (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+  const tri = ease(1 - Math.abs(1 - 2 * p)); // 0->1->0 eased (symmetric keyframes)
+  switch (motion) {
+    case 'spin': return `transform:rotate(${(360 * p).toFixed(1)}deg);${pivot}`;
+    case 'wiggle': return `transform:rotate(${(-6 + 12 * tri).toFixed(2)}deg);${pivot}`;
+    case 'swing': return `transform:rotate(${(-12 + 24 * tri).toFixed(2)}deg);transform-box:fill-box;transform-origin:top center`;
+    case 'pulse': return `transform:scale(${(1 + 0.2 * tri).toFixed(3)});${pivot}`;
+    case 'bob': return `transform:translateY(${(-30 * tri).toFixed(1)}%);${pivot}`;
+    case 'shimmer': return `opacity:${(1 - 0.6 * tri).toFixed(3)}`;
+    default: return '';
+  }
+}
+
 /**
- * Export the ANIMATED mosaic as a looping .gif. The CSS animation lives only in
- * the browser, so a GIF is how a moving mosaic gets shared.
+ * Export the ANIMATED mosaic as a looping .gif.
  *
- * Mechanism — capture from the LIVE animated DOM. An SVG loaded as an <img> (what
- * drawImage needs) renders STATICALLY: CSS animations don't run, animation-delay
- * does nothing, and even a baked `transform` attr pivots around the SVG origin not
- * the element. So instead we mount the real mosaic in a hidden live <div> (where
- * the CSS animation actually runs with correct fill-box pivots), pause its
- * animations via the Web Animations API, and for each frame:
- *   1. seek every .motion animation's currentTime to phase p,
- *   2. read each element's COMPUTED transform (a matrix() with the pivot resolved),
- *   3. bake those matrices into a serialized copy and rasterize it.
- * N frames across one cycle -> seamless loop. gif.js encodes in a Worker.
+ * Fast path: for each frame, replace the live `.motion{animation:...}` rule in the
+ * SVG's <style> with a STATIC `.motion{transform:<phase>}` rule and rasterize. A
+ * single CSS rule freezes ALL cells at that phase — O(1) per frame, not O(cells).
+ * (The earlier per-element approach forced a getComputedStyle reflow per cell per
+ * frame -> hung at 1000+ cells.) transform-box:fill-box pivots in place even in a
+ * static SVG image (verified). N frames over one cycle -> seamless loop.
  *
- * @param periodSec the animation period (settings.motionSpeed) — one full cycle.
+ * @param motion the active motion key; @param periodSec the cycle length.
  * ponytail: gif.js is the one runtime dep; hand-rolling GIF89a/LZW isn't worth it.
  */
 export async function downloadGif(
-  svg: string, periodSec: number, scale = 1, frames = 20, filename = 'iconizer.gif',
+  svg: string, motion: string, periodSec: number, scale = 1, frames = 20, filename = 'iconizer.gif',
 ): Promise<void> {
   const { w, h } = svgSize(svg);
   const W = Math.round(w * scale), H = Math.round(h * scale);
   const delayMs = Math.max(20, Math.round((periodSec * 1000) / frames));
 
-  // Load gif.js + its worker SOURCE inlined as a string (?raw). gif.js does
-  // `new Worker(workerScript)` internally; we wrap the inlined source in a same-
-  // origin blob URL. ?raw works identically in dev and build (no separate worker
-  // file to 404, no CORS) — unlike ?url+fetch, which failed in dev and hung render.
+  // gif.js worker inlined via ?raw -> blob URL (works in dev and build; ?url+fetch
+  // failed in dev and hung render forever).
   const [{ default: GIF }, { default: workerSrc }] = await Promise.all([
     import('gif.js'),
     import('gif.js/dist/gif.worker.js?raw'),
@@ -114,47 +126,20 @@ export async function downloadGif(
   const workerBlobUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
   const gif = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
 
-  // Mount the live mosaic offscreen so its CSS animation actually runs.
-  const stage = document.createElement('div');
-  stage.style.cssText = 'position:fixed;left:-99999px;top:0;pointer-events:none';
-  stage.innerHTML = svg;
-  document.body.appendChild(stage);
-  const liveSvg = stage.querySelector('svg')!;
-  const motionEls = Array.from(liveSvg.querySelectorAll<SVGElement>('.motion'));
-  const periodMs = periodSec * 1000;
+  // The live <style> sets `.motion{...animation:mo ...}`. We swap the whole
+  // .motion rule for a static phase rule. Match the existing rule to replace it.
+  const motionRuleRe = /\.motion\{[^}]*\}/;
 
   try {
     for (let i = 0; i < frames; i++) {
-      const tMs = (periodMs * i) / frames; // phase across one cycle
-      // seek each element's animation, then read its resolved computed transform.
-      for (const el of motionEls) {
-        for (const a of el.getAnimations()) { a.pause(); a.currentTime = tMs; }
-      }
-      // bake the computed transform (incl. fill-box pivot) onto a clone, serialize.
-      const clone = liveSvg.cloneNode(true) as SVGElement;
-      const cloneEls = Array.from(clone.querySelectorAll<SVGElement>('.motion'));
-      motionEls.forEach((el, j) => {
-        const t = getComputedStyle(el).transform;
-        const o = getComputedStyle(el).opacity;
-        const c = cloneEls[j];
-        if (t && t !== 'none') c.setAttribute('transform', cssMatrixToSvg(t));
-        if (o && o !== '1') c.setAttribute('opacity', o);
-        c.removeAttribute('class'); // drop the .motion class so the <style> can't re-animate
-      });
-      // strip the <style> from the clone (no live animation in the raster anyway).
-      clone.querySelector('style')?.remove();
-      const frame = await rasterize(new XMLSerializer().serializeToString(clone), W, H);
+      const p = i / frames;
+      const frameSvg = svg.replace(motionRuleRe, `.motion{${motionRuleAt(motion, p)}}`);
+      const frame = await rasterize(frameSvg, W, H);
       gif.addFrame(frame, { delay: delayMs, copy: true });
     }
-  } finally {
-    stage.remove();
-  }
-
-  try {
     const blob: Blob = await new Promise((resolve, reject) => {
       gif.on('finished', resolve);
       gif.on('abort', () => reject(new Error('gif encode aborted')));
-      // guard: if the worker never reports back, fail loudly instead of hanging.
       const timer = setTimeout(() => reject(new Error('gif encode timed out')), 30000);
       gif.on('finished', () => clearTimeout(timer));
       gif.render();
@@ -163,11 +148,4 @@ export async function downloadGif(
   } finally {
     URL.revokeObjectURL(workerBlobUrl);
   }
-}
-
-/** "matrix(a, b, c, d, e, f)" (computed CSS) -> SVG transform "matrix(a b c d e f)". */
-function cssMatrixToSvg(css: string): string {
-  const nums = css.match(/matrix\(([^)]+)\)/)?.[1];
-  if (!nums) return '';
-  return `matrix(${nums.split(',').map((n) => n.trim()).join(' ')})`;
 }
