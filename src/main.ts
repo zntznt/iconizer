@@ -549,6 +549,30 @@ const taskFor = (win: HTMLElement) => byWin.get(win.id);
 // Two-phase genie: .minimizing runs the transform/fade transition while the window
 // still holds its grid slot; on transitionend, .minimized (display:none) drops it
 // out so the grid reflows. Restore reverses.
+// FLIP: animate the OTHER windows sliding to their new spots when the layout
+// reflows (a window leaving/entering), instead of teleporting. `mutate` performs
+// the layout change; `except` is the window being toggled (it has its own genie).
+function flipSiblings(except: HTMLElement, mutate: () => void) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { mutate(); return; }
+  const others = allWins.map((id) => document.getElementById(id)!)
+    .filter((w) => w && w !== except && !w.classList.contains('minimized') && !w.classList.contains('minimizing'));
+  const first = new Map(others.map((w) => [w, w.getBoundingClientRect()]));
+  mutate(); // layout changes here
+  for (const w of others) {
+    const a = first.get(w)!;
+    const b = w.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) continue;
+    w.style.transition = 'none';
+    w.style.transform = `translate(${dx}px, ${dy}px)`; // invert: appear unmoved
+    requestAnimationFrame(() => {
+      w.style.transition = 'transform .28s cubic-bezier(.4,0,.6,1)';
+      w.style.transform = ''; // play: slide to real position
+      w.addEventListener('transitionend', () => { w.style.transition = ''; }, { once: true });
+    });
+  }
+}
+
 function minimizeWin(win: HTMLElement) {
   if (win.classList.contains('minimized') || win.classList.contains('minimizing')) return;
   const task = taskFor(win);
@@ -562,8 +586,8 @@ function minimizeWin(win: HTMLElement) {
   let done = false;
   const finish = () => {
     if (done) return; done = true;
-    win.classList.add('minimized');
     win.classList.remove('minimizing');
+    flipSiblings(win, () => win.classList.add('minimized')); // others slide up to fill
   };
   win.addEventListener('transitionend', (e) => { if (e.propertyName === 'transform') finish(); }, { once: true });
   setTimeout(finish, 400);

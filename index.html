@@ -200,9 +200,11 @@
          short window never inherits a tall neighbour's row -> no big gaps). */
       @media (min-width: 1000px) {
         .desktop { flex-direction: row; align-items: flex-start; }
-        .rail { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 0; }
+        /* rails take 1 share each, the CRT takes 1.4 (matches the old grid ratio so
+           the CRT stays the dominant centre column, not shrunk to content). */
+        .rail { display: flex; flex-direction: column; gap: 14px; flex: 1 1 0; min-width: 0; }
         .rail-left { order: 1; }
-        .hero { order: 2; flex: 0 1 auto; align-self: stretch; }
+        .hero { order: 2; flex: 1.4 1 0; min-width: 360px; align-self: stretch; }
         .rail-right { order: 3; }
       }
       /* the transition lives on .win (always present) so BOTH directions animate:
