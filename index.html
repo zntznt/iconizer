@@ -85,10 +85,14 @@
         display: flex; flex-direction: column;
       }
       .crt.maximized .crt-screen { flex: 1; min-height: 0; display: flex; }
-      .crt.maximized .crt-screen #out { height: 100%; display: flex; align-items: center; justify-content: center; }
-      .crt.maximized #out svg { max-height: 100%; width: auto; }
-      /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black */
-      .crt-screen { position: relative; background: radial-gradient(ellipse at 50% 45%, #15201a, #0a0d0a 80%); border-radius: 6px; overflow: hidden; min-height: 200px; box-shadow: inset 0 0 40px rgba(0,0,0,.7); }
+      .crt.maximized .crt-screen #out { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+      /* fill the available height; width follows the SVG's aspect ratio */
+      .crt.maximized #out svg { height: 100%; width: auto; max-width: 100%; max-height: 100%; margin: 0; }
+      /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
+         No min-height here so the glass shrink-wraps the rendered SVG (no black
+         letterbox at odd ratios); the empty state gets its height from :has() below. */
+      .crt-screen { position: relative; background: radial-gradient(ellipse at 50% 45%, #15201a, #0a0d0a 80%); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 40px rgba(0,0,0,.7); }
+      .hero:has(#out:empty) .crt-screen { min-height: 200px; }
       .crt-screen::after { /* static fine scanlines (texture) */
         content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3;
         background: repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.12) 2px 3px);
