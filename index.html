@@ -79,9 +79,9 @@
       /* maximized: pop out of the grid, fill the VERTICAL space. Width follows the
          image (centered) — borders hug the picture, not the viewport edges. */
       .crt.maximized {
-        position: fixed; top: 12px; bottom: calc(var(--taskbar-h) + 12px);
+        position: fixed; top: 12px; bottom: 12px;
         left: 50%; transform: translateX(-50%);
-        z-index: 45; width: auto; max-width: calc(100vw - 24px); cursor: zoom-out;
+        z-index: 60; width: auto; max-width: calc(100vw - 24px); cursor: zoom-out;
         display: flex; flex-direction: column;
       }
       .crt.maximized .crt-screen { flex: 1; min-height: 0; display: flex; }
@@ -91,7 +91,7 @@
       /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
          No min-height here so the glass shrink-wraps the rendered SVG (no black
          letterbox at odd ratios); the empty state gets its height from :has() below. */
-      .crt-screen { position: relative; background: radial-gradient(ellipse at 50% 45%, #15201a, #0a0d0a 80%); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 40px rgba(0,0,0,.7); }
+      .crt-screen { position: relative; background: radial-gradient(ellipse at 50% 45%, #15201a, #0a0d0a 80%); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 40px rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; }
       .hero:has(#out:empty) .crt-screen { min-height: 200px; }
       .crt-screen::after { /* static fine scanlines (texture) */
         content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3;
@@ -104,8 +104,11 @@
         animation: roll 6s linear infinite;
       }
       @keyframes roll { from { transform: translateY(0); } to { transform: translateY(460%); } }
-      #out { display: block; position: relative; z-index: 1; }
-      #out svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+      /* #out shrink-wraps the SVG so the glass hugs the image (no black borders at
+         odd ratios). The screen centres it; the SVG caps at the screen width and a
+         sane max height, keeping its aspect ratio. */
+      #out { position: relative; z-index: 1; display: flex; }
+      #out svg { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; }
       .mascot {
         display: none; color: #9bbc0f; font-family: var(--cursive); text-align: center;
         padding: 40px 16px; font-size: 15px;
