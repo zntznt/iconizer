@@ -17,6 +17,8 @@
     let leftSprites = [], rightSprites = []; // loud gutter "GIF" sprites
     let t = 0;                           // logical seconds; advances only when live
     let reduce = mq.matches;
+    let exporting = false;               // paused while a raster export runs
+    const FPS = 30;                      // 30 reads as motion, halves the GPU vs 60
 
     const C = {
       star: [255, 255, 255], starDim: [150, 156, 200],
@@ -75,14 +77,24 @@
       p.pixelDensity(dpr());
       p.angleMode(p.RADIANS); p.ellipseMode(p.CENTER);
       seedStars(); planets = makePlanets(); rebuildGutters();
-      p.frameRate(reduce ? 1 : 60);
+      p.frameRate(reduce ? 1 : FPS);
       if (reduce) { p.redraw(); p.noLoop(); }
       const onMq = (e) => {            // live reduced-motion toggle
         reduce = e.matches;
         if (reduce) { p.frameRate(1); p.redraw(); p.noLoop(); }
-        else if (!document.hidden) { p.frameRate(60); p.loop(); }
+        else if (!document.hidden && !exporting) { p.frameRate(FPS); p.loop(); }
       };
       mq.addEventListener ? mq.addEventListener('change', onMq) : mq.addListener(onMq);
+      // Single resume gate: run only when motion's allowed AND nothing's blocking
+      // (tab hidden, or a raster export hogging the main thread).
+      const sync = () => {
+        if (reduce || document.hidden || exporting) p.noLoop();
+        else { p.frameRate(FPS); p.loop(); }
+      };
+      document.addEventListener('iconizer:export', (e) => {
+        exporting = !!(e.detail && e.detail.busy); sync();
+      });
+      document.addEventListener('visibilitychange', sync);
     };
 
     p.windowResized = function () {
@@ -191,11 +203,7 @@
 
   function boot() {
     if (typeof p5 === 'undefined') return;   // CDN failed to load: stay on flat-black body, no crash
-    const inst = new p5(sketch);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) inst.noLoop();
-      else if (!mq.matches) inst.loop();           // resume only for motion users
-    });
+    new p5(sketch);                          // visibility/export pausing lives in the sketch closure
   }
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', boot);

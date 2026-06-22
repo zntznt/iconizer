@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <!-- Iconizer favicon: the Start-menu 4-colour Win9x flag.
-       Four triangles meeting at centre with a thin dark gap, on a black tile
-       so it reads on the Space Jam void. -->
-  <rect width="32" height="32" rx="3" fill="#000"/>
-  <g transform="translate(16 16) rotate(-12)">
-    <!-- gap = the triangles stop short of centre/edges; ~1.2 inset -->
-    <polygon points="-1.5,-1.5 -11,-1.5 -1.5,-11"  fill="#f00"/><!-- top-left  red -->
-    <polygon points="1.5,-1.5  11,-1.5  1.5,-11"   fill="#0c0"/><!-- top-right green -->
-    <polygon points="-1.5,1.5  -11,1.5  -1.5,11"   fill="#00f"/><!-- bot-left  blue -->
-    <polygon points="1.5,1.5   11,1.5   1.5,11"    fill="#fc0"/><!-- bot-right yellow -->
+       Built for 16px tabs: bold quadrant blocks, a fat dark cross gap (reads at
+       small sizes where the old thin-triangle gap turned to mush), slight skew
+       for the "waving flag" feel. Black tile so it pops on the Space Jam void. -->
+  <rect width="32" height="32" rx="4" fill="#000"/>
+  <g transform="translate(16 16) skewX(-12) translate(-16 -16)">
+    <rect x="5"  y="5"  width="9.5" height="9.5" rx="1" fill="#f33"/><!-- red    -->
+    <rect x="17.5" y="5"  width="9.5" height="9.5" rx="1" fill="#2c2"/><!-- green  -->
+    <rect x="5"  y="17.5" width="9.5" height="9.5" rx="1" fill="#39f"/><!-- blue   -->
+    <rect x="17.5" y="17.5" width="9.5" height="9.5" rx="1" fill="#fc2"/><!-- yellow -->
   </g>
 </svg>

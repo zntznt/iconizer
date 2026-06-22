@@ -45,6 +45,7 @@ const settings: Settings = settingsFromUrl() ?? { ...defaults };
 
 // Inputs that don't change every render: cache the parsed results.
 let cells: Cell[] | null = null;
+let srcBitmap: ImageBitmap | null = null; // decoded once at load; resample reuses it
 const icons: { name: string; svg: ParsedSvg }[] = []; // dark->light order
 let lastSvg = ''; // latest render() output, reused by export (no re-render)
 
@@ -84,9 +85,9 @@ function scheduleRedraw() {
 async function loadImage(file: File): Promise<boolean> {
   if (!file.type.startsWith('image/')) return false;
   try {
-    const bitmap = await createImageBitmap(file);
-    cells = sample(bitmap, settings);
-    bitmap.close();
+    srcBitmap?.close();              // free the previous image
+    srcBitmap = await createImageBitmap(file);
+    cells = sample(srcBitmap, settings);
   } catch { return false; } // corrupt/undecodable image
   $('srcName').textContent = file.name;
   refreshPips();
@@ -185,20 +186,17 @@ $('iconList').addEventListener('click', (e) => {
   redraw();
 });
 
-// cols and background change the sampled grid, so they must re-sample. We only
-// have the bitmap at upload time; cheapest is to re-read the File from the input.
-async function resample() {
-  const file = ($('image') as HTMLInputElement).files?.[0];
-  if (!file) return;
-  const bitmap = await createImageBitmap(file);
-  cells = sample(bitmap, settings);
-  bitmap.close();
+// cols and background change the sampled grid, so they must re-sample — but the
+// decoded bitmap is cached from load, so this is just a re-sample, no re-decode.
+function resample() {
+  if (!srcBitmap) return;
+  cells = sample(srcBitmap, settings);
 }
 
-$('cols').addEventListener('input', async (e) => {
+$('cols').addEventListener('input', (e) => {
   settings.cols = +(e.target as HTMLInputElement).value;
   $('colsVal').textContent = String(settings.cols);
-  await resample();
+  resample();
   scheduleRedraw();
 });
 
@@ -216,9 +214,9 @@ $('iconScale').addEventListener('input', (e) => {
   scheduleRedraw();
 });
 
-$('background').addEventListener('input', async (e) => {
+$('background').addEventListener('input', (e) => {
   settings.background = (e.target as HTMLInputElement).value;
-  await resample();
+  resample();
   scheduleRedraw();
 });
 
@@ -332,13 +330,21 @@ $('staggerMode').addEventListener('change', (e) => {
   settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
   scheduleRedraw();
 });
+// Tell the p5 backdrop to pause while a raster export runs (it fights the encode
+// for the main thread / GPU). The sketch listens for this on document.
+const setExportBusy = (busy: boolean) =>
+  document.dispatchEvent(new CustomEvent('iconizer:export', { detail: { busy } }));
+
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);
 });
 $('dlPng').addEventListener('click', async () => {
   if (!lastSvg) return;
   setStatus('exporting'); setProg(30);
-  await downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+  setExportBusy(true);
+  try {
+    await downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+  } finally { setExportBusy(false); }
   setProg(100); setTimeout(() => { setStatus('ready'); setProg(0); }, 400);
 });
 $('dlGif').addEventListener('click', async () => {
@@ -351,10 +357,12 @@ $('dlGif').addEventListener('click', async () => {
   // coarse progress: the bar creeps while gif.js encodes (no per-frame callback wired).
   let p = 15;
   const creep = setInterval(() => { p = Math.min(90, p + 8); setProg(p); }, 200);
+  setExportBusy(true);
   try {
     await downloadGif(lastSvg, settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value);
     setProg(100);
   } finally {
+    setExportBusy(false);
     clearInterval(creep);
     btn.disabled = false;
     btn.textContent = old;

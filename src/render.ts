@@ -9,7 +9,10 @@ import { motionStyle, motionAttrs } from './motion.ts';
 // root viewBox scales the whole thing, so this is just internal resolution.
 const CELL = 16;
 
-/** Round to keep the output string small and stable for the self-check. */
+/** Round to keep the output string small and stable for the self-check.
+ *  Coords use 1 decimal (0.1 user-unit = 1/160 of a cell — invisible, smaller
+ *  file); the aspect ratio keeps 2 decimals since CSS layout math reads it. */
+const r1 = (n: number) => Math.round(n * 10) / 10;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Scale factor for one cell's icon: global iconScale x optional brightness scale.
@@ -42,9 +45,9 @@ function iconFor(cell: Cell, count: number): string {
 
 /** Centered placement box for a cell's icon at a given scale factor. */
 function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
-  const size = r2(CELL * scale);
-  const pad = r2((CELL - size) / 2); // center the shrunk icon in its box
-  return { x: r2(cell.col * CELL + pad), y: r2(cell.row * CELL + pad), size };
+  const size = r1(CELL * scale);
+  const pad = r1((CELL - size) / 2); // center the shrunk icon in its box
+  return { x: r1(cell.col * CELL + pad), y: r1(cell.row * CELL + pad), size };
 }
 
 // CMY layer geometry, biggest first. Each layer subtracts ONE channel via
@@ -74,16 +77,16 @@ function cmyBody(cell: Cell, settings: Settings, iconId: string): string {
   const base = scaleFor(cell, settings);
   let s = '';
   for (let i = 0; i < n; i++) {
-    const scale = r2(base * (1 - i / n)); // even steps: 1, 1-1/n, 1-2/n ...
+    const scale = r1(base * (1 - i / n)); // even steps: 1, 1-1/n, 1-2/n ...
     const { x, y, size } = cellBox(cell, settings, scale);
     const off = settings.layerOffset;
-    const ox = r2(x + INKS[i].dx * off);
-    const oy = r2(y + INKS[i].dy * off);
+    const ox = r1(x + INKS[i].dx * off);
+    const oy = r1(y + INKS[i].dy * off);
     const ink = inkFill(INKS[i].chan, strength[i]);
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
       `color="${ink}" style="mix-blend-mode:multiply"/>`;
   }
-  const bx = r2(cell.col * CELL), by = r2(cell.row * CELL);
+  const bx = r1(cell.col * CELL), by = r1(cell.row * CELL);
   // INNER group: isolated blend + white backing. STATIC — multiply resolves once
   // to the exact colour. Animating it would re-blend against black (the old bug).
   return `<g style="isolation:isolate">` +
@@ -111,8 +114,8 @@ function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
   const off = settings.layerOffset;
   let s = '';
   for (const ch of CHANS) {
-    const ox = r2(x + ch.dx * off);
-    const oy = r2(y + ch.dy * off);
+    const ox = r1(x + ch.dx * off);
+    const oy = r1(y + ch.dy * off);
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
       `color="${ch.fill}" style="mix-blend-mode:screen"/>`;
   }
