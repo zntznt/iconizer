@@ -69,8 +69,12 @@ function refreshExportState() {
   ($('dlSvg') as HTMLButtonElement).disabled = !rendered;
   ($('dlPng') as HTMLButtonElement).disabled = !rendered;
   ($('dlGif') as HTMLButtonElement).disabled = !rendered || !animated;
+  // captions double as the reason a button is locked (mirrors the GIF note).
+  $('svgNote').textContent = rendered ? 'vector · crisp · tiny' : 'add a pic + icon first';
+  $('pngNote').textContent = rendered ? 'raster image · @ current scale' : 'add a pic + icon first';
   const note = document.getElementById('gifNote');
-  if (note) note.textContent = animated ? 'animated · ready' : 'animated · needs Motion FX';
+  if (note) note.textContent = !rendered ? 'add a pic + icon first'
+    : animated ? 'animated · ready' : 'animated · needs Motion FX';
   syncQuickSave();
 }
 
@@ -164,6 +168,8 @@ function renderIconList() {
     row.innerHTML = `<span>${i + 1}. ${it.name}</span><button data-i="${i}" type="button">×</button>`;
     list.appendChild(row);
   });
+  // the dark->light ordering rule only matters with 2+ icons; show it then.
+  $('iconOrderHint').hidden = icons.length < 2;
 }
 
 // Add one or more SVGs to the list (the file input allows multiple).
@@ -203,7 +209,8 @@ $('cols').addEventListener('input', (e) => {
 // blockSize pools the already-sampled grid (no resample) — just redraw.
 $('blockSize').addEventListener('input', (e) => {
   settings.blockSize = +(e.target as HTMLInputElement).value;
-  $('blockVal').textContent = `${settings.blockSize}×${settings.blockSize}`;
+  const n = settings.blockSize;
+  $('blockVal').textContent = n > 1 ? `${n}×${n} chonk` : '1×1';
   scheduleRedraw();
 });
 
@@ -227,10 +234,12 @@ $('sizeByBrightness').addEventListener('change', (e) => {
 });
 $('sizeMin').addEventListener('input', (e) => {
   settings.sizeRange[0] = +(e.target as HTMLInputElement).value;
+  $('sizeMinVal').textContent = settings.sizeRange[0].toFixed(2);
   scheduleRedraw();
 });
 $('sizeMax').addEventListener('input', (e) => {
   settings.sizeRange[1] = +(e.target as HTMLInputElement).value;
+  $('sizeMaxVal').textContent = settings.sizeRange[1].toFixed(2);
   scheduleRedraw();
 });
 
@@ -254,6 +263,7 @@ $('layerCount').addEventListener('change', (e) => {
 });
 $('layerOffset').addEventListener('input', (e) => {
   settings.layerOffset = +(e.target as HTMLInputElement).value;
+  $('layerOffsetVal').textContent = String(settings.layerOffset);
   scheduleRedraw();
 });
 
@@ -292,6 +302,8 @@ function syncSchemeUI() {
   disclose('p-levels', kind === 'posterize');
   disclose('p-duotone', kind === 'duotone');
   disclose('p-palette', kind === 'palette');
+  $('levelsVal').textContent = `${($('levels') as HTMLInputElement).value} steps`;
+  $('schemeHint').hidden = kind !== 'none'; // hint only while nothing's picked
 }
 
 // The three NEW disclosure insets (scheme insets are handled by syncSchemeUI).
@@ -324,6 +336,7 @@ $('motion').addEventListener('change', async (e) => {
 });
 $('motionSpeed').addEventListener('input', (e) => {
   settings.motionSpeed = +(e.target as HTMLInputElement).value;
+  $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   scheduleRedraw();
 });
 $('staggerMode').addEventListener('change', (e) => {
@@ -395,18 +408,19 @@ function syncControls() {
     else el.value = String(v);
   };
   set('cols', settings.cols); $('colsVal').textContent = String(settings.cols);
-  set('blockSize', settings.blockSize); $('blockVal').textContent = `${settings.blockSize}×${settings.blockSize}`;
+  set('blockSize', settings.blockSize);
+  $('blockVal').textContent = settings.blockSize > 1 ? `${settings.blockSize}×${settings.blockSize} chonk` : '1×1';
   set('iconScale', settings.iconScale); $('iconScaleVal').textContent = String(settings.iconScale);
   set('background', settings.background);
   set('sizeByBrightness', settings.sizeByBrightness);
-  set('sizeMin', settings.sizeRange[0]);
-  set('sizeMax', settings.sizeRange[1]);
+  set('sizeMin', settings.sizeRange[0]); $('sizeMinVal').textContent = settings.sizeRange[0].toFixed(2);
+  set('sizeMax', settings.sizeRange[1]); $('sizeMaxVal').textContent = settings.sizeRange[1].toFixed(2);
   set('layered', settings.layered);
   set('layerStyle', settings.layerStyle);
   set('layerCount', settings.layerCount);
-  set('layerOffset', settings.layerOffset);
+  set('layerOffset', settings.layerOffset); $('layerOffsetVal').textContent = String(settings.layerOffset);
   set('motion', settings.motion);
-  set('motionSpeed', settings.motionSpeed);
+  set('motionSpeed', settings.motionSpeed); $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   set('staggerMode', settings.staggerMode);
   // scheme + its conditional sub-controls
   set('scheme', settings.scheme.kind);
@@ -632,6 +646,7 @@ function restoreWin(win: HTMLElement, scroll = true) {
 // CRT shows); after the first successful render they cascade in one by one.
 const allWins = ['winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion', 'winExport'];
 function bootMinimizeAll() {
+  document.body.classList.add('no-media'); // hide the task buttons until a render exists
   allWins.forEach((id) => {
     const w = document.getElementById(id);
     if (w) { w.classList.add('minimized'); taskFor(w)?.classList.add('stowed'); }
@@ -641,6 +656,7 @@ let booted = false; // the cascade reveal runs once
 function bootReveal() {
   if (booted) return;
   booted = true;
+  document.body.classList.remove('no-media'); // taskbar buttons appear with the windows
   allWins.forEach((id, i) => {
     setTimeout(() => { const w = document.getElementById(id); if (w) restoreWin(w, false); }, i * 240);
   });
