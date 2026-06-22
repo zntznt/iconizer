@@ -71,6 +71,16 @@ assert.ok(zeroW > 0, `sizeRange [0,0] floors above zero (icons tiny, not gone), 
 const inverted = emitCell(mid, { ...defaults, layered: false, sizeByBrightness: true, sizeRange: [0.8, 0.1] });
 assert.ok((inverted.match(/width="([\d.]+)"/)?.[1] ?? '') !== '', 'min>max renders a valid (sorted) size');
 
+// size-by-brightness is area-linear (sqrt of lerp(lo², hi²)), not linear in the
+// scale factor — so a midtone icon covers more than the naive linear midpoint
+// would (that's the fix for "too thin until it jumps big"). CELL=16, range [0.2,1].
+const half: Cell = { col: 0, row: 0, r: 119, g: 119, b: 119, brightness: 0.5 };
+const areaLin = emitCell(half, { ...defaults, layered: false, sizeByBrightness: true, sizeRange: [0.2, 1] });
+const halfW = +(areaLin.match(/width="([\d.]+)"/)?.[1] ?? '0');
+const expected = 16 * Math.sqrt(0.2 * 0.2 + (1 - 0.2 * 0.2) * 0.5); // ≈ 16*0.721 = 11.54
+assert.ok(Math.abs(halfW - expected) < 0.2, `area-linear midtone width ~${expected.toFixed(2)}, got ${halfW}`);
+assert.ok(halfW > 16 * (0.2 + (1 - 0.2) * 0.5), 'area-linear midtone is larger than the old linear ramp');
+
 // blockSize: merge NxN sample cells into one averaged icon. 4x4 grid, block 2 ->
 // 2x2 = 4 icons (vs 16), each the average of its block.
 const g16: Cell[] = [];

@@ -25,7 +25,12 @@ function scaleFor(cell: Cell, settings: Settings): number {
     // sort the range so min>max (independent sliders) doesn't invert the lerp.
     const lo = Math.min(settings.sizeRange[0], settings.sizeRange[1]);
     const hi = Math.max(settings.sizeRange[0], settings.sizeRange[1]);
-    tonal = lo + (hi - lo) * (1 - cell.brightness);
+    // Interpolate in AREA, not linear dimension: the eye reads a cell's ink
+    // coverage (~scale²), so a linear ramp on `tonal` looks bimodal — most cells
+    // stay thin, then jump big near the dark end. Lerp lo²..hi² and sqrt back so
+    // perceived size moves evenly with brightness. Endpoints (lo, hi) unchanged.
+    const t = 1 - cell.brightness; // dark cell -> 1 (big), light -> 0 (small)
+    tonal = Math.sqrt(lo * lo + (hi * hi - lo * lo) * t);
   }
   const s = settings.iconScale * tonal;
   // floor at a tiny positive value so icons can shrink small but never vanish
