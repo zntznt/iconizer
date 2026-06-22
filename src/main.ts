@@ -344,8 +344,15 @@ $('dlPng').addEventListener('click', async () => {
   setExportBusy(true);
   try {
     await downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
-  } finally { setExportBusy(false); }
-  setProg(100); setTimeout(() => { setStatus('ready'); setProg(0); }, 400);
+    setProg(100);
+  } catch {
+    // a failed raster (e.g. iOS canvas cap) must not leave the bar stuck on
+    // "exporting" forever — surface it and recover.
+    $('progText').textContent = '✖ PNG EXPORT FAILED';
+  } finally {
+    setExportBusy(false);
+    setTimeout(() => { setStatus('ready'); setProg(0); }, 800);
+  }
 });
 $('dlGif').addEventListener('click', async () => {
   if (!lastSvg || settings.motion === 'none') return;

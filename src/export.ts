@@ -9,8 +9,12 @@ function downloadBlob(blob: Blob, filename: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  // Append before click: some WebViews (iOS Safari) ignore a detached anchor.
+  // Defer the revoke a tick: revoking synchronously can kill the blob before
+  // Safari finishes the download handoff.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 0);
 }
 
 /** Download the rendered mosaic as a standalone .svg file. */
