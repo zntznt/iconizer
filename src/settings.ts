@@ -9,9 +9,13 @@ export type Settings = {
   sizeRange: [number, number]; // min..max scale factor when sizeByBrightness
   background: string; // CSS color the source is composited onto; sets CMY floor
   layered: boolean; // false -> solid-tint path; true -> per-cell layered stack
-  layerStyle: 'cmy' | 'rgb'; // cmy: multiply-subtract to cell colour; rgb: solid
-                             // red/green/blue icons scaled by channel proportion
-  layerCount: 2 | 3; // CMY only: inks to stack (3 = CMY, 2 = CM)
+  // The "3D glasses" split styles. Subtractive (multiply over white):
+  //   cmy  — cyan/magenta/yellow inks   cmyk — + a black ink for deeper shadows
+  //   ryb  — warmer artist primaries (red/yellow/blue)
+  // Additive (screen over black):
+  //   rgb       — red/green/blue subpixels    anaglyph — red+cyan 3D-glasses ghosts
+  layerStyle: 'cmy' | 'cmyk' | 'ryb' | 'rgb' | 'anaglyph';
+  layerCount: 2 | 3; // cmy/ryb only: inks to stack (3 = full, 2 = drop the last)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
   scheme: Scheme; // remap each cell color upstream of solid/layered
   motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static

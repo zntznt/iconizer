@@ -32,10 +32,13 @@ assert.ok(bgOut.indexOf('<rect') < bgOut.indexOf('<use'), 'bg rect must precede 
 // channel; baking strength into the ink color makes 3 inks multiply to (r,g,b).
 const mid: Cell = { col: 0, row: 0, r: 180, g: 90, b: 40, brightness: 0.4 };
 
-const layered = emitCell(mid, { ...defaults, layered: true, layerCount: 3, layerOffset: 0 });
+const layered = emitCell(mid, { ...defaults, layered: true, layerStyle: 'cmy', layerCount: 3, layerOffset: 0 });
 assert.equal((layered.match(/<use\b/g) ?? []).length, 3, 'layered:3 -> 3 <use>');
 assert.equal((layered.match(/mix-blend-mode:multiply/g) ?? []).length, 3,
   'all 3 layers multiply-blended');
+// CMY now blends against the WHITE page (no per-cell rect / isolation group).
+assert.ok(!layered.includes('isolation:isolate'), 'CMY: no per-cell isolation (multiply on white page)');
+assert.ok(!layered.includes('<rect'), 'CMY: no per-cell white backing rect');
 
 // The 3 ink fills, multiplied together against white, must equal the cell color.
 // Each fill dims exactly one channel to 255*(1-strength); product per channel
@@ -157,4 +160,39 @@ assert.ok(rgbAnim.includes('will-change:transform'),
   'motion style includes will-change (GPU-cache the raster, fixes scale/pulse jank)');
 assert.ok(/<g class="motion"><use/.test(rgbAnim), 'motion wraps the screen <use>s directly');
 
-console.log('render.test.ts: ok (solid + CMY + RGB additive + perf isolation + scheme + multi-icon)');
+// --- new layered styles (cmyk / ryb / anaglyph) + page-background forcing -----
+
+// SUBTRACTIVE styles (cmy/cmyk/ryb) force a WHITE page (multiply identity);
+// ADDITIVE (rgb/anaglyph) force BLACK. background setting is overridden either way.
+for (const [style, pageBg] of [['cmy', '#ffffff'], ['cmyk', '#ffffff'], ['ryb', '#ffffff'],
+                               ['rgb', '#000000'], ['anaglyph', '#000000']] as const) {
+  const o = render(cell, circleSvg, { ...defaults, cols: 1, layered: true, layerStyle: style, background: '#abcdef' });
+  assert.ok(o.includes(`fill="${pageBg}"`), `${style} forces page bg ${pageBg}, not the #abcdef setting`);
+  assert.ok(!o.includes('isolation:isolate'), `${style}: no per-cell isolation`);
+  // circle icon, so the ONLY <rect> is the single global background.
+  assert.equal((o.match(/<rect/g) ?? []).length, 1, `${style}: exactly one (global bg) rect, no per-cell rects`);
+}
+
+// CMYK = 4 multiply layers (CMY + a K/black ink). The K ink is a gray (r=g=b).
+const cmyk = emitCell(mid, { ...defaults, layered: true, layerStyle: 'cmyk', layerOffset: 0 });
+assert.equal((cmyk.match(/<use\b/g) ?? []).length, 4, 'CMYK -> 4 layers');
+assert.equal((cmyk.match(/mix-blend-mode:multiply/g) ?? []).length, 4, 'CMYK all multiply');
+const cmykFills = [...cmyk.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => [+m[1], +m[2], +m[3]]);
+const kFill = cmykFills[3];
+assert.ok(kFill[0] === kFill[1] && kFill[1] === kFill[2], `K ink is gray (r=g=b), got ${kFill}`);
+// K = max(r,g,b) as gray; cell (180,90,40) -> 180.
+assert.equal(kFill[0], 180, `K gray = max channel (180), got ${kFill[0]}`);
+
+// anaglyph = 2 screen ghosts, a red one (g=b=0) and a cyan one (r=0), full size.
+const ana = emitCell(mid, { ...defaults, layered: true, layerStyle: 'anaglyph', layerOffset: 2 });
+assert.equal((ana.match(/<use\b/g) ?? []).length, 2, 'anaglyph -> 2 ghosts');
+assert.equal((ana.match(/mix-blend-mode:screen/g) ?? []).length, 2, 'anaglyph screen-blends');
+const anaFills = [...ana.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => [+m[1], +m[2], +m[3]]);
+assert.ok(anaFills[0][1] === 0 && anaFills[0][2] === 0, `anaglyph layer 0 = red ghost, got ${anaFills[0]}`);
+assert.ok(anaFills[1][0] === 0, `anaglyph layer 1 = cyan ghost (r=0), got ${anaFills[1]}`);
+
+// ryb honors layerCount (2 drops the last ink), like cmy.
+const ryb2 = emitCell(mid, { ...defaults, layered: true, layerStyle: 'ryb', layerCount: 2 });
+assert.equal((ryb2.match(/<use\b/g) ?? []).length, 2, 'ryb layerCount:2 -> 2 layers');
+
+console.log('render.test.ts: ok (solid + CMY/CMYK/RYB/RGB/anaglyph + bg forcing + scheme + multi-icon)');

@@ -533,10 +533,13 @@
             <div class="row"><label>style
               <select id="layerStyle">
                 <option value="cmy">CMY ▸ inky / darker</option>
+                <option value="cmyk">CMYK ▸ inky + black</option>
+                <option value="ryb">RYB ▸ warm / painted</option>
                 <option value="rgb">RGB ▸ glowy / brighter</option>
+                <option value="anaglyph">anaglyph ▸ red/cyan 3D</option>
               </select></label></div>
-            <div class="row"><label>layers
-              <select id="layerCount"><option value="3">3 ▸ CMY</option><option value="2">2 ▸ CM</option></select></label></div>
+            <div class="row" id="p-layerCount"><label>layers
+              <select id="layerCount"><option value="3">3 ▸ full</option><option value="2">2 ▸ drop last</option></select></label></div>
             <div class="row"><label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label><span class="val" id="layerOffsetVal">0</span></div>
             <div class="dw-nudge">⚠ heavy with Motion FX on a big grid — drop columns if it chugs</div>
           </div>

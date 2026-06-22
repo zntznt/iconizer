@@ -50,74 +50,80 @@ function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings
   return { x: r1(cell.col * CELL + pad), y: r1(cell.row * CELL + pad), size };
 }
 
-// CMY layer geometry, biggest first. Each layer subtracts ONE channel via
-// multiply blend; offset directions give the chromatic-aberration shimmer.
-// chan = which RGB channel this ink removes (cyan->R, magenta->G, yellow->B).
-const INKS = [
-  { chan: 0, dx: -1, dy: -1 }, // cyan    removes red,   up-left
-  { chan: 1, dx: 1, dy: 1 }, //   magenta removes green, down-right
-  { chan: 2, dx: -1, dy: 1 }, //  yellow  removes blue,  down-left
-] as const;
+// Which layer styles SUBTRACT ink (multiply over a WHITE page) vs ADD light
+// (screen over a BLACK page). render() picks the page background from this.
+// ponytail: no per-cell white/black rect + isolation any more — every style now
+// blends against the shared page. It's a fun toy; overlapping/animating cells
+// re-blend and that's fine (the user asked for it). Fewer nodes, simpler.
+export const SUBTRACTIVE = new Set(['cmy', 'cmyk', 'ryb']);
 
-/** Ink fill for one channel at strength s∈[0,1]: white except the removed
- *  channel dimmed to (1-s). Multiplied against white -> that channel = 1-s. */
-function inkFill(chan: number, s: number): string {
-  const v = Math.round(255 * (1 - s));
-  const rgb = [255, 255, 255];
-  rgb[chan] = v;
-  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-}
+// Per-style ink layers. Each entry: how to derive the layer's strength from the
+// cell's r/g/b (0..1 each), and the offset direction for the aberration shimmer.
+// SUBTRACTIVE inks are white-minus-one-channel (multiply); ADDITIVE carry the
+// channel's true value (screen). Offsets fan out so layers separate under offset.
+type Ink = { color: (r: number, g: number, b: number) => string; dx: number; dy: number };
+const cmyInk = (chan: number): Ink => ({
+  color: (...c) => { const rgb = [255, 255, 255]; rgb[chan] = Math.round(c[chan] * 255); return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; },
+  dx: [-1, 1, -1][chan], dy: [-1, 1, 1][chan],
+});
+// K ink: gray = max(r,g,b); multiplying by it darkens every channel equally in
+// the shadows, which CMY alone can't reach (3 weak inks never hit true black).
+const kInk: Ink = {
+  color: (r, g, b) => { const v = Math.round(Math.max(r, g, b) * 255); return `rgb(${v},${v},${v})`; },
+  dx: 1, dy: -1,
+};
+// RYB: artist primaries. Red removes nothing extra, but we fake the warmer wheel
+// by mapping subtractive inks to red/yellow/blue tints (multiply). Approximate —
+// it's a vibe, not a color-managed conversion.
+const rybInks: Ink[] = [
+  { color: (r) => `rgb(255,${Math.round(r * 255)},${Math.round(r * 255)})`, dx: -1, dy: -1 }, // red ink
+  { color: (_r, _g, b) => `rgb(255,255,${Math.round(b * 255)})`, dx: 1, dy: 1 },               // yellow ink (removes blue)
+  { color: (_r, g) => `rgb(${Math.round(g * 255)},${Math.round(g * 255)},255)`, dx: -1, dy: 1 }, // blue ink (removes green)
+];
+const rgbInks: Ink[] = [
+  { color: (r) => `rgb(${Math.round(r * 255)},0,0)`, dx: -1, dy: -1 },
+  { color: (_r, g) => `rgb(0,${Math.round(g * 255)},0)`, dx: 1, dy: 1 },
+  { color: (_r, _g, b) => `rgb(0,0,${Math.round(b * 255)})`, dx: -1, dy: 1 },
+];
+// Anaglyph: the literal 3D-glasses look — a red ghost and a cyan ghost of the
+// SAME icon, screen-blended, fanned apart by offset. Carries luminance so the
+// shape stays readable; colour comes from the red/cyan split, not the cell.
+const anaglyphInks: Ink[] = [
+  { color: (r, g, b) => { const v = Math.round((0.3 * r + 0.59 * g + 0.11 * b) * 255); return `rgb(${v},0,0)`; }, dx: -1, dy: 0 },
+  { color: (r, g, b) => { const v = Math.round((0.3 * r + 0.59 * g + 0.11 * b) * 255); return `rgb(0,${v},${v})`; }, dx: 1, dy: 0 },
+];
 
-/** CMY layered body: 2-3 multiply-blended <use> subtracting R/G/B channels, in
- *  an isolated group over white so they multiply to the exact cell colour. */
-function cmyBody(cell: Cell, settings: Settings, iconId: string): string {
-  const n = settings.layerCount;
-  // ponytail: naive CMY — no black (K) channel, no per-channel screen angles.
-  const strength = [1 - cell.r / 255, 1 - cell.g / 255, 1 - cell.b / 255];
-  const base = scaleFor(cell, settings);
-  let s = '';
-  for (let i = 0; i < n; i++) {
-    const scale = r1(base * (1 - i / n)); // even steps: 1, 1-1/n, 1-2/n ...
-    const { x, y, size } = cellBox(cell, settings, scale);
-    const off = settings.layerOffset;
-    const ox = r1(x + INKS[i].dx * off);
-    const oy = r1(y + INKS[i].dy * off);
-    const ink = inkFill(INKS[i].chan, strength[i]);
-    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
-      `color="${ink}" style="mix-blend-mode:multiply"/>`;
+/** Pick the ink list + blend mode for a style. layerCount trims CMY/RYB to 2. */
+function inksFor(settings: Settings): { inks: Ink[]; blend: 'multiply' | 'screen' } {
+  switch (settings.layerStyle) {
+    case 'cmyk': return { inks: [cmyInk(0), cmyInk(1), cmyInk(2), kInk], blend: 'multiply' };
+    case 'ryb': return { inks: rybInks.slice(0, settings.layerCount), blend: 'multiply' };
+    case 'rgb': return { inks: rgbInks, blend: 'screen' };
+    case 'anaglyph': return { inks: anaglyphInks, blend: 'screen' };
+    case 'cmy':
+    default: return { inks: [cmyInk(0), cmyInk(1), cmyInk(2)].slice(0, settings.layerCount), blend: 'multiply' };
   }
-  const bx = r1(cell.col * CELL), by = r1(cell.row * CELL);
-  // INNER group: isolated blend + white backing. STATIC — multiply resolves once
-  // to the exact colour. Animating it would re-blend against black (the old bug).
-  return `<g style="isolation:isolate">` +
-    `<rect x="${bx}" y="${by}" width="${CELL}" height="${CELL}" fill="#fff"/>${s}</g>`;
 }
 
-/** RGB additive layered body: 3 full-size icons carrying each channel's TRUE
- *  value (r,0,0 / 0,g,0 / 0,0,b), screen-blended so where the shapes overlap the
- *  channels ADD back to the exact cell colour — like RGB subpixels combining.
- *  screen is the additive mirror of CMY's multiply.
- *
- *  No per-cell backing or isolation: the global black background (forced in
- *  render() for this style) is screen's identity backdrop, so the 3 layers add to
- *  (r,g,b) without any extra nodes — fewest nodes, cheapest to composite.
- *  Tradeoff: where motion (pulse/offset) pushes a cell over its neighbours, the
- *  moving cell screens over their pixels and the seam can flicker. Keep offset
- *  modest if that shows; re-add a per-cell isolation group if it ever matters. */
-function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
-  const CHANS = [
-    { fill: `rgb(${Math.round(cell.r)},0,0)`, dx: -1, dy: -1 },
-    { fill: `rgb(0,${Math.round(cell.g)},0)`, dx: 1, dy: 1 },
-    { fill: `rgb(0,0,${Math.round(cell.b)})`, dx: -1, dy: 1 },
-  ];
-  const { x, y, size } = cellBox(cell, settings);
+/** A layered cell body: N tinted copies of the icon, each blended against the
+ *  shared page (white for multiply styles, black for screen). No per-cell rect
+ *  or isolation — the page IS the blend backdrop. Subtractive styles shrink each
+ *  successive layer (concentric inks); additive/anaglyph stay full size. */
+function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
+  const { inks, blend } = inksFor(settings);
+  const n = inks.length;
+  const base = scaleFor(cell, settings);
+  const shrink = blend === 'multiply'; // CMY/RYB inks nest; RGB/anaglyph overlap full-size
+  const r = cell.r / 255, g = cell.g / 255, b = cell.b / 255;
   const off = settings.layerOffset;
   let s = '';
-  for (const ch of CHANS) {
-    const ox = r1(x + ch.dx * off);
-    const oy = r1(y + ch.dy * off);
+  for (let i = 0; i < n; i++) {
+    const scale = shrink ? r1(base * (1 - i / n)) : base; // even concentric steps
+    const { x, y, size } = cellBox(cell, settings, scale);
+    const ox = r1(x + inks[i].dx * off);
+    const oy = r1(y + inks[i].dy * off);
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
-      `color="${ch.fill}" style="mix-blend-mode:screen"/>`;
+      `color="${inks[i].color(r, g, b)}" style="mix-blend-mode:${blend}"/>`;
   }
   return s;
 }
@@ -127,9 +133,7 @@ function rgbBody(cell: Cell, settings: Settings, iconId: string): string {
  *  pick up the scheme for free. */
 function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
   const iconId = iconFor(cell, iconCount);
-  const body = settings.layerStyle === 'rgb'
-    ? rgbBody(cell, settings, iconId)
-    : cmyBody(cell, settings, iconId);
+  const body = layeredBody(cell, settings, iconId);
   // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
   // browser caches the cell's raster and moves/scales the bitmap per frame. No
   // motion -> bare body, output unchanged.
@@ -197,11 +201,12 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
   // Motion keyframes baked into the SVG (no JS loop) — so animation survives
   // export: the downloaded .svg stays alive. '' when motion:'none'.
   const style = motionStyle(settings);
-  // Same background the source was sampled against, so sample <-> display <->
-  // export all match. Sits behind the icons. RGB-additive style FORCES black: it
-  // screen-blends, and screen's identity backdrop is black — anything else washes
-  // the colours out, and a non-black page is where the old per-cell rects showed.
-  const bgFill = settings.layered && settings.layerStyle === 'rgb' ? '#000000' : settings.background;
+  // Background = the blend backdrop for layered styles, else the sampled bg.
+  // SUBTRACTIVE inks (cmy/cmyk/ryb) multiply -> need a WHITE page (multiply's
+  // identity) so the inks resolve to the cell colour with no per-cell rect.
+  // ADDITIVE (rgb/anaglyph) screen -> need a BLACK page (screen's identity).
+  let bgFill = settings.background;
+  if (settings.layered) bgFill = SUBTRACTIVE.has(settings.layerStyle) ? '#ffffff' : '#000000';
   const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) => emitCell(c, settings, i, icons.length)).join('');
 

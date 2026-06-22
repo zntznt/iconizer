@@ -253,8 +253,14 @@ $('layered').addEventListener('change', async (e) => {
   disclose('p-layered', cb.checked);
   scheduleRedraw();
 });
+// "layers" (2 vs 3) only applies to cmy/ryb; the rest have a fixed layer count.
+function syncLayerCountUI() {
+  const st = settings.layerStyle;
+  disclose('p-layerCount', st === 'cmy' || st === 'ryb');
+}
 $('layerStyle').addEventListener('change', (e) => {
   settings.layerStyle = (e.target as HTMLSelectElement).value as Settings['layerStyle'];
+  syncLayerCountUI();
   scheduleRedraw();
 });
 $('layerCount').addEventListener('change', (e) => {
@@ -433,6 +439,7 @@ function syncControls() {
     settings.scheme.colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
   }
   syncSchemeUI();
+  syncLayerCountUI();
   syncDisclosure(); // restore the 3 new insets from current control values
 }
 

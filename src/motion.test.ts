@@ -35,28 +35,26 @@ assert.ok(!still.includes('class="motion"'), 'motion:none -> no motion class');
 const o = { ...defaults, cols: 6, motion: 'spin' as const, staggerMode: 'random' as const };
 assert.equal(render(grid, svg, o), render(grid, svg, o), 'random stagger deterministic');
 
-// --- layered + motion: blend and transform on SEPARATE elements ----------
-// The multiply blend must NOT be animated (a transform re-blends it against a
-// black/transparent backdrop -> goes black). So motion wraps the blended group
-// in an OUTER <g>, while the inner isolated group stays static.
+// --- layered + motion: the whole cell moves as one unit -------------------
+// No per-cell isolation any more (every style blends against the shared page).
+// Motion wraps the cell's blended <use> stack in ONE <g class="motion"> so the
+// layers move together; the individual <use>s are never animated.
 const lay = (over: Partial<typeof defaults>) =>
-  render(grid, svg, { ...defaults, cols: 6, layered: true, layerCount: 3, ...over });
+  render(grid, svg, { ...defaults, cols: 6, layered: true, layerStyle: 'cmy', layerCount: 3, ...over });
 
-// layered + wiggle: motion class on an OUTER <g> that contains the isolated
-// blend group; the inner <g style="isolation:isolate"> has NO motion class.
+// layered + wiggle: a motion <g> wraps the <use> stack directly (no isolation grp).
 const animated = lay({ motion: 'wiggle', staggerMode: 'none' });
-assert.ok(/<g class="motion"><g style="isolation:isolate">/.test(animated),
-  'layered motion -> outer motion <g> wraps the static blend group');
-assert.ok(!/isolation:isolate"[^>]*class="motion"/.test(animated),
-  'the blended (isolated) group is NEVER animated -> no black-out');
+assert.ok(/<g class="motion"><use/.test(animated),
+  'layered motion -> motion <g> wraps the <use> stack directly');
+assert.ok(!animated.includes('isolation:isolate'), 'no per-cell isolation group');
 // no per-<use> animation (the layers stay static; the whole cell moves as one).
 assert.ok(!/<use[^>]*class="motion"/.test(animated) && !/<use[^>]*animation/.test(animated),
   'CMY layers themselves are not animated');
 
-// layered, no motion -> bare blend group, no outer wrapper (output unchanged).
+// layered, no motion -> bare <use> stack, no wrapper (output unchanged).
 const stillLayered = lay({ motion: 'none' });
-assert.ok(stillLayered.includes('<g style="isolation:isolate">') &&
-  !stillLayered.includes('class="motion"'), 'layered+none -> no motion wrapper');
+assert.ok(!stillLayered.includes('class="motion"') && !stillLayered.includes('isolation:isolate'),
+  'layered+none -> no motion wrapper, no isolation');
 
 // solid + motion: the <use> is wrapped in a motion <g> (per-icon pivot via the
 // .motion class's fill-box+center), not the motion attrs on the <use> directly.

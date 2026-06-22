@@ -39,6 +39,7 @@ export function settingsFromUrl(): Settings | null {
 
 const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer'];
 const STAGGERS: StaggerMode[] = ['none', 'ripple', 'brightness', 'random'];
+const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph'] as const;
 const SCHEMES = ['none', 'grayscale', 'invert', 'posterize', 'duotone'] as const;
 const randHex = (pick: (n: number) => number) =>
   '#' + [0, 0, 0].map(() => pick(256).toString(16).padStart(2, '0')).join('');
@@ -72,7 +73,7 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     sizeByBrightness: rnd() < 0.5,
     background: rnd() < 0.7 ? '#ffffff' : randHex(pick),
     layered,
-    layerStyle: rnd() < 0.5 ? 'cmy' : 'rgb',
+    layerStyle: choose(LAYER_STYLES),
     layerOffset: rnd() < 0.5 ? 0 : pick(4),
     scheme,
     motion,
