@@ -365,15 +365,20 @@ $('dlGif').addEventListener('click', async () => {
   let p = 15;
   const creep = setInterval(() => { p = Math.min(90, p + 8); setProg(p); }, 200);
   setExportBusy(true);
+  // Fewer frames on touch devices: 20 frames of held ImageData can OOM/freeze a
+  // phone (and trip the encode timeout); 12 keeps it smooth at a tiny cost.
+  const frames = matchMedia('(pointer: coarse)').matches ? 12 : 20;
   try {
-    await downloadGif(lastSvg, settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value);
+    await downloadGif(lastSvg, settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value, frames);
     setProg(100);
+  } catch {
+    $('progText').textContent = '✖ GIF EXPORT FAILED';
   } finally {
     setExportBusy(false);
     clearInterval(creep);
     btn.disabled = false;
     btn.textContent = old;
-    setTimeout(() => { setStatus('ready'); setProg(0); }, 400);
+    setTimeout(() => { setStatus('ready'); setProg(0); }, 800);
   }
 });
 

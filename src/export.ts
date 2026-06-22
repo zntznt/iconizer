@@ -35,12 +35,16 @@ function svgSize(svg: string): { w: number; h: number } {
 // instead of the tiny native size, keeping aspect ratio. scale multiplies it.
 const PNG_BASE = 1500; // sharp default for PNG/SVG (the longest side)
 const GIF_BASE = 720; // capped so animated GIFs stay shareable in size
+// iOS Safari blanks/nulls a canvas past ~4096px per side (and ~16.7M px total).
+// Clamp the longest side here so a high scale (1500×4 = 6000) doesn't produce a
+// blank export. Conservative enough to also cover the area cap for any ratio.
+const MAX_SIDE = 4096;
 
 /** Export pixel dimensions: scale the SVG to `base` on its longest side (× scale),
- *  preserving aspect ratio. */
-function exportSize(svg: string, base: number, scale: number): { w: number; h: number } {
+ *  preserving aspect ratio, then clamp to MAX_SIDE so mobile canvases don't blank. */
+export function exportSize(svg: string, base: number, scale: number): { w: number; h: number } {
   const { w, h } = svgSize(svg);
-  const k = (base * scale) / Math.max(w, h);
+  const k = Math.min(base * scale, MAX_SIDE) / Math.max(w, h);
   return { w: Math.round(w * k), h: Math.round(h * k) };
 }
 
