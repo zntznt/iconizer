@@ -7,9 +7,11 @@ M5 (44px touch targets for sm-link / ring-site / qs-item / win-bar glyphs),
 M7 (minimize tucks 40px + fades instead of flinging 60vh). Verified on
 390×844 emulation: all 6 control windows reachable, sysbar no overflow,
 maximize clears the top bar, desktop layout unaffected.
-Still open (export/perf cluster, lower priority): B2 (GIF freeze), M2 (PNG
-canvas cap), M4 (already partly addressed — 30fps + export pause shipped),
-plus the MINOR list.
+Export/perf cluster now also DONE: B2 (GIF → 12 frames on coarse pointers, no
+OOM/freeze), M2/F5 (exportSize clamps the longest side to 4096px so high-scale
+PNG/GIF don't blank on iOS), M4 (30fps + pause-on-export shipped earlier). Both
+raster exports recover from failure (✖ message, status → READY) instead of
+hanging. Remaining: the MINOR polish list (m1–m7) only.
 
 Method: real-device emulation in Chrome DevTools (iPhone-12 class, 390×844,
 dpr 3, touch) on the built `dist/`, plus two parallel code auditors (CSS and
