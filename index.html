@@ -122,7 +122,9 @@
       .crt.maximized {
         position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
         z-index: 60; width: fit-content; height: fit-content;
-        max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); cursor: zoom-out;
+        /* dvh (not vh) so mobile Safari's URL-bar doesn't clip; minus the 30px
+           sysbar so a centered tall image clears the top bar (B3). */
+        max-width: calc(100vw - 24px); max-height: calc(100dvh - 60px); cursor: zoom-out;
       }
       /* maximized: the SVG carries aspect-ratio (from render). Setting both axes to
          the viewport caps + aspect-ratio makes the browser keep the image ratio and
@@ -132,7 +134,7 @@
            (height cap x aspect-ratio). --ar is the image's W/H, passed from render()
            since CSS can't read it. height follows from aspect-ratio. No max-* clamp
            (which would break the ratio) — the min() already bounds both axes. */
-        width: min(calc(100vw - 52px), calc((100vh - 52px) * var(--ar, 1)));
+        width: min(calc(100vw - 52px), calc((100dvh - 88px) * var(--ar, 1)));
         height: auto; max-width: none; max-height: none; margin: 0;
       }
       /* off-CRT phosphor glass: dark green-grey, faint inner glow, not pure black.
@@ -352,15 +354,35 @@
       /* ---- responsive ---- */
       @media (max-width: 640px) {
         :root { --taskbar-h: 48px; }
-        .hero { position: sticky; top: 30px; z-index: 30; padding: 8px; }
+        /* B1: CRT is a normal block, NOT sticky — so the controls below it are
+           reachable by scrolling instead of buried behind a pinned preview.
+           Cap the SVG height (not the bezel) so a tall image SHRINKS to fit ~55dvh
+           and stays fully visible (no crop); the fit-content bezel follows it.
+           Tap to maximize for the full-size look. */
+        .hero { position: static; padding: 8px; }
+        .hero:not(:has(#out:empty)) .crt:not(.maximized) { width: fit-content; max-width: 100%; margin: 0 auto; }
+        .crt:not(.maximized) #out svg { width: auto; max-width: 100%; max-height: 55dvh; }
         .desktop { padding: 0 8px 8px; } /* .desktop is flex, not grid */
         .row { flex-direction: column; align-items: stretch; }
         .row > label { flex-direction: column; align-items: stretch; gap: 4px; }
         .row .val { margin-left: 0; }
-        .start-meta { display: none; } /* hide clock+counter+webring label, keep buttons */
+        /* M1: hide the decorative LCD chips (was a typo'd .start-meta that never
+           fired -> sysbar overflowed). The status text shrinks instead of pushing
+           off-screen. */
+        .sysbar-meta { display: none; }
+        .prog { flex: 1 1 0; min-width: 0; }
+        .prog-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sysbar-cap { max-width: 50vw; }
+        /* M7: minimize tucks a short distance + fades, instead of flinging 60vh
+           across the stacked column. */
+        .win.minimizing { transform: translateY(40px) scale(.6); }
       }
       @media (pointer: coarse) {
-        .btn98, .icon-row button, .win-bar .btns i { min-height: 44px; }
+        /* M5: comfortable touch targets for every tappable control. */
+        .btn98, .icon-row button, .win-bar .btns i,
+        .sm-link, .sm-about, .ring-site, .qs-item { min-height: 44px; }
+        .win-bar .btns i { min-width: 36px; } /* the mini/close glyphs were 18px slivers */
+        .sm-link, .sm-about, .ring-site, .qs-item { display: flex; align-items: center; }
         input[type="range"] { height: 28px; }
       }
       @media (prefers-reduced-motion: reduce) {

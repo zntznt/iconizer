@@ -1,7 +1,15 @@
 # Mobile evaluation — Iconizer
 
-**Status: EVALUATION ONLY. Nothing fixed yet.** This is the punch-list for a
-future mobile pass.
+**Status: mobile pass DONE (CSS-only).** Fixed: B1 (CRT un-stuck, capped to
+55dvh, shrinks to fit — no crop), B3 (maximized uses dvh + clears the sysbar),
+M1 (sysbar typo → `.sysbar-meta`, chips hidden on mobile, status text ellipsizes),
+M5 (44px touch targets for sm-link / ring-site / qs-item / win-bar glyphs),
+M7 (minimize tucks 40px + fades instead of flinging 60vh). Verified on
+390×844 emulation: all 6 control windows reachable, sysbar no overflow,
+maximize clears the top bar, desktop layout unaffected.
+Still open (export/perf cluster, lower priority): B2 (GIF freeze), M2 (PNG
+canvas cap), M4 (already partly addressed — 30fps + export pause shipped),
+plus the MINOR list.
 
 Method: real-device emulation in Chrome DevTools (iPhone-12 class, 390×844,
 dpr 3, touch) on the built `dist/`, plus two parallel code auditors (CSS and
