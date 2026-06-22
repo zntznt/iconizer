@@ -88,9 +88,18 @@ Annotated so nobody prunes them as "obvious":
 
 ## Phase 5 — Color schemes — checks for when it lands
 
-- **C1** Each scheme (grayscale/invert/posterize/duotone/palette) visibly changes
-  the mosaic, in BOTH tint and layered modes (schemes sit upstream of both).
+- **C1** Each scheme (grayscale/invert/sepia/threshold/hue/posterize/duotone/
+  tritone/palette) visibly changes the mosaic, in BOTH tint and layered modes
+  (schemes sit upstream of both).
 - **C2** Scheme `none` == prior look unchanged.
+- **C3** Each scheme's disclosure inset shows/hides as its option is picked, and
+  its knobs live-update the render: threshold cutoff, hue degrees, tritone's 3
+  swatches, palette preset (Game Boy/CGA/EGA/C64/PICO-8) vs custom 3-color.
+- **C4 (preset snap)** Picking a palette preset collapses the image onto that
+  machine's swatches only — e.g. Game Boy yields four greens, nothing else.
+- **C5 (permalink round-trip)** Set each new scheme, reload from the URL hash:
+  the same scheme + knob values restore; a known palette preset restores as the
+  named preset (not as 'custom').
 
 ## Phase 6 — Deploy — checks for when it lands
 

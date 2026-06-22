@@ -3,7 +3,7 @@ import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
-import type { Scheme, RGB } from './color.ts';
+import { PALETTES, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -283,15 +283,28 @@ const hex2rgb = (h: string): RGB => ({
 function readScheme(): Scheme {
   const kind = ($('scheme') as HTMLSelectElement).value;
   switch (kind) {
+    case 'threshold':
+      return { kind, cutoff: +($('thresh') as HTMLInputElement).value };
+    case 'hue':
+      return { kind, deg: +($('hueDeg') as HTMLInputElement).value };
     case 'posterize':
       return { kind, levels: +($('levels') as HTMLInputElement).value };
     case 'duotone':
       return { kind, dark: hex2rgb(($('duoDark') as HTMLInputElement).value),
         light: hex2rgb(($('duoLight') as HTMLInputElement).value) };
-    case 'palette':
-      return { kind, colors: ['pal0', 'pal1', 'pal2'].map((id) => hex2rgb(($(id) as HTMLInputElement).value)) };
+    case 'tritone':
+      return { kind, dark: hex2rgb(($('triDark') as HTMLInputElement).value),
+        mid: hex2rgb(($('triMid') as HTMLInputElement).value),
+        light: hex2rgb(($('triLight') as HTMLInputElement).value) };
+    case 'palette': {
+      const preset = ($('palettePreset') as HTMLSelectElement).value;
+      const colors = preset === 'custom'
+        ? ['pal0', 'pal1', 'pal2'].map((id) => hex2rgb(($(id) as HTMLInputElement).value))
+        : PALETTES[preset];
+      return { kind, colors };
+    }
     default:
-      return { kind } as Scheme; // none | grayscale | invert
+      return { kind } as Scheme; // none | grayscale | invert | sepia
   }
 }
 
@@ -306,9 +319,17 @@ function disclose(id: string, show: boolean) {
 function syncSchemeUI() {
   const kind = ($('scheme') as HTMLSelectElement).value;
   disclose('p-levels', kind === 'posterize');
+  disclose('p-threshold', kind === 'threshold');
+  disclose('p-hue', kind === 'hue');
   disclose('p-duotone', kind === 'duotone');
+  disclose('p-tritone', kind === 'tritone');
   disclose('p-palette', kind === 'palette');
+  // palette preset 'custom' reveals the 3 hand-pick swatches; presets hide them.
+  disclose('p-palette-custom', kind === 'palette'
+    && ($('palettePreset') as HTMLSelectElement).value === 'custom');
   $('levelsVal').textContent = `${($('levels') as HTMLInputElement).value} steps`;
+  $('threshVal').textContent = (+($('thresh') as HTMLInputElement).value).toFixed(2);
+  $('hueDegVal').textContent = `${($('hueDeg') as HTMLInputElement).value}°`;
   $('schemeHint').hidden = kind !== 'none'; // hint only while nothing's picked
 }
 
@@ -320,7 +341,8 @@ function syncDisclosure() {
   refreshExportState();
 }
 
-for (const id of ['scheme', 'levels', 'duoDark', 'duoLight', 'pal0', 'pal1', 'pal2']) {
+for (const id of ['scheme', 'levels', 'thresh', 'hueDeg', 'duoDark', 'duoLight',
+  'triDark', 'triMid', 'triLight', 'palettePreset', 'pal0', 'pal1', 'pal2']) {
   $(id).addEventListener('input', () => {
     settings.scheme = readScheme();
     syncSchemeUI();
@@ -431,12 +453,25 @@ function syncControls() {
   // scheme + its conditional sub-controls
   set('scheme', settings.scheme.kind);
   if (settings.scheme.kind === 'posterize') set('levels', settings.scheme.levels);
+  if (settings.scheme.kind === 'threshold') set('thresh', settings.scheme.cutoff);
+  if (settings.scheme.kind === 'hue') set('hueDeg', settings.scheme.deg);
   if (settings.scheme.kind === 'duotone') {
     set('duoDark', rgb2hex(settings.scheme.dark));
     set('duoLight', rgb2hex(settings.scheme.light));
   }
+  if (settings.scheme.kind === 'tritone') {
+    set('triDark', rgb2hex(settings.scheme.dark));
+    set('triMid', rgb2hex(settings.scheme.mid));
+    set('triLight', rgb2hex(settings.scheme.light));
+  }
   if (settings.scheme.kind === 'palette') {
-    settings.scheme.colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
+    // Match the colors against a known preset; fall back to 'custom' + swatches.
+    const colors = settings.scheme.colors;
+    const presetName = Object.keys(PALETTES).find((name) =>
+      PALETTES[name].length === colors.length
+      && PALETTES[name].every((c, i) => c.r === colors[i]?.r && c.g === colors[i]?.g && c.b === colors[i]?.b));
+    set('palettePreset', presetName ?? 'custom');
+    if (!presetName) colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
   }
   syncSchemeUI();
   syncLayerCountUI();
