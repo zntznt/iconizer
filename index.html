@@ -399,10 +399,21 @@
         .pip.nudge, .prog-fill, .dw-face, .dw-cur, .arcade-btn { animation: none !important; }
       }
       /* ---- Geocities webring banner ---- */
+      /* INVARIANT: the webring is ALWAYS the last element in the scroll flow —
+         the final content before the (fixed) taskbar, at every window size.
+         This is guaranteed structurally: .ringbox is a normal-flow sibling that
+         comes AFTER <main.desktop> in source and is NOT in any flex/grid container
+         with the windows. To keep that guarantee, .ringbox must stay:
+           - a direct child of <body>, positioned AFTER </main> in the markup;
+           - position: static (no fixed/absolute/sticky — those leave the flow);
+           - free of any `order` (it's not a flex item, so order is inert anyway).
+         If you ever wrap the desktop + ringbox in a shared flex/grid, give the
+         ringbox `order: 999` (or make it the last child) to preserve this. */
       .ringbox {
         max-width: 720px; margin: 14px auto 6px; padding: 6px 8px; text-align: center;
         background: #100022; box-shadow: var(--bevel-up), 0 0 0 2px var(--magenta);
         font-family: var(--cursive); color: var(--cyan);
+        position: static; /* load-bearing: stays in flow as the last content block */
       }
       .ring-title { font-size: 14px; color: var(--lime); text-shadow: 0 0 4px var(--lime); letter-spacing: 1px; }
       /* scrolling marquee of member links; track is duplicated in markup for a
