@@ -48,13 +48,24 @@ export function exportSize(svg: string, base: number, scale: number): { w: numbe
   return { w: Math.round(w * k), h: Math.round(h * k) };
 }
 
-/** A 2d context with high-quality image smoothing (the default is "low"). */
-function hqContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
-  const ctx = canvas.getContext('2d');
+/** A 2d context with high-quality image smoothing (the default is "low").
+ *  `readback`=true sets willReadFrequently so repeated getImageData (the GIF
+ *  frame loop) uses the CPU-backed canvas path instead of round-tripping the GPU. */
+function hqContext(canvas: HTMLCanvasElement, readback = false): CanvasRenderingContext2D {
+  const ctx = canvas.getContext('2d', readback ? { willReadFrequently: true } : undefined);
   if (!ctx) throw new Error('2d canvas context unavailable');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   return ctx;
+}
+
+/** Decode one SVG string to an <img> (the expensive, parallelizable step). The
+ *  caller owns the returned object URL until the image is drawn — revoke after. */
+function decodeSvg(svg: string): { img: HTMLImageElement; url: string; done: Promise<void> } {
+  const url = URL.createObjectURL(svgBlob(svg));
+  const img = new Image();
+  img.src = url;
+  return { img, url, done: img.decode() };
 }
 
 /**
@@ -85,24 +96,6 @@ export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.p
       canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'),
     );
     downloadBlob(blob, filename);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-/** Rasterize one SVG string to an ImageData at the given pixel size. */
-async function rasterize(svg: string, w: number, h: number): Promise<ImageData> {
-  const url = URL.createObjectURL(svgBlob(svg));
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = hqContext(canvas);
-    ctx.drawImage(img, 0, 0, w, h);
-    return ctx.getImageData(0, 0, w, h);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -154,8 +147,11 @@ export async function downloadGif(
     import('gif.js/dist/gif.worker.js?raw'),
   ]);
   const workerBlobUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
-  // quality: lower = better (1 best, 30 default). 5 is a good sharpness/size balance.
-  const gif = new GIF({ workers: 2, quality: 5, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
+  // The LZW encode is the dominant cost (~3s of a ~5s export) and gif.js shards
+  // it one-frame-per-worker. Scale workers with cores (was a fixed 2), capped at
+  // the frame count and leaving a core for the main thread. quality: lower=better.
+  const workers = Math.max(2, Math.min(frames, (navigator.hardwareConcurrency || 4) - 1));
+  const gif = new GIF({ workers, quality: 5, width: W, height: H, workerScript: workerBlobUrl, repeat: 0 });
 
   // Drop the live <style> (its animation/reduce-motion rules are inert in a static
   // image and would conflict). We bake a PER-CELL static transform instead — each
@@ -165,20 +161,34 @@ export async function downloadGif(
   // matches a motion element's class attr + optional inline animation-delay style.
   const motionElRe = /class="motion"(?:\s+style="animation-delay:([\d.-]+)s")?/g;
   const period = periodSec;
+  const frameSvgAt = (i: number) => {
+    const t = (period * i) / frames; // global time within one cycle
+    return styleStripped.replace(motionElRe, (_m, delayStr) => {
+      // CSS: effective phase = ((t - delay) / period) wrapped to [0,1).
+      const delay = delayStr ? parseFloat(delayStr) : 0;
+      let p = ((t - delay) / period) % 1;
+      if (p < 0) p += 1;
+      // bake this cell's transform inline; class removed so nothing re-animates.
+      return `style="${motionRuleAt(motion, p)}"`;
+    });
+  };
 
   try {
+    // Draw each frame on ONE reused readback canvas (no 20 separate canvas
+    // allocations; willReadFrequently makes the per-frame getImageData a CPU read,
+    // not a GPU round-trip). Decode SERIALLY — decoding all frames at once makes
+    // Image.decode() reject (EncodingError) under Chrome's concurrent-decode limit.
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = hqContext(canvas, /* readback */ true);
     for (let i = 0; i < frames; i++) {
-      const t = (period * i) / frames; // global time within one cycle
-      const frameSvg = styleStripped.replace(motionElRe, (_m, delayStr) => {
-        // CSS: effective phase = ((t - delay) / period) wrapped to [0,1).
-        const delay = delayStr ? parseFloat(delayStr) : 0;
-        let p = ((t - delay) / period) % 1;
-        if (p < 0) p += 1;
-        // bake this cell's transform inline; class removed so nothing re-animates.
-        return `style="${motionRuleAt(motion, p)}"`;
-      });
-      const frame = await rasterize(frameSvg, W, H);
-      gif.addFrame(frame, { delay: delayMs, copy: true });
+      const { img, url, done } = decodeSvg(frameSvgAt(i));
+      await done;
+      ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(url);
+      gif.addFrame(ctx.getImageData(0, 0, W, H), { delay: delayMs });
     }
     const blob: Blob = await new Promise((resolve, reject) => {
       gif.on('finished', resolve);

@@ -56,8 +56,10 @@ function redraw() {
   // ON-SCREEN: inline-shapes form — the browser lays out a flat tree instead of
   // cloning a <symbol> shadow subtree per cell (~85x faster paint on big grids).
   out.innerHTML = render(cells, parsed, settings, 'live');
-  // FOR EXPORT: the compact <symbol>+<use> form (tiny .svg; PNG/GIF rasterize it
-  // once, where the per-<use> layout cost is irrelevant). Cheap string build.
+  // FOR EXPORT (svg/png/gif): the <symbol>+<use> form. It's the one that rasterizes
+  // reliably — the inline 'live' form decodes faster in micro-benchmarks but breaks
+  // <img>/canvas rasterization at full scale (spliced transforms), so exports use
+  // this form, NOT the on-screen one.
   lastSvg = render(cells, parsed, settings, 'export');
   refreshExportState();
   refreshPips();
