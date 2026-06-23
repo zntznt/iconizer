@@ -48,7 +48,22 @@ Annotated so nobody prunes them as "obvious":
   renders quickly and the DOM has a SMALL number of `<filter>` defs (tens, not
   thousands). Inspect `<defs>` to confirm sharing.
 - **R5 (cols slider)** Dragging cols re-renders live, smoothly (debounced).
-- **R6 (sizeByBrightness)** Toggle on: icon sizes visibly vary by cell tone.
+- **R6 (sizeByBrightness)** Toggle on: icon sizes visibly vary by cell tone. The
+  ramp should read evenly (area-linear) — no "all thin, then suddenly big" cliff.
+- **R6a (rotate by brightness)** rotate → 'by brightness': icons form an
+  orientation field — dark and light cells lean by different amounts. Best with a
+  directional icon (arrow/slash). Crank degrees to 360 for a tone pinwheel.
+- **R6b (rotate jitter)** rotate → 'random jitter': icons scatter at varied tilts,
+  but the pattern is STABLE across re-renders (deterministic, not reshuffling on
+  every slider nudge). 'fixed' tilts all icons identically.
+- **R6c (rotation pivots in place)** Every rotated icon spins around its OWN centre
+  and stays inside roughly its cell — it must NOT fling toward the canvas origin.
+- **R6d (rotation × motion × layered)** With a motion (e.g. bob) AND/OR layered
+  mode on, the static tilt still holds while the cell animates/splits — rotation
+  composes, it doesn't fight the spin or break the channel-split blend.
+- **R6e (fadeByBrightness)** Toggle on: icon opacity ramps by tone; min/max set the
+  faintest/most-solid cells. In LAYERED mode the whole channel-split stack fades as
+  one (the colors stay correct, just lighter) — no muddy/clipped blend.
 - **R7 (background)** Change the background color input: the mosaic's backdrop AND
   the sampling composite both follow it (sample <-> display match).
   NOTE: in LAYERED mode this applies only to the outer page backdrop — each cell's
@@ -88,9 +103,18 @@ Annotated so nobody prunes them as "obvious":
 
 ## Phase 5 — Color schemes — checks for when it lands
 
-- **C1** Each scheme (grayscale/invert/posterize/duotone/palette) visibly changes
-  the mosaic, in BOTH tint and layered modes (schemes sit upstream of both).
+- **C1** Each scheme (grayscale/invert/sepia/threshold/hue/posterize/duotone/
+  tritone/palette) visibly changes the mosaic, in BOTH tint and layered modes
+  (schemes sit upstream of both).
 - **C2** Scheme `none` == prior look unchanged.
+- **C3** Each scheme's disclosure inset shows/hides as its option is picked, and
+  its knobs live-update the render: threshold cutoff, hue degrees, tritone's 3
+  swatches, palette preset (Game Boy/CGA/EGA/C64/PICO-8) vs custom 3-color.
+- **C4 (preset snap)** Picking a palette preset collapses the image onto that
+  machine's swatches only — e.g. Game Boy yields four greens, nothing else.
+- **C5 (permalink round-trip)** Set each new scheme, reload from the URL hash:
+  the same scheme + knob values restore; a known palette preset restores as the
+  named preset (not as 'custom').
 
 ## Phase 6 — Deploy — checks for when it lands
 

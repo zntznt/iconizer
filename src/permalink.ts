@@ -1,5 +1,5 @@
 import { defaults, type Settings } from './settings.ts';
-import type { Scheme } from './color.ts';
+import { PALETTES, type Scheme } from './color.ts';
 import type { Motion, StaggerMode } from './motion.ts';
 
 /**
@@ -40,7 +40,9 @@ export function settingsFromUrl(): Settings | null {
 const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer'];
 const STAGGERS: StaggerMode[] = ['none', 'ripple', 'brightness', 'random'];
 const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph'] as const;
-const SCHEMES = ['none', 'grayscale', 'invert', 'posterize', 'duotone'] as const;
+const SCHEMES = ['none', 'grayscale', 'invert', 'sepia', 'threshold', 'hue',
+  'posterize', 'duotone', 'tritone', 'palette'] as const;
+const PALETTE_NAMES = Object.keys(PALETTES);
 const randHex = (pick: (n: number) => number) =>
   '#' + [0, 0, 0].map(() => pick(256).toString(16).padStart(2, '0')).join('');
 
@@ -55,8 +57,12 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   let scheme: Scheme;
   const kind = choose(SCHEMES);
   if (kind === 'posterize') scheme = { kind, levels: 2 + pick(6) };
+  else if (kind === 'threshold') scheme = { kind, cutoff: +(0.2 + rnd() * 0.6).toFixed(2) };
+  else if (kind === 'hue') scheme = { kind, deg: pick(72) * 5 }; // 0..355 in 5° steps
   else if (kind === 'duotone') scheme = { kind, dark: rgb(randHex(pick)), light: rgb(randHex(pick)) };
-  else scheme = { kind } as Scheme;
+  else if (kind === 'tritone') scheme = { kind, dark: rgb(randHex(pick)), mid: rgb(randHex(pick)), light: rgb(randHex(pick)) };
+  else if (kind === 'palette') scheme = { kind, colors: PALETTES[choose(PALETTE_NAMES)] };
+  else scheme = { kind } as Scheme; // none | grayscale | invert | sepia
 
   // layered + motion together is the heavy combo (we warn about it) — so a roll
   // picks AT MOST ONE of them: a 'flavor' of layered, motion, or plain.
@@ -65,12 +71,21 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   const ANIMS = MOTIONS.filter((m) => m !== 'none');
   const motion = flavor === 'motion' ? choose(ANIMS) : 'none';
 
+  // Rotation is cheap (static), so a roll can sprinkle it freely. Half the time
+  // upright; otherwise a tilt mode with a sensible angle for that mode.
+  const rotate = rnd() < 0.5 ? 'none' : choose(['brightness', 'jitter', 'fixed'] as const);
+  const rotateDeg = rotate === 'fixed' ? pick(72) * 5 // 0..355 (any angle)
+    : 15 + pick(34) * 5; // 15..180 sweep for field/jitter — readable, not a blur
+
   return {
     ...defaults,
     cols: 12 + pick(64), // 12..75 — keeps it legible, not absurdly fine
     blockSize: 1 + pick(3), // 1..3
     iconScale: +(0.6 + rnd() * 1.8).toFixed(1), // 0.6..2.4
     sizeByBrightness: rnd() < 0.5,
+    rotate,
+    rotateDeg,
+    fadeByBrightness: rnd() < 0.35,
     background: rnd() < 0.7 ? '#ffffff' : randHex(pick),
     layered,
     layerStyle: choose(LAYER_STYLES),

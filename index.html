@@ -520,6 +520,24 @@
             <div class="row"><label>min <input id="sizeMin" type="range" min="0" max="1" step="0.05" value="0.3" /></label><span class="val" id="sizeMinVal">0.30</span></div>
             <div class="row"><label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="sizeMaxVal">1.00</span></div>
           </div>
+          <div class="divider">✦ ✦ ✦</div>
+          <div class="row"><label>rotate icons
+            <select id="rotate">
+              <option value="none">none</option>
+              <option value="brightness">by brightness (orientation field)</option>
+              <option value="jitter">random jitter (scattered)</option>
+              <option value="fixed">fixed angle</option>
+            </select></label></div>
+          <div class="inset" id="p-rotate" hidden aria-hidden="true">
+            <div class="teach" id="rotateHint">▸ rotation unlocked! &nbsp; spin those icons ✦</div>
+            <div class="row"><label>degrees <input id="rotateDeg" type="range" min="0" max="360" step="5" value="45" /></label><span class="val" id="rotateDegVal">45°</span></div>
+          </div>
+          <div class="row"><label><input id="fadeByBrightness" type="checkbox" /> fade icons by brightness</label></div>
+          <div class="inset" id="p-fadeRange" hidden aria-hidden="true">
+            <div class="teach">▸ fade knobs unlocked! &nbsp; faintest ~ most solid</div>
+            <div class="row"><label>min <input id="fadeMin" type="range" min="0" max="1" step="0.05" value="0.25" /></label><span class="val" id="fadeMinVal">0.25</span></div>
+            <div class="row"><label>max <input id="fadeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="fadeMaxVal">1.00</span></div>
+          </div>
         </div>
       </section>
 
@@ -558,22 +576,47 @@
               <option value="none">none</option>
               <option value="grayscale">grayscale</option>
               <option value="invert">invert</option>
+              <option value="sepia">sepia (vintage)</option>
+              <option value="threshold">threshold (1-bit B&amp;W)</option>
+              <option value="hue">hue shift (psychedelic)</option>
               <option value="posterize">posterize (chunky colors)</option>
               <option value="duotone">duotone (Game Boy)</option>
-              <option value="palette">palette</option>
+              <option value="tritone">tritone (3-tone ramp)</option>
+              <option value="palette">palette (retro presets)</option>
             </select></label></div>
           <div class="teach" id="schemeHint">▸ try 'duotone' for that Game Boy look ✦</div>
           <div class="inset" id="p-levels" hidden aria-hidden="true">
             <div class="teach">▸ posterize knobs unlocked! &nbsp; how many steps?</div>
             <div class="row"><label>levels <input id="levels" type="range" min="2" max="8" step="1" value="4" /></label><span class="val" id="levelsVal">4 steps</span></div>
           </div>
+          <div class="inset" id="p-threshold" hidden aria-hidden="true">
+            <div class="teach">▸ threshold unlocked! &nbsp; where's the black/white line?</div>
+            <div class="row"><label>cutoff <input id="thresh" type="range" min="0.05" max="0.95" step="0.05" value="0.5" /></label><span class="val" id="threshVal">0.50</span></div>
+          </div>
+          <div class="inset" id="p-hue" hidden aria-hidden="true">
+            <div class="teach">▸ hue shift unlocked! &nbsp; spin the color wheel ✦</div>
+            <div class="row"><label>degrees <input id="hueDeg" type="range" min="0" max="360" step="5" value="120" /></label><span class="val" id="hueDegVal">120°</span></div>
+          </div>
           <div class="inset" id="p-duotone" hidden aria-hidden="true">
             <div class="teach">▸ duotone unlocked! &nbsp; dark ink / light ink ✦</div>
             <div class="row"><label>dark <input id="duoDark" type="color" value="#0f380f" /></label><label>light <input id="duoLight" type="color" value="#9bbc0f" /></label></div>
           </div>
+          <div class="inset" id="p-tritone" hidden aria-hidden="true">
+            <div class="teach">▸ tritone unlocked! &nbsp; dark / mid / light ✦</div>
+            <div class="row"><label>dark <input id="triDark" type="color" value="#1a1a2e" /></label><label>mid <input id="triMid" type="color" value="#e94560" /></label><label>light <input id="triLight" type="color" value="#f5f5dc" /></label></div>
+          </div>
           <div class="inset" id="p-palette" hidden aria-hidden="true">
-            <div class="teach">3 colors ✦</div>
-            <div class="row"><input id="pal0" type="color" value="#ff0000" /><input id="pal1" type="color" value="#00ff00" /><input id="pal2" type="color" value="#0000ff" /></div>
+            <div class="teach">▸ palette unlocked! &nbsp; pick a retro machine, or go custom ✦</div>
+            <div class="row"><label>preset
+              <select id="palettePreset">
+                <option value="custom">custom (3 colors)</option>
+                <option value="gameboy">Game Boy</option>
+                <option value="cga">CGA</option>
+                <option value="ega">EGA</option>
+                <option value="c64">Commodore 64</option>
+                <option value="pico8">PICO-8</option>
+              </select></label></div>
+            <div class="row" id="p-palette-custom"><input id="pal0" type="color" value="#ff0000" /><input id="pal1" type="color" value="#00ff00" /><input id="pal2" type="color" value="#0000ff" /></div>
           </div>
         </div>
       </section>

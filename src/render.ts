@@ -3,7 +3,7 @@ import { poolCells } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
 import { transformColor } from './color.ts';
-import { motionStyle, motionAttrs } from './motion.ts';
+import { motionStyle, motionAttrs, hash01 } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
 // root viewBox scales the whole thing, so this is just internal resolution.
@@ -25,12 +25,54 @@ function scaleFor(cell: Cell, settings: Settings): number {
     // sort the range so min>max (independent sliders) doesn't invert the lerp.
     const lo = Math.min(settings.sizeRange[0], settings.sizeRange[1]);
     const hi = Math.max(settings.sizeRange[0], settings.sizeRange[1]);
-    tonal = lo + (hi - lo) * (1 - cell.brightness);
+    // Interpolate in AREA, not linear dimension: the eye reads a cell's ink
+    // coverage (~scale²), so a linear ramp on `tonal` looks bimodal — most cells
+    // stay thin, then jump big near the dark end. Lerp lo²..hi² and sqrt back so
+    // perceived size moves evenly with brightness. Endpoints (lo, hi) unchanged.
+    const t = 1 - cell.brightness; // dark cell -> 1 (big), light -> 0 (small)
+    tonal = Math.sqrt(lo * lo + (hi * hi - lo * lo) * t);
   }
   const s = settings.iconScale * tonal;
   // floor at a tiny positive value so icons can shrink small but never vanish
   // entirely (sizeRange [0,0] otherwise -> a blank mosaic, looks like a bug).
   return Math.max(0.02, s);
+}
+
+/** Per-cell rotation in degrees (0 = upright). 'brightness' turns the mosaic into
+ *  an orientation field (tone -> tilt); 'jitter' scatters by a deterministic hash
+ *  so render() stays pure; 'fixed' tilts every icon the same. */
+function rotationFor(cell: Cell, index: number, settings: Settings): number {
+  switch (settings.rotate) {
+    case 'fixed':
+      return settings.rotateDeg;
+    case 'brightness':
+      return settings.rotateDeg * cell.brightness;
+    case 'jitter':
+      return (hash01(index) * 2 - 1) * settings.rotateDeg; // ±rotateDeg
+    case 'none':
+    default:
+      return 0;
+  }
+}
+
+/** Per-cell opacity 0..1, ramped over brightness. Applied on the leaf <use>(s)
+ *  (not a group) so it never isolates the layered blend modes — a faded ink just
+ *  blends against the page more weakly, which is the look we want. */
+function opacityFor(cell: Cell, settings: Settings): number {
+  if (!settings.fadeByBrightness) return 1;
+  const [lo, hi] = settings.fadeRange;
+  return Math.max(0, Math.min(1, lo + (hi - lo) * cell.brightness));
+}
+const opAttr = (o: number) => (o < 1 ? ` opacity="${r2(o)}"` : '');
+
+/** Wrap a cell body in a static-rotation group, pivoting in place (fill-box) so
+ *  it rotates around the icon's own centre. Sits INSIDE the motion wrapper so a
+ *  spinning/bobbing cell still carries its static tilt (nested transforms). */
+function rotateWrap(body: string, cell: Cell, index: number, settings: Settings): string {
+  const deg = rotationFor(cell, index, settings);
+  if (!deg) return body; // no rotation -> output unchanged
+  return `<g style="transform:rotate(${r1(deg)}deg);transform-box:fill-box;` +
+    `transform-origin:center">${body}</g>`;
 }
 
 /** Which icon a cell draws, by brightness: dark cell -> icon 0, light -> last.
@@ -116,6 +158,7 @@ function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
   const shrink = blend === 'multiply'; // CMY/RYB inks nest; RGB/anaglyph overlap full-size
   const r = cell.r / 255, g = cell.g / 255, b = cell.b / 255;
   const off = settings.layerOffset;
+  const op = opAttr(opacityFor(cell, settings)); // fades the whole stack uniformly
   let s = '';
   for (let i = 0; i < n; i++) {
     const scale = shrink ? r1(base * (1 - i / n)) : base; // even concentric steps
@@ -123,7 +166,7 @@ function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
     const ox = r1(x + inks[i].dx * off);
     const oy = r1(y + inks[i].dy * off);
     s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
-      `color="${inks[i].color(r, g, b)}" style="mix-blend-mode:${blend}"/>`;
+      `color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"/>`;
   }
   return s;
 }
@@ -133,7 +176,7 @@ function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
  *  pick up the scheme for free. */
 function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
   const iconId = iconFor(cell, iconCount);
-  const body = layeredBody(cell, settings, iconId);
+  const body = rotateWrap(layeredBody(cell, settings, iconId), cell, index, settings);
   // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
   // browser caches the cell's raster and moves/scales the bitmap per frame. No
   // motion -> bare body, output unchanged.
@@ -152,7 +195,10 @@ function emitCell(cell: Cell, settings: Settings, index: number, iconCount: numb
   // per-cell SVG filter, which re-rasterized every frame when animated and made
   // motion lag. fill= too, for belt-and-suspenders on currentColor inheritance.
   const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-  const el = `<use href="#${iconId}" x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" color="${fill}"/>`;
+  const el = rotateWrap(
+    `<use href="#${iconId}" x="${x}" y="${y}" width="${size}" height="${size}" ` +
+    `fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}/>`,
+    cell, index, settings);
   // Motion on a <g> wrapper, not the <use>: fill-box on a <use>->symbol instance
   // resolves inconsistently (symbol geometry vs placed box). A <g>'s fill-box is
   // its children's rendered box = this icon in place, so it pivots around its OWN
