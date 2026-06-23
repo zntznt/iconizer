@@ -5,6 +5,7 @@ import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
+import { startAnimator, stopAnimator, pauseAnimator } from './animator.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -55,12 +56,27 @@ function redraw() {
   const parsed = icons.map((i) => i.svg);
   // ON-SCREEN: inline-shapes form — the browser lays out a flat tree instead of
   // cloning a <symbol> shadow subtree per cell (~85x faster paint on big grids).
+  // This SVG carries the .motion groups (geometry + per-cell delay) the canvas
+  // animator reads, but the CSS animation never paints — the animator hides it.
   out.innerHTML = render(cells, parsed, settings, 'live');
   // FOR EXPORT (svg/png/gif): the <symbol>+<use> form. It's the one that rasterizes
   // reliably — the inline 'live' form decodes faster in micro-benchmarks but breaks
   // <img>/canvas rasterization at full scale (spliced transforms), so exports use
   // this form, NOT the on-screen one.
   lastSvg = render(cells, parsed, settings, 'export');
+  // MOTION: instead of letting the browser animate thousands of SVG nodes (it
+  // crawls past a few thousand cells), reproduce the exact look on a <canvas>
+  // overlay — bake the static mosaic once, blit each cell per frame. motion='none'
+  // or reduced-motion -> stopAnimator() is a no-op and the plain SVG shows.
+  // Canvas motion engine handles the SOLID mosaic (smooth at any col count): it
+  // bakes each icon as a sprite and draws every cell tinted per frame. Layered
+  // styles keep the CSS path (per-cell blend stacks don't reduce to one sprite).
+  // motion='none' / reduced-motion / layered -> no-op, the plain SVG shows.
+  stopAnimator();
+  if (settings.motion !== 'none' && !settings.layered) {
+    const svg = out.querySelector('svg');
+    if (svg) void startAnimator(out, svg, cells, parsed, settings.background, settings);
+  }
   refreshExportState();
   refreshPips();
   setStatus('ready');
@@ -500,10 +516,13 @@ $('staggerMode').addEventListener('change', (e) => {
   settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
   scheduleRedraw();
 });
-// Tell the p5 backdrop to pause while a raster export runs (it fights the encode
-// for the main thread / GPU). The sketch listens for this on document.
-const setExportBusy = (busy: boolean) =>
+// Pause both the p5 backdrop AND the mosaic motion canvas while a raster export
+// runs (they fight the encode for the main thread / GPU). The backdrop listens on
+// document; the animator pauses directly.
+const setExportBusy = (busy: boolean) => {
+  pauseAnimator(busy);
   document.dispatchEvent(new CustomEvent('iconizer:export', { detail: { busy } }));
+};
 
 $('dlSvg').addEventListener('click', () => {
   if (lastSvg) downloadSvg(lastSvg);
