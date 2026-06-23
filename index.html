@@ -582,6 +582,7 @@
               <option value="posterize">posterize (chunky colors)</option>
               <option value="duotone">duotone (Game Boy)</option>
               <option value="tritone">tritone (3-tone ramp)</option>
+              <option value="gradient">gradient (color ramp)</option>
               <option value="palette">palette (retro presets)</option>
             </select></label></div>
           <div class="teach" id="schemeHint">▸ try 'duotone' for that Game Boy look ✦</div>
@@ -604,6 +605,19 @@
           <div class="inset" id="p-tritone" hidden aria-hidden="true">
             <div class="teach">▸ tritone unlocked! &nbsp; dark / mid / light ✦</div>
             <div class="row"><label>dark <input id="triDark" type="color" value="#1a1a2e" /></label><label>mid <input id="triMid" type="color" value="#e94560" /></label><label>light <input id="triLight" type="color" value="#f5f5dc" /></label></div>
+          </div>
+          <div class="inset" id="p-gradient" hidden aria-hidden="true">
+            <div class="teach">▸ gradient unlocked! &nbsp; tone maps onto a smooth color ramp ✦</div>
+            <div class="row"><label>preset
+              <select id="gradientPreset">
+                <option value="custom">custom (4 stops)</option>
+                <option value="vaporwave">vaporwave</option>
+                <option value="sunset">sunset</option>
+                <option value="fire">fire</option>
+                <option value="ice">ice</option>
+                <option value="rainbow">rainbow</option>
+              </select></label></div>
+            <div class="row" id="p-gradient-custom"><input id="grad0" type="color" value="#1a0033" /><input id="grad1" type="color" value="#ff2a6d" /><input id="grad2" type="color" value="#ffba08" /><input id="grad3" type="color" value="#fff3b0" /></div>
           </div>
           <div class="inset" id="p-palette" hidden aria-hidden="true">
             <div class="teach">▸ palette unlocked! &nbsp; pick a retro machine, or go custom ✦</div>

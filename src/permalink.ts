@@ -1,5 +1,5 @@
 import { defaults, type Settings } from './settings.ts';
-import { PALETTES, type Scheme } from './color.ts';
+import { PALETTES, GRADIENTS, type Scheme } from './color.ts';
 import type { Motion, StaggerMode } from './motion.ts';
 
 /**
@@ -41,8 +41,9 @@ const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 's
 const STAGGERS: StaggerMode[] = ['none', 'ripple', 'brightness', 'random'];
 const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph'] as const;
 const SCHEMES = ['none', 'grayscale', 'invert', 'sepia', 'threshold', 'hue',
-  'posterize', 'duotone', 'tritone', 'palette'] as const;
+  'posterize', 'duotone', 'tritone', 'gradient', 'palette'] as const;
 const PALETTE_NAMES = Object.keys(PALETTES);
+const GRADIENT_NAMES = Object.keys(GRADIENTS);
 const randHex = (pick: (n: number) => number) =>
   '#' + [0, 0, 0].map(() => pick(256).toString(16).padStart(2, '0')).join('');
 
@@ -61,6 +62,7 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   else if (kind === 'hue') scheme = { kind, deg: pick(72) * 5 }; // 0..355 in 5° steps
   else if (kind === 'duotone') scheme = { kind, dark: rgb(randHex(pick)), light: rgb(randHex(pick)) };
   else if (kind === 'tritone') scheme = { kind, dark: rgb(randHex(pick)), mid: rgb(randHex(pick)), light: rgb(randHex(pick)) };
+  else if (kind === 'gradient') scheme = { kind, stops: GRADIENTS[choose(GRADIENT_NAMES)] };
   else if (kind === 'palette') scheme = { kind, colors: PALETTES[choose(PALETTE_NAMES)] };
   else scheme = { kind } as Scheme; // none | grayscale | invert | sepia
 

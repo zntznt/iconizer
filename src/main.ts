@@ -3,7 +3,7 @@ import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
-import { PALETTES, type Scheme, type RGB } from './color.ts';
+import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -319,6 +319,13 @@ const hex2rgb = (h: string): RGB => ({
   b: parseInt(h.slice(5, 7), 16),
 });
 
+/** The preset name whose color list equals `colors`, or null (= custom). Lets
+ *  a restored palette/gradient round-trip back to its named preset, not 'custom'. */
+const matchPreset = (table: Record<string, RGB[]>, colors: RGB[]): string | null =>
+  Object.keys(table).find((name) =>
+    table[name].length === colors.length
+    && table[name].every((c, i) => c.r === colors[i]?.r && c.g === colors[i]?.g && c.b === colors[i]?.b)) ?? null;
+
 function readScheme(): Scheme {
   const kind = ($('scheme') as HTMLSelectElement).value;
   switch (kind) {
@@ -342,6 +349,13 @@ function readScheme(): Scheme {
         : PALETTES[preset];
       return { kind, colors };
     }
+    case 'gradient': {
+      const preset = ($('gradientPreset') as HTMLSelectElement).value;
+      const stops = preset === 'custom'
+        ? ['grad0', 'grad1', 'grad2', 'grad3'].map((id) => hex2rgb(($(id) as HTMLInputElement).value))
+        : GRADIENTS[preset];
+      return { kind, stops };
+    }
     default:
       return { kind } as Scheme; // none | grayscale | invert | sepia
   }
@@ -362,10 +376,13 @@ function syncSchemeUI() {
   disclose('p-hue', kind === 'hue');
   disclose('p-duotone', kind === 'duotone');
   disclose('p-tritone', kind === 'tritone');
+  disclose('p-gradient', kind === 'gradient');
   disclose('p-palette', kind === 'palette');
   // palette preset 'custom' reveals the 3 hand-pick swatches; presets hide them.
   disclose('p-palette-custom', kind === 'palette'
     && ($('palettePreset') as HTMLSelectElement).value === 'custom');
+  disclose('p-gradient-custom', kind === 'gradient'
+    && ($('gradientPreset') as HTMLSelectElement).value === 'custom');
   $('levelsVal').textContent = `${($('levels') as HTMLInputElement).value} steps`;
   $('threshVal').textContent = (+($('thresh') as HTMLInputElement).value).toFixed(2);
   $('hueDegVal').textContent = `${($('hueDeg') as HTMLInputElement).value}°`;
@@ -383,7 +400,8 @@ function syncDisclosure() {
 }
 
 for (const id of ['scheme', 'levels', 'thresh', 'hueDeg', 'duoDark', 'duoLight',
-  'triDark', 'triMid', 'triLight', 'palettePreset', 'pal0', 'pal1', 'pal2']) {
+  'triDark', 'triMid', 'triLight', 'palettePreset', 'pal0', 'pal1', 'pal2',
+  'gradientPreset', 'grad0', 'grad1', 'grad2', 'grad3']) {
   $(id).addEventListener('input', () => {
     settings.scheme = readScheme();
     syncSchemeUI();
@@ -513,11 +531,15 @@ function syncControls() {
   if (settings.scheme.kind === 'palette') {
     // Match the colors against a known preset; fall back to 'custom' + swatches.
     const colors = settings.scheme.colors;
-    const presetName = Object.keys(PALETTES).find((name) =>
-      PALETTES[name].length === colors.length
-      && PALETTES[name].every((c, i) => c.r === colors[i]?.r && c.g === colors[i]?.g && c.b === colors[i]?.b));
+    const presetName = matchPreset(PALETTES, colors);
     set('palettePreset', presetName ?? 'custom');
     if (!presetName) colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
+  }
+  if (settings.scheme.kind === 'gradient') {
+    const stops = settings.scheme.stops;
+    const presetName = matchPreset(GRADIENTS, stops);
+    set('gradientPreset', presetName ?? 'custom');
+    if (!presetName) stops.slice(0, 4).forEach((c, i) => set(`grad${i}`, rgb2hex(c)));
   }
   syncSchemeUI();
   syncLayerCountUI();

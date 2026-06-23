@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { transformColor, PALETTES, type RGB } from './color.ts';
+import { transformColor, PALETTES, GRADIENTS, type RGB } from './color.ts';
 
 const rgb = (r: number, g: number, b: number): RGB => ({ r, g, b });
 
@@ -48,4 +48,22 @@ const gb = transformColor(rgb(120, 160, 20), { kind: 'palette', colors: PALETTES
 assert.ok(PALETTES.gameboy.some((c) => c.r === gb.r && c.g === gb.g && c.b === gb.b),
   'palette result is one of the preset swatches');
 
-console.log('color.test.ts: ok (grayscale, invert, sepia, threshold, hue, posterize, duotone, tritone, palette, presets, none)');
+// gradient map: black (luma 0) -> first stop, white (luma 1) -> last stop.
+const gStops = [rgb(0, 0, 0), rgb(100, 100, 100), rgb(255, 255, 255)];
+assert.deepEqual(transformColor(rgb(0, 0, 0), { kind: 'gradient', stops: gStops }), rgb(0, 0, 0),
+  'gradient black -> first stop');
+assert.deepEqual(transformColor(rgb(255, 255, 255), { kind: 'gradient', stops: gStops }), rgb(255, 255, 255),
+  'gradient white -> last stop');
+// a 2-stop gradient is exactly duotone — same output for the same luma.
+const lo = rgb(10, 20, 30), hi = rgb(200, 180, 160);
+const midRgb = rgb(128, 128, 128);
+assert.deepEqual(
+  transformColor(midRgb, { kind: 'gradient', stops: [lo, hi] }),
+  transformColor(midRgb, { kind: 'duotone', dark: lo, light: hi }),
+  '2-stop gradient == duotone');
+// single stop is a constant; presets exist and are multi-stop.
+assert.deepEqual(transformColor(rgb(50, 90, 130), { kind: 'gradient', stops: [rgb(7, 7, 7)] }), rgb(7, 7, 7),
+  'single-stop gradient is constant');
+assert.ok(GRADIENTS.vaporwave.length >= 2 && GRADIENTS.fire.length >= 2, 'gradient presets are multi-stop');
+
+console.log('color.test.ts: ok (grayscale, invert, sepia, threshold, hue, posterize, duotone, tritone, gradient, palette, presets, none)');

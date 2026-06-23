@@ -18,6 +18,7 @@ export type Scheme =
   | { kind: 'posterize'; levels: number }
   | { kind: 'duotone'; dark: RGB; light: RGB }
   | { kind: 'tritone'; dark: RGB; mid: RGB; light: RGB } // 3-stop gradient map
+  | { kind: 'gradient'; stops: RGB[] } // N-stop gradient map keyed by luma
   | { kind: 'palette'; colors: RGB[] };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -51,6 +52,32 @@ export const PALETTES: Record<string, RGB[]> = {
     '#fff1e8', '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c',
     '#ff77a8', '#ffccaa'].map(hex),
 };
+
+/** Built-in multi-stop gradients for the `gradient` scheme. Each cell's luma
+ *  indexes a smooth ramp across the stops (a "gradient map") — the smooth,
+ *  curated cousin of duotone/tritone. Tuned for the vaporwave/CRT toy vibe. */
+export const GRADIENTS: Record<string, RGB[]> = {
+  vaporwave: ['#1a0033', '#ff2a6d', '#d300c5', '#05d9e8', '#d1f7ff'].map(hex),
+  sunset: ['#0d1b2a', '#7b2d26', '#e85d04', '#ffba08', '#fff3b0'].map(hex),
+  fire: ['#000000', '#5f0000', '#d00000', '#ff8800', '#ffe808', '#ffffff'].map(hex),
+  ice: ['#03045e', '#0077b6', '#00b4d8', '#90e0ef', '#caf0f8'].map(hex),
+  rainbow: ['#ff0000', '#ff8800', '#ffee00', '#00cc44', '#0088ff', '#8800ff'].map(hex),
+};
+
+/** Map t in [0,1] across an N-stop ramp (evenly spaced), lerping the bracketing
+ *  pair. Shared shape with duotone (2 stops) / tritone (3) generalised to N. */
+function gradientAt(stops: RGB[], t: number): RGB {
+  if (stops.length === 1) return stops[0];
+  const p = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(p));
+  const frac = p - i;
+  const a = stops[i], b = stops[i + 1];
+  return {
+    r: clamp255(lerp(a.r, b.r, frac)),
+    g: clamp255(lerp(a.g, b.g, frac)),
+    b: clamp255(lerp(a.b, b.b, frac)),
+  };
+}
 
 /** Remap one cell color through a scheme. Pure: rgb in, rgb out. Called at a
  *  single upstream point in render() so it composes with solid AND layered. */
@@ -120,6 +147,10 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
       return t < 0.5
         ? seg(scheme.dark, scheme.mid, t * 2)
         : seg(scheme.mid, scheme.light, (t - 0.5) * 2);
+    }
+    case 'gradient': {
+      if (scheme.stops.length === 0) return rgb;
+      return gradientAt(scheme.stops, luma(rgb));
     }
     case 'palette': {
       // ponytail: nearest by squared RGB distance — perceptually off. Lab/OKLab

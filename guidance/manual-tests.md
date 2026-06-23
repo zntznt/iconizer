@@ -104,17 +104,22 @@ Annotated so nobody prunes them as "obvious":
 ## Phase 5 — Color schemes — checks for when it lands
 
 - **C1** Each scheme (grayscale/invert/sepia/threshold/hue/posterize/duotone/
-  tritone/palette) visibly changes the mosaic, in BOTH tint and layered modes
-  (schemes sit upstream of both).
+  tritone/gradient/palette) visibly changes the mosaic, in BOTH tint and layered
+  modes (schemes sit upstream of both).
 - **C2** Scheme `none` == prior look unchanged.
 - **C3** Each scheme's disclosure inset shows/hides as its option is picked, and
   its knobs live-update the render: threshold cutoff, hue degrees, tritone's 3
-  swatches, palette preset (Game Boy/CGA/EGA/C64/PICO-8) vs custom 3-color.
+  swatches, palette preset (Game Boy/CGA/EGA/C64/PICO-8) vs custom 3-color,
+  gradient preset (vaporwave/sunset/fire/ice/rainbow) vs custom 4-stop.
 - **C4 (preset snap)** Picking a palette preset collapses the image onto that
   machine's swatches only — e.g. Game Boy yields four greens, nothing else.
+- **C4a (gradient map)** A gradient preset remaps tone onto a SMOOTH ramp:
+  shadows take the first stop, highlights the last, midtones the in-between
+  colors. Vaporwave on a face = dark purple shadows → cyan/cream highlights.
+  Contrast with palette (hard snap) and tritone (only 3 stops).
 - **C5 (permalink round-trip)** Set each new scheme, reload from the URL hash:
-  the same scheme + knob values restore; a known palette preset restores as the
-  named preset (not as 'custom').
+  the same scheme + knob values restore; a known palette/gradient preset restores
+  as the named preset (not as 'custom').
 
 ## Phase 6 — Deploy — checks for when it lands
 
