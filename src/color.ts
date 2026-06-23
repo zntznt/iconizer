@@ -19,7 +19,31 @@ export type Scheme =
   | { kind: 'duotone'; dark: RGB; light: RGB }
   | { kind: 'tritone'; dark: RGB; mid: RGB; light: RGB } // 3-stop gradient map
   | { kind: 'gradient'; stops: RGB[] } // N-stop gradient map keyed by luma
+  | { kind: 'solarize'; cutoff: number } // invert only channels above cutoff
+  | { kind: 'channelswap'; order: string } // permute channels, e.g. 'gbr'
   | { kind: 'palette'; colors: RGB[] };
+
+/** Always-on tonal/colour adjustment applied BEFORE the scheme. Neutral values
+ *  are identity, so it only costs anything when a user actually moves a knob. */
+export type Adjust = {
+  brightness: number; // multiplier, 1 = neutral
+  contrast: number; // multiplier around mid-grey, 1 = neutral
+  saturation: number; // 0 = grey, 1 = neutral, >1 = vivid
+  temperature: number; // -1 cool .. 0 neutral .. +1 warm
+};
+export const NEUTRAL_ADJUST: Adjust = { brightness: 1, contrast: 1, saturation: 1, temperature: 0 };
+export const adjustActive = (a: Adjust): boolean =>
+  a.brightness !== 1 || a.contrast !== 1 || a.saturation !== 1 || a.temperature !== 0;
+
+/** A gradient wash blended across the whole grid (position -> u in [0,1]). Post
+ *  stage, after the scheme — the "literal gradient" overlay, distinct from the
+ *  tone-keyed gradient map. */
+export type Overlay = {
+  dir: 'none' | 'h' | 'v' | 'diag' | 'radial';
+  preset: string; // key into GRADIENTS
+  blend: 'mix' | 'multiply' | 'screen';
+  strength: number; // 0..1
+};
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp255 = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
@@ -77,6 +101,53 @@ function gradientAt(stops: RGB[], t: number): RGB {
     g: clamp255(lerp(a.g, b.g, frac)),
     b: clamp255(lerp(a.b, b.b, frac)),
   };
+}
+
+/** Pre-scheme tonal/colour tweak. Order: brightness -> contrast -> temperature
+ *  -> saturation, each a cheap closed form. Pure: rgb in, rgb out. */
+export function adjustColor(rgb: RGB, a: Adjust): RGB {
+  let { r, g, b } = rgb;
+  r *= a.brightness; g *= a.brightness; b *= a.brightness;
+  r = (r - 128) * a.contrast + 128;
+  g = (g - 128) * a.contrast + 128;
+  b = (b - 128) * a.contrast + 128;
+  if (a.temperature) { const k = a.temperature * 40; r += k; b -= k; } // warm = +red/-blue
+  if (a.saturation !== 1) {
+    const y = LUMA.r * r + LUMA.g * g + LUMA.b * b; // grey point (0..255)
+    r = y + (r - y) * a.saturation;
+    g = y + (g - y) * a.saturation;
+    b = y + (b - y) * a.saturation;
+  }
+  return { r: clamp255(r), g: clamp255(g), b: clamp255(b) };
+}
+
+/** Ordered-dither threshold in (0,1) for a cell, from a 4x4 Bayer matrix. render()
+ *  adds (this - 0.5) * spread to the cell before a quantising scheme, breaking
+ *  flat bands into the classic retro cross-hatch. */
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+export const bayer = (col: number, row: number): number =>
+  (BAYER4[(row & 3) * 4 + (col & 3)] + 0.5) / 16;
+
+/** Whether a scheme quantises (snaps tone to discrete steps) — the only schemes
+ *  ordered dithering does anything visible for. */
+export const schemeQuantizes = (s: Scheme): boolean =>
+  s.kind === 'threshold' || s.kind === 'posterize' || s.kind === 'palette';
+
+/** Blend a gradient-wash colour (at grid position u) over a base colour. */
+export function overlayColor(base: RGB, u: number, overlay: Overlay): RGB {
+  const stops = GRADIENTS[overlay.preset] ?? [];
+  if (stops.length === 0 || overlay.strength <= 0) return base;
+  const g = gradientAt(stops, u);
+  const ch = (bv: number, gv: number): number => {
+    let blended: number;
+    switch (overlay.blend) {
+      case 'multiply': blended = (bv * gv) / 255; break;
+      case 'screen': blended = 255 - ((255 - bv) * (255 - gv)) / 255; break;
+      default: blended = gv; // 'mix' = straight crossfade
+    }
+    return clamp255(lerp(bv, blended, overlay.strength));
+  };
+  return { r: ch(base.r, g.r), g: ch(base.g, g.g), b: ch(base.b, g.b) };
 }
 
 /** Remap one cell color through a scheme. Pure: rgb in, rgb out. Called at a
@@ -151,6 +222,20 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
     case 'gradient': {
       if (scheme.stops.length === 0) return rgb;
       return gradientAt(scheme.stops, luma(rgb));
+    }
+    case 'solarize': {
+      // invert only the channels brighter than cutoff — the darkroom/psychedelic
+      // tone reversal in the highlights.
+      const c = scheme.cutoff * 255;
+      const f = (v: number) => (v > c ? 255 - v : v);
+      return { r: f(rgb.r), g: f(rgb.g), b: f(rgb.b) };
+    }
+    case 'channelswap': {
+      // order is a permutation of 'rgb' naming which source channel feeds each
+      // output channel — instant alien palettes for ~free.
+      const o = scheme.order;
+      const pick = (ch: string) => (ch === 'r' ? rgb.r : ch === 'g' ? rgb.g : rgb.b);
+      return { r: pick(o[0]), g: pick(o[1]), b: pick(o[2]) };
     }
     case 'palette': {
       // ponytail: nearest by squared RGB distance — perceptually off. Lab/OKLab

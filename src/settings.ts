@@ -1,4 +1,5 @@
-import type { Scheme } from './color.ts';
+import type { Scheme, Adjust, Overlay } from './color.ts';
+import { NEUTRAL_ADJUST } from './color.ts';
 import type { Motion, StaggerMode } from './motion.ts';
 
 export type Settings = {
@@ -24,7 +25,11 @@ export type Settings = {
   layerStyle: 'cmy' | 'cmyk' | 'ryb' | 'rgb' | 'anaglyph';
   layerCount: 2 | 3; // cmy/ryb only: inks to stack (3 = full, 2 = drop the last)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
+  adjust: Adjust; // pre-scheme tonal/colour tweak (brightness/contrast/sat/temp)
   scheme: Scheme; // remap each cell color upstream of solid/layered
+  dither: boolean; // ordered (Bayer) dither under quantising schemes
+  ditherStrength: number; // 0..1 dither spread
+  overlay: Overlay; // post-scheme gradient wash across the grid
   motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static
   motionSpeed: number; // animation period in seconds
   staggerMode: StaggerMode; // per-cell animation-delay pattern
@@ -47,7 +52,11 @@ export const defaults: Settings = {
   layerStyle: 'cmy',
   layerCount: 3,
   layerOffset: 0,
+  adjust: { ...NEUTRAL_ADJUST },
   scheme: { kind: 'none' },
+  dither: false,
+  ditherStrength: 0.5,
+  overlay: { dir: 'none', preset: 'vaporwave', blend: 'mix', strength: 0.5 },
   motion: 'none',
   motionSpeed: 1.5,
   staggerMode: 'ripple',

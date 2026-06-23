@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { transformColor, PALETTES, GRADIENTS, type RGB } from './color.ts';
+import { transformColor, adjustColor, overlayColor, bayer, schemeQuantizes,
+  NEUTRAL_ADJUST, PALETTES, GRADIENTS, type RGB } from './color.ts';
 
 const rgb = (r: number, g: number, b: number): RGB => ({ r, g, b });
 
@@ -66,4 +67,35 @@ assert.deepEqual(transformColor(rgb(50, 90, 130), { kind: 'gradient', stops: [rg
   'single-stop gradient is constant');
 assert.ok(GRADIENTS.vaporwave.length >= 2 && GRADIENTS.fire.length >= 2, 'gradient presets are multi-stop');
 
-console.log('color.test.ts: ok (grayscale, invert, sepia, threshold, hue, posterize, duotone, tritone, gradient, palette, presets, none)');
+// solarize: channel <= cutoff unchanged, channel > cutoff inverted.
+const sol = transformColor(rgb(40, 200, 120), { kind: 'solarize', cutoff: 0.5 }); // 0.5*255=127.5
+assert.deepEqual(sol, rgb(40, 55, 120), 'solarize inverts only channels above cutoff');
+
+// channelswap 'gbr': out.r=g, out.g=b, out.b=r.
+assert.deepEqual(transformColor(rgb(10, 20, 30), { kind: 'channelswap', order: 'gbr' }), rgb(20, 30, 10),
+  'channelswap permutes channels');
+
+// adjust: neutral is identity; saturation 0 collapses to grey (channels equal).
+assert.deepEqual(adjustColor(rgb(10, 150, 240), NEUTRAL_ADJUST), rgb(10, 150, 240), 'neutral adjust = identity');
+const desat = adjustColor(rgb(10, 150, 240), { ...NEUTRAL_ADJUST, saturation: 0 });
+assert.ok(desat.r === desat.g && desat.g === desat.b, 'saturation 0 -> grey');
+// brightness 0.5 halves; temperature warms red, cools blue.
+assert.deepEqual(adjustColor(rgb(100, 100, 100), { ...NEUTRAL_ADJUST, brightness: 0.5 }), rgb(50, 50, 50), 'brightness halves');
+const warm = adjustColor(rgb(120, 120, 120), { ...NEUTRAL_ADJUST, temperature: 1 });
+assert.ok(warm.r > 120 && warm.b < 120, 'warm temperature: +red, -blue');
+
+// bayer threshold stays in (0,1); schemeQuantizes only for the snapping schemes.
+for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+  const v = bayer(x, y); assert.ok(v > 0 && v < 1, `bayer in (0,1), got ${v}`);
+}
+assert.ok(schemeQuantizes({ kind: 'palette', colors: [] }) && schemeQuantizes({ kind: 'threshold', cutoff: 0.5 }));
+assert.ok(!schemeQuantizes({ kind: 'duotone', dark: rgb(0, 0, 0), light: rgb(255, 255, 255) }), 'duotone does not quantize');
+
+// overlay: strength 0 -> base untouched; strength 1 'mix' -> the gradient colour.
+const ovBase = rgb(10, 20, 30);
+assert.deepEqual(overlayColor(ovBase, 0.5, { dir: 'h', preset: 'vaporwave', blend: 'mix', strength: 0 }), ovBase,
+  'overlay strength 0 = base');
+const ovFull = overlayColor(ovBase, 0, { dir: 'h', preset: 'fire', blend: 'mix', strength: 1 });
+assert.deepEqual(ovFull, GRADIENTS.fire[0], 'overlay mix strength 1 at u=0 = first gradient stop');
+
+console.log('color.test.ts: ok (schemes + adjust + solarize/channelswap + dither + overlay)');

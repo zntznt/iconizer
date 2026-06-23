@@ -98,6 +98,14 @@ const faded = emitCell({ ...mid, brightness: 0.4 }, { ...defaults, fadeByBrightn
 assert.ok(faded.includes('opacity="0.4"'), 'fade maps brightness onto leaf opacity');
 assert.ok(!emitCell(mid, defaults).includes('opacity='), 'no opacity attr by default (fully opaque)');
 
+// gradient overlay maps grid position across the wash: with the 2-col `grid`, a
+// horizontal 'fire' overlay at full mix puts col0 at u=0 (black) and col1 at u=1
+// (white) — verifies overlayU + overlayColor flow through render().
+const ovOut = render(grid, svg, { ...defaults, cols: 2,
+  overlay: { dir: 'h', preset: 'fire', blend: 'mix', strength: 1 } });
+assert.ok(ovOut.includes('fill="rgb(0,0,0)"') && ovOut.includes('fill="rgb(255,255,255)"'),
+  'horizontal overlay washes cols from the first to the last gradient stop');
+
 // blockSize: merge NxN sample cells into one averaged icon. 4x4 grid, block 2 ->
 // 2x2 = 4 icons (vs 16), each the average of its block.
 const g16: Cell[] = [];

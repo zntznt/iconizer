@@ -342,6 +342,10 @@ function readScheme(): Scheme {
       return { kind, dark: hex2rgb(($('triDark') as HTMLInputElement).value),
         mid: hex2rgb(($('triMid') as HTMLInputElement).value),
         light: hex2rgb(($('triLight') as HTMLInputElement).value) };
+    case 'solarize':
+      return { kind, cutoff: +($('solCutoff') as HTMLInputElement).value };
+    case 'channelswap':
+      return { kind, order: ($('swapOrder') as HTMLSelectElement).value };
     case 'palette': {
       const preset = ($('palettePreset') as HTMLSelectElement).value;
       const colors = preset === 'custom'
@@ -377,6 +381,8 @@ function syncSchemeUI() {
   disclose('p-duotone', kind === 'duotone');
   disclose('p-tritone', kind === 'tritone');
   disclose('p-gradient', kind === 'gradient');
+  disclose('p-solarize', kind === 'solarize');
+  disclose('p-channelswap', kind === 'channelswap');
   disclose('p-palette', kind === 'palette');
   // palette preset 'custom' reveals the 3 hand-pick swatches; presets hide them.
   disclose('p-palette-custom', kind === 'palette'
@@ -386,22 +392,73 @@ function syncSchemeUI() {
   $('levelsVal').textContent = `${($('levels') as HTMLInputElement).value} steps`;
   $('threshVal').textContent = (+($('thresh') as HTMLInputElement).value).toFixed(2);
   $('hueDegVal').textContent = `${($('hueDeg') as HTMLInputElement).value}°`;
+  $('solCutoffVal').textContent = (+($('solCutoff') as HTMLInputElement).value).toFixed(2);
   $('schemeHint').hidden = kind !== 'none'; // hint only while nothing's picked
 }
 
-// The three NEW disclosure insets (scheme insets are handled by syncSchemeUI).
+// The disclosure insets (scheme insets are handled by syncSchemeUI).
 function syncDisclosure() {
   disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
   disclose('p-fadeRange', ($('fadeByBrightness') as HTMLInputElement).checked);
+  disclose('p-dither', ($('dither') as HTMLInputElement).checked);
+  disclose('p-overlay', ($('overlayDir') as HTMLSelectElement).value !== 'none');
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
   syncRotateUI();
   refreshExportState();
 }
 
+// --- adjust panel (sat/bright/contrast/temp) — pre-scheme, always live -------
+function readAdjust(): Settings['adjust'] {
+  return {
+    brightness: +($('adjBright') as HTMLInputElement).value,
+    contrast: +($('adjContrast') as HTMLInputElement).value,
+    saturation: +($('adjSat') as HTMLInputElement).value,
+    temperature: +($('adjTemp') as HTMLInputElement).value,
+  };
+}
+for (const [id, label] of [['adjBright', 'adjBrightVal'], ['adjContrast', 'adjContrastVal'],
+  ['adjSat', 'adjSatVal'], ['adjTemp', 'adjTempVal']] as const) {
+  $(id).addEventListener('input', () => {
+    settings.adjust = readAdjust();
+    $(label).textContent = (+($(id) as HTMLInputElement).value).toFixed(2);
+    scheduleRedraw();
+  });
+}
+
+// --- dither (under quantising schemes) ---------------------------------------
+$('dither').addEventListener('change', (e) => {
+  settings.dither = (e.target as HTMLInputElement).checked;
+  disclose('p-dither', settings.dither);
+  scheduleRedraw();
+});
+$('ditherStrength').addEventListener('input', (e) => {
+  settings.ditherStrength = +(e.target as HTMLInputElement).value;
+  $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  scheduleRedraw();
+});
+
+// --- gradient overlay (post-scheme wash) -------------------------------------
+function readOverlay(): Settings['overlay'] {
+  return {
+    dir: ($('overlayDir') as HTMLSelectElement).value as Settings['overlay']['dir'],
+    preset: ($('overlayPreset') as HTMLSelectElement).value,
+    blend: ($('overlayBlend') as HTMLSelectElement).value as Settings['overlay']['blend'],
+    strength: +($('overlayStrength') as HTMLInputElement).value,
+  };
+}
+for (const id of ['overlayDir', 'overlayPreset', 'overlayBlend', 'overlayStrength']) {
+  $(id).addEventListener('input', () => {
+    settings.overlay = readOverlay();
+    disclose('p-overlay', settings.overlay.dir !== 'none');
+    $('overlayStrengthVal').textContent = settings.overlay.strength.toFixed(2);
+    scheduleRedraw();
+  });
+}
+
 for (const id of ['scheme', 'levels', 'thresh', 'hueDeg', 'duoDark', 'duoLight',
   'triDark', 'triMid', 'triLight', 'palettePreset', 'pal0', 'pal1', 'pal2',
-  'gradientPreset', 'grad0', 'grad1', 'grad2', 'grad3']) {
+  'gradientPreset', 'grad0', 'grad1', 'grad2', 'grad3', 'solCutoff', 'swapOrder']) {
   $(id).addEventListener('input', () => {
     settings.scheme = readScheme();
     syncSchemeUI();
@@ -514,6 +571,18 @@ function syncControls() {
   set('motion', settings.motion);
   set('motionSpeed', settings.motionSpeed); $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   set('staggerMode', settings.staggerMode);
+  // adjust panel
+  set('adjBright', settings.adjust.brightness); $('adjBrightVal').textContent = settings.adjust.brightness.toFixed(2);
+  set('adjContrast', settings.adjust.contrast); $('adjContrastVal').textContent = settings.adjust.contrast.toFixed(2);
+  set('adjSat', settings.adjust.saturation); $('adjSatVal').textContent = settings.adjust.saturation.toFixed(2);
+  set('adjTemp', settings.adjust.temperature); $('adjTempVal').textContent = settings.adjust.temperature.toFixed(2);
+  // dither + overlay
+  set('dither', settings.dither);
+  set('ditherStrength', settings.ditherStrength); $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  set('overlayDir', settings.overlay.dir);
+  set('overlayPreset', settings.overlay.preset);
+  set('overlayBlend', settings.overlay.blend);
+  set('overlayStrength', settings.overlay.strength); $('overlayStrengthVal').textContent = settings.overlay.strength.toFixed(2);
   // scheme + its conditional sub-controls
   set('scheme', settings.scheme.kind);
   if (settings.scheme.kind === 'posterize') set('levels', settings.scheme.levels);
@@ -528,6 +597,8 @@ function syncControls() {
     set('triMid', rgb2hex(settings.scheme.mid));
     set('triLight', rgb2hex(settings.scheme.light));
   }
+  if (settings.scheme.kind === 'solarize') set('solCutoff', settings.scheme.cutoff);
+  if (settings.scheme.kind === 'channelswap') set('swapOrder', settings.scheme.order);
   if (settings.scheme.kind === 'palette') {
     // Match the colors against a known preset; fall back to 'custom' + swatches.
     const colors = settings.scheme.colors;

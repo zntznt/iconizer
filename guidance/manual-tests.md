@@ -120,6 +120,21 @@ Annotated so nobody prunes them as "obvious":
 - **C5 (permalink round-trip)** Set each new scheme, reload from the URL hash:
   the same scheme + knob values restore; a known palette/gradient preset restores
   as the named preset (not as 'custom').
+- **C6 (adjust panel)** brightness/contrast/saturation/temperature each visibly
+  shift the mosaic and STACK with the chosen scheme (they run before it). All at
+  neutral (1/1/1/0) == no change. Saturation 0 == grey regardless of scheme.
+- **C7 (solarize / channelswap)** solarize flips highlights above the cutoff
+  (eerie tone reversal); channel swap orders (RBG…BGR) each recolor instantly.
+- **C8 (dither)** With a QUANTISING scheme (threshold / posterize / palette),
+  toggling dither breaks flat bands into the retro cross-hatch; strength scales
+  the grain. With a non-quantising scheme (e.g. duotone) it has ~no effect — by
+  design (hint says so). Dither pattern is stable across re-renders.
+- **C9 (gradient overlay)** Pick a direction (h/v/diag/radial): a gradient wash
+  blends across the WHOLE grid, independent of image content. blend mix/multiply/
+  screen differ; strength 0 == off. radial centers the ramp. Confirm it composes
+  over a scheme AND in layered mode (overlay runs last, on the cell color).
+- **C10 (overlay permalink)** Overlay dir/preset/blend/strength round-trip via
+  the URL hash.
 
 ## Phase 6 — Deploy — checks for when it lands
 
