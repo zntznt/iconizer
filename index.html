@@ -871,11 +871,14 @@
       </div>
     </div>
 
-    <!-- Space Jam '96 p5 backdrop. Plain (non-module) scripts so global `p5` is
-         visible to the IIFE; it self-guards on readyState, so order vs main.ts
-         is irrelevant. spacejam.js lives in public/ -> served at /iconizer/. -->
+    <!-- Moiré p5 backdrop. Plain (non-module) scripts so global `p5` is visible
+         to the IIFE; it self-guards on readyState, so order vs main.ts is
+         irrelevant. spacejam.js lives in public/ -> served at the base root. The
+         src is DOCUMENT-RELATIVE (./) so it resolves to /iconizer/spacejam.js in
+         BOTH `vite dev` and GitHub Pages prod; an absolute /iconizer/… path got
+         doubled to /iconizer/iconizer/… under the dev server's base. -->
     <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
-    <script src="/iconizer/spacejam.js"></script>
+    <script src="./spacejam.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
