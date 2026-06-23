@@ -52,8 +52,13 @@ let lastSvg = ''; // latest render() output, reused by export (no re-render)
 function redraw() {
   syncUrl(settings); // keep the permalink current even before an image is loaded
   if (!cells || icons.length === 0) return;
-  lastSvg = render(cells, icons.map((i) => i.svg), settings);
-  out.innerHTML = lastSvg;
+  const parsed = icons.map((i) => i.svg);
+  // ON-SCREEN: inline-shapes form — the browser lays out a flat tree instead of
+  // cloning a <symbol> shadow subtree per cell (~85x faster paint on big grids).
+  out.innerHTML = render(cells, parsed, settings, 'live');
+  // FOR EXPORT: the compact <symbol>+<use> form (tiny .svg; PNG/GIF rasterize it
+  // once, where the per-<use> layout cost is irrelevant). Cheap string build.
+  lastSvg = render(cells, parsed, settings, 'export');
   refreshExportState();
   refreshPips();
   setStatus('ready');
@@ -78,11 +83,17 @@ function refreshExportState() {
   syncQuickSave();
 }
 
-// Debounce so dragging a slider doesn't thrash render() on every input event.
+// Debounce so dragging a slider doesn't thrash render() on every input event,
+// then align the surviving redraw to a frame boundary (rAF) so the DOM swap +
+// layout land in one paint pass instead of risking a mid-frame double layout.
 let timer: number | undefined;
+let raf = 0;
 function scheduleRedraw() {
   clearTimeout(timer);
-  timer = setTimeout(redraw, 50);
+  timer = setTimeout(() => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => { raf = 0; redraw(); });
+  }, 50);
 }
 
 /** Load + validate an image file. Returns true on success. */

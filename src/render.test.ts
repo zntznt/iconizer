@@ -7,7 +7,7 @@ const grid: Cell[] = [
   { col: 0, row: 0, r: 255, g: 0, b: 0, brightness: 0.21 },
   { col: 1, row: 0, r: 0, g: 0, b: 255, brightness: 0.07 },
 ];
-const svg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
+const svg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24', singleShape: true }];
 
 const out = render(grid, svg, { ...defaults, cols: 2 });
 
@@ -27,6 +27,34 @@ const bgOut = render(grid, svg, { ...defaults, cols: 2, background: '#000000' })
 assert.ok(bgOut.includes('<rect width="32" height="16" fill="#000000"/>'),
   'expected a full-size background rect in the chosen color');
 assert.ok(bgOut.indexOf('<rect') < bgOut.indexOf('<use'), 'bg rect must precede uses');
+
+// --- LIVE mode: inlines shapes, no <use>/<symbol> (perf: no shadow-tree/cell) ---
+const live = render(grid, svg, { ...defaults, cols: 2 }, 'live');
+assert.ok(!live.includes('<use'), 'live: no <use> (inlined)');
+assert.ok(!live.includes('<symbol') && !live.includes('<defs'), 'live: no <symbol>/<defs>');
+// SINGLE-SHAPE icon (<rect>) -> the transform is SPLICED into the shape, NO <g>
+// wrapper (the ~16x-faster fast path). The tag becomes <rect transform=... .../>.
+assert.ok(/<rect transform="translate\([\d.]+ [\d.]+\) scale\(0\.67\)"/.test(live),
+  'live single-shape: transform spliced into the <rect>, scale 16/24=0.67');
+assert.ok(!live.includes('<g transform='), 'live single-shape: no per-cell <g> wrapper');
+assert.equal((live.match(/<rect transform=/g) ?? []).length, 2, 'live: one drawable per cell');
+assert.ok(live.includes('color="rgb(255,0,0)"') && live.includes('color="rgb(0,0,255)"'),
+  'live: tint colour preserved on the shape');
+
+// MULTI-SHAPE icon -> falls back to the <g transform> wrapper (one group/cell).
+const multi = [{ innerSvg: '<rect width="24" height="24"/><circle r="6"/>', viewBox: '0 0 24 24', singleShape: false }];
+const liveMulti = render(grid, multi, { ...defaults, cols: 2 }, 'live');
+assert.ok(/<g transform="translate\([\d.]+ [\d.]+\) scale\(0\.67\)"[^>]*>/.test(liveMulti),
+  'live multi-shape: wraps the icon in a translate+scale <g>');
+assert.equal((liveMulti.match(/<g transform=/g) ?? []).length, 2, 'live multi: one group per cell');
+
+// single-shape with LEADING whitespace/comment (innerHTML can carry these): the
+// splice must target the real <path tag, not the leading text — else corrupt SVG.
+const ws = [{ innerSvg: '\n  <!-- icon -->\n  <path d="M0 0" fill="currentColor"/>', viewBox: '0 0 24 24', singleShape: true }];
+const liveWs = render(grid, ws, { ...defaults, cols: 2 }, 'live');
+assert.ok(/<path transform="[^"]+" fill="rgb\(255,0,0\)"/.test(liveWs),
+  'live: splice targets the <path even past leading whitespace/comment');
+assert.ok(liveWs.includes('<!-- icon -->'), 'live: leading comment preserved, not clobbered');
 
 // Layered CMY (batch-04). Multiply-blend mechanism: each ink subtracts one
 // channel; baking strength into the ink color makes 3 inks multiply to (r,g,b).
@@ -111,7 +139,7 @@ assert.ok(ovOut.includes('fill="rgb(0,0,0)"') && ovOut.includes('fill="rgb(255,2
 const g16: Cell[] = [];
 for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++)
   g16.push({ col: c, row: r, r: 120, g: 120, b: 120, brightness: 0.47 });
-const svg2 = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
+const svg2 = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24', singleShape: true }];
 const r1 = render(g16, svg2, { ...defaults, cols: 4, blockSize: 1 });
 const r2x = render(g16, svg2, { ...defaults, cols: 4, blockSize: 2 });
 assert.equal((r1.match(/<use/g) ?? []).length, 16, 'block 1 -> one icon per cell');
@@ -126,7 +154,7 @@ assert.ok(/viewBox="0 0 64 64"/.test(r1) && /viewBox="0 0 32 32"/.test(r2x),
 // Scheme composes with BOTH modes (batch-05). render() transforms upstream, so
 // a scheme must reach the layered path too — not just the solid branch.
 const cell: Cell[] = [{ col: 0, row: 0, r: 200, g: 100, b: 50, brightness: 0.5 }];
-const tinySvg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
+const tinySvg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24', singleShape: true }];
 
 // invert(200,100,50) = (55,155,205). Layered inks must multiply to THAT, not the
 // original — proving the scheme reached emitLayered, not just the solid path.
@@ -144,8 +172,8 @@ assert.ok(invSolid.includes('fill="rgb(55,155,205)"'), 'solid+invert -> inverted
 
 // Multi-icon: N symbols, each cell picks by brightness (dark -> icon0, light -> last).
 const twoIcons = [
-  { innerSvg: '<circle r="12"/>', viewBox: '0 0 24 24' },
-  { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' },
+  { innerSvg: '<circle r="12"/>', viewBox: '0 0 24 24', singleShape: true },
+  { innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24', singleShape: true },
 ];
 const dark: Cell[] = [{ col: 0, row: 0, r: 10, g: 10, b: 10, brightness: 0.04 }];
 const light: Cell[] = [{ col: 0, row: 0, r: 240, g: 240, b: 240, brightness: 0.94 }];
@@ -160,7 +188,7 @@ assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#ico
 // RGB additive layered style: 3 full-size icons carrying each channel's TRUE
 // value, screen-blended over black so overlaps add back to the original colour.
 // circle icon (not the rect fixture) so counting <rect> only catches backgrounds.
-const circleSvg = [{ innerSvg: '<circle r="11"/>', viewBox: '0 0 24 24' }];
+const circleSvg = [{ innerSvg: '<circle r="11"/>', viewBox: '0 0 24 24', singleShape: true }];
 const rgbOut = render(cell, circleSvg, { ...defaults, cols: 1, layered: true, layerStyle: 'rgb', background: '#ffffff' });
 assert.equal((rgbOut.match(/mix-blend-mode:screen/g) ?? []).length, 3, 'RGB style screen-blends 3 layers');
 // the global background is FORCED black (screen identity), overriding the white

@@ -91,12 +91,62 @@ function rotateWrap(body: string, cell: Cell, index: number, settings: Settings)
 
 /** Which icon a cell draws, by brightness: dark cell -> icon 0, light -> last.
  *  Order your SVGs dense->sparse (like ASCII art: '@' dark ... '.' light). */
-function iconFor(cell: Cell, count: number): string {
-  if (count <= 1) return 'icon0';
+function iconIndex(cell: Cell, count: number): number {
+  if (count <= 1) return 0;
   // dark cell (low brightness) -> icon0; light -> last. clamp so brightness==1
   // doesn't overflow to index count.
-  const i = Math.min(count - 1, Math.floor(cell.brightness * count));
-  return `icon${i}`;
+  return Math.min(count - 1, Math.floor(cell.brightness * count));
+}
+
+// Render target. 'export' uses <symbol>+<use> (define the icon once, tiny file —
+// the slow per-<use> shadow-tree layout doesn't matter in a downloaded/rasterized
+// file). 'live' INLINES the icon's shapes per cell behind a <g transform>: the
+// browser lays out a flat tree instead of cloning a shadow subtree per cell, which
+// is ~85x faster on screen for the common solid path. Same pixels either way.
+export type RenderMode = 'export' | 'live';
+
+/** Parse "minX minY w h" -> numbers (icon viewBox), defaulting sanely. */
+function parseViewBox(vb: string): [number, number, number, number] {
+  const p = vb.trim().split(/[\s,]+/).map(Number);
+  return p.length === 4 && p.every((n) => Number.isFinite(n)) ? (p as [number, number, number, number]) : [0, 0, 24, 24];
+}
+
+/** An icon placer: given a cell box + paint attrs, emit ONE drawable for the icon.
+ *  'export' -> <use href="#iconN" ...>; 'live' -> <g transform...>inlined shapes</g>.
+ *  Built once per icon per render (closes over the parsed viewBox / inner markup). */
+type Placer = (box: { x: number; y: number; size: number }, attrs: string) => string;
+function makePlacer(icon: ParsedSvg, id: string, mode: RenderMode): Placer {
+  if (mode === 'export') {
+    return ({ x, y, size }, attrs) =>
+      `<use href="#${id}" x="${x}" y="${y}" width="${size}" height="${size}"${attrs}/>`;
+  }
+  // live: map the icon's viewBox into the cell box with one transform, then inline
+  // the shapes. translate to the cell, scale viewBox->size, shift off the viewBox
+  // origin.
+  const [minX, minY, vbW, vbH] = parseViewBox(icon.viewBox);
+  const inner = icon.innerSvg;
+  const transform = (x: number, y: number, size: number): string => {
+    const sx = r2(size / vbW), sy = r2(size / vbH);
+    // origin shift folded into translate so it's one transform, fewer chars.
+    const tx = r2(x - minX * sx), ty = r2(y - minY * sy);
+    return sx === sy ? `translate(${tx} ${ty}) scale(${sx})` : `translate(${tx} ${ty}) scale(${sx} ${sy})`;
+  };
+
+  // FAST PATH: a one-element icon (e.g. a lone <path>). Splice the transform +
+  // paint attrs straight INTO that element — no wrapping <g>, which would force a
+  // per-cell coordinate system the layout engine processes separately (~16x cost).
+  // Find the END of the opening tag NAME (after "<path", before its attrs), past
+  // any leading whitespace/comments innerHTML may carry — splicing at the wrong
+  // spot would corrupt the markup, so fall back to the <g> wrapper if unsure.
+  const m = icon.singleShape ? /<[a-zA-Z][\w:-]*/.exec(inner) : null;
+  if (m) {
+    const sp = m.index + m[0].length; // just after "<path"
+    const head = inner.slice(0, sp), tail = inner.slice(sp);
+    return ({ x, y, size }, attrs) =>
+      `${head} transform="${transform(x, y, size)}"${attrs}${tail}`;
+  }
+  // FALLBACK: multi-shape icon needs a shared group to carry the one transform.
+  return ({ x, y, size }, attrs) => `<g transform="${transform(x, y, size)}"${attrs}>${inner}</g>`;
 }
 
 /** Centered placement box for a cell's icon at a given scale factor. */
@@ -165,7 +215,7 @@ function inksFor(settings: Settings): { inks: Ink[]; blend: 'multiply' | 'screen
  *  shared page (white for multiply styles, black for screen). No per-cell rect
  *  or isolation — the page IS the blend backdrop. Subtractive styles shrink each
  *  successive layer (concentric inks); additive/anaglyph stay full size. */
-function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
+function layeredBody(cell: Cell, settings: Settings, place: Placer): string {
   const { inks, blend } = inksFor(settings);
   const n = inks.length;
   const base = scaleFor(cell, settings);
@@ -176,11 +226,10 @@ function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
   let s = '';
   for (let i = 0; i < n; i++) {
     const scale = shrink ? r1(base * (1 - i / n)) : base; // even concentric steps
-    const { x, y, size } = cellBox(cell, settings, scale);
-    const ox = r1(x + inks[i].dx * off);
-    const oy = r1(y + inks[i].dy * off);
-    s += `<use href="#${iconId}" x="${ox}" y="${oy}" width="${size}" height="${size}" ` +
-      `color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"/>`;
+    const box = cellBox(cell, settings, scale);
+    box.x = r1(box.x + inks[i].dx * off);
+    box.y = r1(box.y + inks[i].dy * off);
+    s += place(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
   }
   return s;
 }
@@ -188,9 +237,8 @@ function layeredBody(cell: Cell, settings: Settings, iconId: string): string {
 /** A layered cell: CMY multiply stack or RGB-additive stack, then the motion
  *  wrapper. The scheme already transformed cell.r/g/b upstream, so both styles
  *  pick up the scheme for free. */
-function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: number): string {
-  const iconId = iconFor(cell, iconCount);
-  const body = rotateWrap(layeredBody(cell, settings, iconId), cell, index, settings);
+function emitLayered(cell: Cell, settings: Settings, index: number, place: Placer): string {
+  const body = rotateWrap(layeredBody(cell, settings, place), cell, index, settings);
   // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
   // browser caches the cell's raster and moves/scales the bitmap per frame. No
   // motion -> bare body, output unchanged.
@@ -198,25 +246,22 @@ function emitLayered(cell: Cell, settings: Settings, index: number, iconCount: n
   return mo ? `<g${mo}>${body}</g>` : body;
 }
 
-/** The <use>(s) for a single cell. One per cell, or a CMY stack if layered. */
-function emitCell(cell: Cell, settings: Settings, index: number, iconCount: number): string {
-  if (settings.layered) return emitLayered(cell, settings, index, iconCount);
+/** One cell's drawable(s): a single tinted icon, or a layered ink stack. `place`
+ *  is the per-icon placer (export <use> or live inlined shapes). */
+function emitCellWith(cell: Cell, settings: Settings, index: number, place: Placer): string {
+  if (settings.layered) return emitLayered(cell, settings, index, place);
 
-  const { x, y, size } = cellBox(cell, settings);
-  const iconId = iconFor(cell, iconCount);
+  const box = cellBox(cell, settings);
   // Tint via color= (makeTintable forces icons to currentColor, so this recolors
-  // any art). This is GPU-cheap and the SAME mechanism CMY uses — unlike the old
-  // per-cell SVG filter, which re-rasterized every frame when animated and made
-  // motion lag. fill= too, for belt-and-suspenders on currentColor inheritance.
+  // any art). GPU-cheap, the SAME mechanism CMY uses. fill= too, belt-and-
+  // suspenders on currentColor inheritance.
   const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
   const el = rotateWrap(
-    `<use href="#${iconId}" x="${x}" y="${y}" width="${size}" height="${size}" ` +
-    `fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}/>`,
+    place(box, ` fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}`),
     cell, index, settings);
-  // Motion on a <g> wrapper, not the <use>: fill-box on a <use>->symbol instance
-  // resolves inconsistently (symbol geometry vs placed box). A <g>'s fill-box is
-  // its children's rendered box = this icon in place, so it pivots around its OWN
-  // centre regardless of canvas size. No motion -> bare element, output unchanged.
+  // Motion on a <g> wrapper, not the leaf: fill-box on a <use>->symbol instance
+  // resolves inconsistently; a <g>'s fill-box is its children's rendered box, so
+  // it pivots around its OWN centre. No motion -> bare element, output unchanged.
   const mo = motionAttrs(cell, index, settings);
   return mo ? `<g${mo}>${el}</g>` : el;
 }
@@ -224,8 +269,12 @@ function emitCell(cell: Cell, settings: Settings, index: number, iconCount: numb
 /**
  * Pure core: grid + parsed svg + settings -> one standalone <svg> string.
  * No DOM reads, no canvas — re-runs cheaply on every settings change.
+ *
+ * `mode` ('export' default): 'export' emits <symbol>+<use> (tiny downloadable
+ * file); 'live' inlines the icon shapes per cell (~85x faster on-screen layout,
+ * same pixels). Default 'export' keeps the export string + self-checks stable.
  */
-export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): string {
+export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mode: RenderMode = 'export'): string {
   if (grid.length === 0 || icons.length === 0) return '';
   // Pool N x N source cells into one averaged icon (blockSize). Must run before
   // we read cols/rows: it re-indexes the grid to a smaller one, so every
@@ -270,12 +319,14 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
     });
   }
 
-  // One <symbol id="icon{i}"> per uploaded SVG; each cell picks one by brightness
-  // (iconFor). Single icon -> just #icon0, identical to before.
-  const symbols = icons
-    .map((svg, i) => `<symbol id="icon${i}" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`)
-    .join('');
-  const defs = `<defs>${symbols}</defs>`;
+  // A placer per icon: export mode references a shared <symbol> via <use>; live
+  // mode inlines the icon's shapes (no shadow-tree-per-cell -> ~85x faster paint).
+  const placers = icons.map((svg, i) => makePlacer(svg, `icon${i}`, mode));
+  // <defs> only in export mode — live mode has no <symbol> to reference.
+  const defs = mode === 'export'
+    ? `<defs>${icons.map((svg, i) =>
+        `<symbol id="icon${i}" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`).join('')}</defs>`
+    : '';
   // Motion keyframes baked into the SVG (no JS loop) — so animation survives
   // export: the downloaded .svg stays alive. '' when motion:'none'.
   const style = motionStyle(settings);
@@ -286,7 +337,8 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
   let bgFill = settings.background;
   if (settings.layered) bgFill = SUBTRACTIVE.has(settings.layerStyle) ? '#ffffff' : '#000000';
   const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
-  const uses = grid.map((c, i) => emitCell(c, settings, i, icons.length)).join('');
+  const uses = grid.map((c, i) =>
+    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length)])).join('');
 
   // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
   // lets the maximized CSS size it correctly with min() (CSS can't read a ratio at
@@ -296,4 +348,10 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
     `width="${outW}" height="${outH}" style="aspect-ratio:${outW}/${outH};--ar:${ar}">${style}${defs}${bg}${uses}</svg>`;
 }
 
+/** Test/back-compat shim: one cell in EXPORT mode (the <use>/<symbol> form the
+ *  self-checks assert). Builds a single export placer for #icon0. */
+function emitCell(cell: Cell, settings: Settings, index = 0, _iconCount = 1): string {
+  return emitCellWith(cell, settings, index,
+    makePlacer({ innerSvg: '', viewBox: '0 0 24 24', singleShape: false }, 'icon0', 'export'));
+}
 export { emitCell };

@@ -1,6 +1,12 @@
 export type ParsedSvg = {
   innerSvg: string; // the root <svg>'s inner content, copied as-is
   viewBox: string; // e.g. "0 0 24 24"
+  // True when innerSvg is exactly ONE element (e.g. a lone <path>). The live
+  // renderer then splices its per-cell transform/fill INTO that element instead
+  // of wrapping it in a <g transform> — a ~16x faster on-screen layout, since a
+  // group per cell establishes a new coordinate system the engine processes
+  // separately. Multi-shape icons fall back to the group wrapper.
+  singleShape: boolean;
 };
 
 /**
@@ -60,5 +66,8 @@ export function parseSvg(text: string): ParsedSvg {
   }
 
   makeTintable(root);
-  return { innerSvg: root.innerHTML, viewBox };
+  // single drawable child (ignoring whitespace text nodes) -> the live renderer
+  // can splice attrs into it directly, skipping the per-cell <g> wrapper.
+  const singleShape = root.children.length === 1;
+  return { innerSvg: root.innerHTML, viewBox, singleShape };
 }
