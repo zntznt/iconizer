@@ -75,6 +75,25 @@ export const PALETTES: Record<string, RGB[]> = {
   pico8: ['#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c7c8',
     '#fff1e8', '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c',
     '#ff77a8', '#ffccaa'].map(hex),
+  // CGA mode 4, palette 0 (high) — the other DOS classic: green/red/yellow
+  cga0: ['#000000', '#55ff55', '#ff5555', '#ffff55'].map(hex),
+  // ZX Spectrum (normal + bright rows, 15 unique)
+  zx: ['#000000', '#0000d7', '#d70000', '#d700d7', '#00d700', '#00d7d7', '#d7d700',
+    '#d7d7d7', '#0000ff', '#ff0000', '#ff00ff', '#00ff00', '#00ffff', '#ffff00',
+    '#ffffff'].map(hex),
+  // MSX1 (TMS9918) 15-color
+  msx: ['#000000', '#3eb849', '#74d07d', '#5955e0', '#8076f1', '#b95e51', '#65dbef',
+    '#db6559', '#ff897d', '#ccc35e', '#ded087', '#3aa241', '#b766b5', '#cccccc',
+    '#ffffff'].map(hex),
+  // Teletext / BBC Micro — 8 fully-saturated primaries
+  teletext: ['#000000', '#ff0000', '#00ff00', '#ffff00', '#0000ff', '#ff00ff',
+    '#00ffff', '#ffffff'].map(hex),
+  // Amber monochrome CRT terminal
+  amber: ['#2a1500', '#804000', '#cc6600', '#ff9100', '#ffc266'].map(hex),
+  // Green P1-phosphor CRT terminal
+  green: ['#001a00', '#004d00', '#009900', '#33cc33', '#99ff99'].map(hex),
+  // 1-bit (classic Macintosh black & white)
+  '1bit': ['#000000', '#ffffff'].map(hex),
 };
 
 /** Built-in multi-stop gradients for the `gradient` scheme. Each cell's luma
@@ -86,6 +105,11 @@ export const GRADIENTS: Record<string, RGB[]> = {
   fire: ['#000000', '#5f0000', '#d00000', '#ff8800', '#ffe808', '#ffffff'].map(hex),
   ice: ['#03045e', '#0077b6', '#00b4d8', '#90e0ef', '#caf0f8'].map(hex),
   rainbow: ['#ff0000', '#ff8800', '#ffee00', '#00cc44', '#0088ff', '#8800ff'].map(hex),
+  // gameboy here is the SMOOTH DMG-green ramp — the gradient-map cousin of the
+  // 4-shade `palette` gameboy (which hard-snaps instead of blending).
+  gameboy: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'].map(hex),
+  matrix: ['#000000', '#003b00', '#008f11', '#00ff41', '#d6ffd6'].map(hex),
+  mono: ['#000000', '#ffffff'].map(hex),
 };
 
 /** Map t in [0,1] across an N-stop ramp (evenly spaced), lerping the bracketing

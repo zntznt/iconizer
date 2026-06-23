@@ -48,6 +48,15 @@ assert.ok(PALETTES.gameboy.length === 4, 'gameboy palette has 4 shades');
 const gb = transformColor(rgb(120, 160, 20), { kind: 'palette', colors: PALETTES.gameboy });
 assert.ok(PALETTES.gameboy.some((c) => c.r === gb.r && c.g === gb.g && c.b === gb.b),
   'palette result is one of the preset swatches');
+// every preset (incl. the new retro machines) is a non-empty list of swatches.
+for (const [name, sw] of Object.entries(PALETTES))
+  assert.ok(sw.length >= 2, `palette ${name} has >=2 swatches`);
+assert.ok(PALETTES['1bit'].length === 2 && PALETTES.amber.length >= 3, 'new presets present (1bit, amber)');
+// gradient `gameboy` (smooth) is distinct in kind from palette `gameboy` (snap):
+// a midtone maps to a BLENDED green, not necessarily one of the 4 fixed shades.
+const gbGrad = transformColor(rgb(96, 96, 96), { kind: 'gradient', stops: GRADIENTS.gameboy });
+assert.ok(!PALETTES.gameboy.some((c) => c.r === gbGrad.r && c.g === gbGrad.g && c.b === gbGrad.b),
+  'gradient gameboy blends between shades (not a hard snap)');
 
 // gradient map: black (luma 0) -> first stop, white (luma 1) -> last stop.
 const gStops = [rgb(0, 0, 0), rgb(100, 100, 100), rgb(255, 255, 255)];

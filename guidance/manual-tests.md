@@ -109,10 +109,13 @@ Annotated so nobody prunes them as "obvious":
 - **C2** Scheme `none` == prior look unchanged.
 - **C3** Each scheme's disclosure inset shows/hides as its option is picked, and
   its knobs live-update the render: threshold cutoff, hue degrees, tritone's 3
-  swatches, palette preset (Game Boy/CGA/EGA/C64/PICO-8) vs custom 3-color,
-  gradient preset (vaporwave/sunset/fire/ice/rainbow) vs custom 4-stop.
+  swatches, palette preset (Game Boy/CGA×2/EGA/C64/PICO-8/ZX/MSX/Teletext/amber/
+  green/1-bit) vs custom 3-color, gradient preset (vaporwave/sunset/fire/ice/
+  rainbow/Game Boy/matrix/mono) vs custom 4-stop.
 - **C4 (preset snap)** Picking a palette preset collapses the image onto that
   machine's swatches only — e.g. Game Boy yields four greens, nothing else.
+  Distinct from the `duotone` scheme (a SMOOTH 2-tone ramp over the same greens):
+  duotone = infinite blended shades, palette Game Boy = 4 hard steps.
 - **C4a (gradient map)** A gradient preset remaps tone onto a SMOOTH ramp:
   shadows take the first stop, highlights the last, midtones the in-between
   colors. Vaporwave on a face = dark purple shadows → cyan/cream highlights.
