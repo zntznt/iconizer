@@ -140,6 +140,21 @@
       motion: 1.0,    // multiplier on orbit + breath speed
       sep: 0.26,      // base separation of the two ripple centers (fraction of width)
     };
+    // Cache of unit-circle (cos,sin) vertex tables keyed by segment count. A ring's
+    // angles never change frame-to-frame (only cx/cy/rad0 do), and only a handful of
+    // distinct nSeg values exist — so we compute each table ONCE here instead of
+    // ~490k Math.cos/sin calls per second in the draw loop. Rebuilt on resize.
+    const segTables = new Map();
+    function segTable(nSeg) {
+      let tbl = segTables.get(nSeg);
+      if (!tbl) {
+        const cos = new Float32Array(nSeg + 1), sin = new Float32Array(nSeg + 1);
+        for (let s = 0; s <= nSeg; s++) { const a = (s / nSeg) * Math.PI * 2; cos[s] = Math.cos(a); sin[s] = Math.sin(a); }
+        tbl = { cos, sin };
+        segTables.set(nSeg, tbl);
+      }
+      return tbl;
+    }
     function buildFamilies() {
       const area = p.width * p.height;
       const k = Math.min(1.4, Math.max(0.9, area / 1500000));
@@ -147,9 +162,15 @@
       // enough rings for each center to span the whole diagonal (full coverage).
       const diag = Math.hypot(p.width, p.height);
       ringCount = Math.ceil(diag / ringPitch) + 2;
-      // famA / famB are just the ring index lists for each center.
+      segTables.clear(); // pitch may have changed -> stale tables
+      // famA / famB carry each ring's radius + its precomputed vertex table.
       famA = []; famB = [];
-      for (let i = 1; i <= ringCount; i++) { famA.push({ idx: i }); famB.push({ idx: i }); }
+      for (let i = 1; i <= ringCount; i++) {
+        const rad0 = i * ringPitch;
+        const nSeg = Math.max(24, Math.min(160, Math.round((2 * Math.PI * rad0) / 14)));
+        const ring = { idx: i, rad0, nSeg, tbl: segTable(nSeg) };
+        famA.push(ring); famB.push({ ...ring });
+      }
     }
 
     // ---- pointer wiring (window-level; canvas can't be hit) ----
@@ -264,10 +285,20 @@
     // family hue, accented toward its partner under heat; additive blend means where
     // THIS ripple set overlaps the OTHER, brightness adds -> the moiré fringe arcs.
     function drawRipple(rings, cx, cy, base, accentToward, lensOn, px, py) {
-      const maxR = ringCount * ringPitch;
+      const W = p.width, H = p.height;
+      // A ring (circle r=rad0 at cx,cy) touches the viewport only when its radius is
+      // between the nearest and farthest viewport points from the center. Outside
+      // that band the whole circle is off-screen (or surrounds it) -> contributes no
+      // pixels, so skip the vertex loop + stroke entirely. As the centers orbit, the
+      // big outer rings spend most of their time fully outside one of these bounds.
+      const nx = Math.max(0, cx < 0 ? -cx : cx > W ? cx - W : 0); // x-gap to rect
+      const ny = Math.max(0, cy < 0 ? -cy : cy > H ? cy - H : 0); // y-gap to rect
+      const nearR = Math.hypot(nx, ny);                            // nearest rect point
+      const farR = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy)); // farthest corner
+      const dimSet = centerDim(cx, cy); // shared by the whole set (center-based)
       for (const rg of rings) {
-        const rad0 = rg.idx * ringPitch;
-        if (rad0 > maxR) continue;
+        const rad0 = rg.rad0;
+        if (rad0 < nearR || rad0 > farR) continue; // off-screen ring -> skip
         // ring is "near cursor" only if the cursor's distance-to-center is within
         // ringPitch of this ring's radius (a thin annulus test) — cheap reject.
         let lensRing = false, curDist = 0;
@@ -275,7 +306,7 @@
           curDist = Math.hypot(px - cx, py - cy);
           lensRing = Math.abs(curDist - rad0) < R;
         }
-        const dim = centerDim(cx, cy);   // ripple-center based dim (whole set shares)
+        const dim = dimSet;
 
         // HEAT pre-pass (cheap, ring-level): how strongly is this ring lit by the
         // cursor or a pulse? Lens heat = falloff of the closest approach (the point
@@ -298,20 +329,23 @@
           if (env > 0) { const e = env * env * 0.8; if (e > heat) heat = e; }
         }
 
+        const alpha = (90 + 120 * heat) * dim;
+        if (alpha < 4) continue; // sub-perceptible on additive black -> skip the draw
+
         const r = base[0] + (accentToward[0] - base[0]) * heat * 0.6;
         const g = base[1] + (accentToward[1] - base[1]) * heat * 0.6;
         const b = base[2] + (accentToward[2] - base[2]) * heat * 0.6;
-        p.stroke(r, g, b, (90 + 120 * heat) * dim);
+        p.stroke(r, g, b, alpha);
 
-        // segment count: ~ every 14px around the circumference, clamped.
-        const nSeg = Math.max(24, Math.min(160, Math.round((2 * Math.PI * rad0) / 14)));
+        // vertices from the precomputed unit-circle table for this ring's nSeg.
+        const cos = rg.tbl.cos, sin = rg.tbl.sin, nSeg = rg.nSeg;
+        const lens = lensRing && heat > 0;
         p.beginShape();
         for (let s = 0; s <= nSeg; s++) {
-          const a = (s / nSeg) * Math.PI * 2;
-          const ca = Math.cos(a), sa = Math.sin(a);
+          const ca = cos[s], sa = sin[s];
           let x = cx + ca * rad0;
           let y = cy + sa * rad0;
-          if (lensRing && heat > 0) {
+          if (lens) {
             // radial lens nudge near the cursor (a clean refraction, no bulge)
             const dx = x - px, dy = y - py, d2 = dx * dx + dy * dy;
             if (d2 < R * R) {
