@@ -580,18 +580,24 @@
           <div class="row"><label>scheme
             <select id="scheme">
               <option value="none">none</option>
-              <option value="grayscale">grayscale</option>
-              <option value="invert">invert</option>
-              <option value="sepia">sepia (vintage)</option>
-              <option value="threshold">threshold (1-bit B&amp;W)</option>
-              <option value="hue">hue shift (psychedelic)</option>
-              <option value="posterize">posterize (chunky colors)</option>
-              <option value="duotone">duotone (2-tone ramp)</option>
-              <option value="tritone">tritone (3-tone ramp)</option>
-              <option value="gradient">gradient (color ramp)</option>
-              <option value="solarize">solarize (darkroom flip)</option>
-              <option value="channelswap">channel swap (alien)</option>
-              <option value="palette">palette (retro presets)</option>
+              <optgroup label="mono &amp; tone">
+                <option value="grayscale">grayscale</option>
+                <option value="invert">invert</option>
+                <option value="sepia">sepia (vintage)</option>
+                <option value="threshold">threshold (1-bit B&amp;W)</option>
+                <option value="posterize">posterize (chunky colors)</option>
+              </optgroup>
+              <optgroup label="color twist">
+                <option value="hue">hue shift (psychedelic)</option>
+                <option value="solarize">solarize (darkroom flip)</option>
+                <option value="channelswap">channel swap (alien)</option>
+              </optgroup>
+              <optgroup label="tone → color map">
+                <option value="duotone">duotone (2-tone ramp)</option>
+                <option value="tritone">tritone (3-tone ramp)</option>
+                <option value="gradient">gradient (color ramp)</option>
+                <option value="palette">palette (retro presets)</option>
+              </optgroup>
             </select></label></div>
           <div class="teach" id="schemeHint">▸ try 'duotone' for that Game Boy look ✦</div>
           <div class="inset" id="p-levels" hidden aria-hidden="true">
@@ -619,14 +625,20 @@
             <div class="row"><label>preset
               <select id="gradientPreset">
                 <option value="custom">custom (4 stops)</option>
-                <option value="vaporwave">vaporwave</option>
-                <option value="sunset">sunset</option>
-                <option value="fire">fire</option>
-                <option value="ice">ice</option>
-                <option value="rainbow">rainbow</option>
-                <option value="gameboy">Game Boy (smooth)</option>
-                <option value="matrix">matrix</option>
-                <option value="mono">mono (b&amp;w)</option>
+                <optgroup label="retro">
+                  <option value="vaporwave">vaporwave</option>
+                  <option value="sunset">sunset</option>
+                  <option value="gameboy">Game Boy (smooth)</option>
+                  <option value="matrix">matrix</option>
+                </optgroup>
+                <optgroup label="natural">
+                  <option value="fire">fire</option>
+                  <option value="ice">ice</option>
+                </optgroup>
+                <optgroup label="spectrum">
+                  <option value="rainbow">rainbow</option>
+                  <option value="mono">mono (b&amp;w)</option>
+                </optgroup>
               </select></label></div>
             <div class="row" id="p-gradient-custom"><input id="grad0" type="color" value="#1a0033" /><input id="grad1" type="color" value="#ff2a6d" /><input id="grad2" type="color" value="#ffba08" /><input id="grad3" type="color" value="#fff3b0" /></div>
           </div>
@@ -635,18 +647,26 @@
             <div class="row"><label>preset
               <select id="palettePreset">
                 <option value="custom">custom (3 colors)</option>
-                <option value="gameboy">Game Boy (4-shade snap)</option>
-                <option value="cga">CGA (cyan/magenta)</option>
-                <option value="cga0">CGA (green/red)</option>
-                <option value="ega">EGA</option>
-                <option value="c64">Commodore 64</option>
-                <option value="pico8">PICO-8</option>
-                <option value="zx">ZX Spectrum</option>
-                <option value="msx">MSX</option>
-                <option value="teletext">Teletext</option>
-                <option value="amber">amber CRT</option>
-                <option value="green">green CRT</option>
-                <option value="1bit">1-bit (b&amp;w)</option>
+                <optgroup label="consoles">
+                  <option value="gameboy">Game Boy (4-shade snap)</option>
+                  <option value="pico8">PICO-8</option>
+                </optgroup>
+                <optgroup label="PC / DOS">
+                  <option value="cga">CGA (cyan/magenta)</option>
+                  <option value="cga0">CGA (green/red)</option>
+                  <option value="ega">EGA</option>
+                </optgroup>
+                <optgroup label="home computers">
+                  <option value="c64">Commodore 64</option>
+                  <option value="zx">ZX Spectrum</option>
+                  <option value="msx">MSX</option>
+                  <option value="teletext">Teletext / BBC</option>
+                </optgroup>
+                <optgroup label="monochrome">
+                  <option value="amber">amber CRT</option>
+                  <option value="green">green CRT</option>
+                  <option value="1bit">1-bit (b&amp;w)</option>
+                </optgroup>
               </select></label></div>
             <div class="row" id="p-palette-custom"><input id="pal0" type="color" value="#ff0000" /><input id="pal1" type="color" value="#00ff00" /><input id="pal2" type="color" value="#0000ff" /></div>
           </div>
@@ -683,14 +703,20 @@
             <div class="teach">▸ overlay unlocked! &nbsp; wash a gradient across the grid ✦</div>
             <div class="row"><label>gradient
               <select id="overlayPreset">
-                <option value="vaporwave">vaporwave</option>
-                <option value="sunset">sunset</option>
-                <option value="fire">fire</option>
-                <option value="ice">ice</option>
-                <option value="rainbow">rainbow</option>
-                <option value="gameboy">Game Boy (smooth)</option>
-                <option value="matrix">matrix</option>
-                <option value="mono">mono (b&amp;w)</option>
+                <optgroup label="retro">
+                  <option value="vaporwave">vaporwave</option>
+                  <option value="sunset">sunset</option>
+                  <option value="gameboy">Game Boy (smooth)</option>
+                  <option value="matrix">matrix</option>
+                </optgroup>
+                <optgroup label="natural">
+                  <option value="fire">fire</option>
+                  <option value="ice">ice</option>
+                </optgroup>
+                <optgroup label="spectrum">
+                  <option value="rainbow">rainbow</option>
+                  <option value="mono">mono (b&amp;w)</option>
+                </optgroup>
               </select></label></div>
             <div class="row"><label>blend
               <select id="overlayBlend">
