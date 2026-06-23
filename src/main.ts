@@ -62,9 +62,30 @@ function redraw() {
   // this form, NOT the on-screen one.
   lastSvg = render(cells, parsed, settings, 'export');
   refreshExportState();
+  refreshMotionPerfNudge();
   refreshPips();
   setStatus('ready');
   bootReveal(); // first successful render -> cascade the windows in (runs once)
+}
+
+// CSS motion animates every cell on the compositor; it stays buttery to a few
+// thousand cells, then drops frames (≈7fps at 100 cols). We don't cap it (that
+// would change the look) — just nudge when the animated grid is big enough to
+// chug, so the user can lower columns / raise blockSize if they want it smooth.
+// blockSize pools cells, so it shrinks the animated count by block².
+const SMOOTH_CELL_BUDGET = 2500; // ≈ 50×50; motion is smooth at/below this
+function refreshMotionPerfNudge() {
+  const nudge = document.getElementById('motionPerfNudge');
+  if (!nudge) return;
+  const animated = settings.motion !== 'none' && !settings.layered;
+  let heavy = false;
+  if (animated && cells) {
+    const rows = Math.max(...cells.map((c) => c.row)) + 1;
+    const block = Math.max(1, settings.blockSize);
+    const effectiveCells = (settings.cols * rows) / (block * block);
+    heavy = effectiveCells > SMOOTH_CELL_BUDGET;
+  }
+  nudge.hidden = !(animated && heavy);
 }
 
 // Single source of truth for export button states. SVG/PNG enabled once a render

@@ -759,6 +759,9 @@
                 <option value="ripple">ripple ▸ outward</option><option value="none">none ▸ all together</option>
                 <option value="brightness">brightness ▸ by tone</option><option value="random">random ▸ chaos</option>
               </select></label></div>
+            <!-- shown by main.ts when motion is on AND the grid is big enough to
+                 drop frames: a non-blocking nudge (no cap — keeps the full look). -->
+            <div class="dw-nudge" id="motionPerfNudge" hidden>⚠ buttery up to ~50 columns — fewer columns (or chunky blocks) = smoother motion on a big grid</div>
           </div>
         </div>
       </section>
