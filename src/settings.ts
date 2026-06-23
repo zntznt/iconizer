@@ -7,6 +7,13 @@ export type Settings = {
   iconScale: number; // global icon size multiplier; >1 = icons overlap their cell
   sizeByBrightness: boolean; // scale each icon by cell brightness when true
   sizeRange: [number, number]; // min..max scale factor when sizeByBrightness
+  // Per-cell rotation. 'fixed' = every icon at rotateDeg; 'brightness' = angle
+  // tracks tone (an orientation field); 'jitter' = deterministic ±rotateDeg
+  // scatter (sticker-bomb). Composes over size, layering, and motion.
+  rotate: 'none' | 'fixed' | 'brightness' | 'jitter';
+  rotateDeg: number; // degrees; role depends on rotate mode (see above)
+  fadeByBrightness: boolean; // ramp each icon's opacity by cell brightness
+  fadeRange: [number, number]; // opacity min..max mapped over brightness (0..1)
   background: string; // CSS color the source is composited onto; sets CMY floor
   layered: boolean; // false -> solid-tint path; true -> per-cell layered stack
   // The "3D glasses" split styles. Subtractive (multiply over white):
@@ -31,6 +38,10 @@ export const defaults: Settings = {
   iconScale: 1,
   sizeByBrightness: false,
   sizeRange: [0.3, 1],
+  rotate: 'none',
+  rotateDeg: 45,
+  fadeByBrightness: false,
+  fadeRange: [0.25, 1],
   background: '#0d120d', // off-CRT dark phosphor (not pure black) — reads as an idle tube
   layered: false,
   layerStyle: 'cmy',

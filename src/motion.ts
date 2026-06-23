@@ -38,8 +38,9 @@ export function motionStyle(settings: Settings): string {
   );
 }
 
-/** Cheap deterministic hash -> [0,1). No Math.random (render() must stay pure). */
-const hash01 = (i: number) => ((i * 2654435761) % 1000) / 1000;
+/** Cheap deterministic hash -> [0,1). No Math.random (render() must stay pure).
+ *  Shared with render() so jitter rotation scatters from the same seed source. */
+export const hash01 = (i: number) => ((i * 2654435761) % 1000) / 1000;
 
 /** Per-cell animation-delay (seconds) for the stagger mode. */
 export function cellDelay(cell: Cell, index: number, settings: Settings): number {

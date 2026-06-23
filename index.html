@@ -520,6 +520,24 @@
             <div class="row"><label>min <input id="sizeMin" type="range" min="0" max="1" step="0.05" value="0.3" /></label><span class="val" id="sizeMinVal">0.30</span></div>
             <div class="row"><label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="sizeMaxVal">1.00</span></div>
           </div>
+          <div class="divider">✦ ✦ ✦</div>
+          <div class="row"><label>rotate icons
+            <select id="rotate">
+              <option value="none">none</option>
+              <option value="brightness">by brightness (orientation field)</option>
+              <option value="jitter">random jitter (scattered)</option>
+              <option value="fixed">fixed angle</option>
+            </select></label></div>
+          <div class="inset" id="p-rotate" hidden aria-hidden="true">
+            <div class="teach" id="rotateHint">▸ rotation unlocked! &nbsp; spin those icons ✦</div>
+            <div class="row"><label>degrees <input id="rotateDeg" type="range" min="0" max="360" step="5" value="45" /></label><span class="val" id="rotateDegVal">45°</span></div>
+          </div>
+          <div class="row"><label><input id="fadeByBrightness" type="checkbox" /> fade icons by brightness</label></div>
+          <div class="inset" id="p-fadeRange" hidden aria-hidden="true">
+            <div class="teach">▸ fade knobs unlocked! &nbsp; faintest ~ most solid</div>
+            <div class="row"><label>min <input id="fadeMin" type="range" min="0" max="1" step="0.05" value="0.25" /></label><span class="val" id="fadeMinVal">0.25</span></div>
+            <div class="row"><label>max <input id="fadeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="fadeMaxVal">1.00</span></div>
+          </div>
         </div>
       </section>
 

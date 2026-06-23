@@ -81,6 +81,23 @@ const expected = 16 * Math.sqrt(0.2 * 0.2 + (1 - 0.2 * 0.2) * 0.5); // ≈ 16*0.
 assert.ok(Math.abs(halfW - expected) < 0.2, `area-linear midtone width ~${expected.toFixed(2)}, got ${halfW}`);
 assert.ok(halfW > 16 * (0.2 + (1 - 0.2) * 0.5), 'area-linear midtone is larger than the old linear ramp');
 
+// rotation: 'fixed' tilts every cell by rotateDeg via an in-place rotate group.
+const rotFixed = emitCell(mid, { ...defaults, rotate: 'fixed', rotateDeg: 30 });
+assert.ok(rotFixed.includes('transform:rotate(30deg)'), 'fixed rotation applies rotateDeg');
+assert.ok(rotFixed.includes('transform-box:fill-box') && rotFixed.includes('transform-origin:center'),
+  'rotation pivots in place (fill-box + center)');
+// 'brightness' scales the angle by tone: mid (0.4) * 50 = 20deg.
+const rotBri = emitCell({ ...mid, brightness: 0.4 }, { ...defaults, rotate: 'brightness', rotateDeg: 50 });
+assert.ok(rotBri.includes('transform:rotate(20deg)'), 'brightness rotation = brightness * rotateDeg');
+// 'none' (default) emits no rotation wrapper — output unchanged.
+assert.ok(!emitCell(mid, defaults).includes('transform:rotate'), 'no rotation by default');
+
+// opacity: fadeByBrightness ramps the leaf <use> opacity over brightness.
+// range [0,1], brightness 0.4 -> opacity 0.4.
+const faded = emitCell({ ...mid, brightness: 0.4 }, { ...defaults, fadeByBrightness: true, fadeRange: [0, 1] });
+assert.ok(faded.includes('opacity="0.4"'), 'fade maps brightness onto leaf opacity');
+assert.ok(!emitCell(mid, defaults).includes('opacity='), 'no opacity attr by default (fully opaque)');
+
 // blockSize: merge NxN sample cells into one averaged icon. 4x4 grid, block 2 ->
 // 2x2 = 4 icons (vs 16), each the average of its block.
 const g16: Cell[] = [];

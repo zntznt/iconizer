@@ -71,12 +71,21 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   const ANIMS = MOTIONS.filter((m) => m !== 'none');
   const motion = flavor === 'motion' ? choose(ANIMS) : 'none';
 
+  // Rotation is cheap (static), so a roll can sprinkle it freely. Half the time
+  // upright; otherwise a tilt mode with a sensible angle for that mode.
+  const rotate = rnd() < 0.5 ? 'none' : choose(['brightness', 'jitter', 'fixed'] as const);
+  const rotateDeg = rotate === 'fixed' ? pick(72) * 5 // 0..355 (any angle)
+    : 15 + pick(34) * 5; // 15..180 sweep for field/jitter — readable, not a blur
+
   return {
     ...defaults,
     cols: 12 + pick(64), // 12..75 — keeps it legible, not absurdly fine
     blockSize: 1 + pick(3), // 1..3
     iconScale: +(0.6 + rnd() * 1.8).toFixed(1), // 0.6..2.4
     sizeByBrightness: rnd() < 0.5,
+    rotate,
+    rotateDeg,
+    fadeByBrightness: rnd() < 0.35,
     background: rnd() < 0.7 ? '#ffffff' : randHex(pick),
     layered,
     layerStyle: choose(LAYER_STYLES),

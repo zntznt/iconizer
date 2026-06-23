@@ -243,6 +243,45 @@ $('sizeMax').addEventListener('input', (e) => {
   scheduleRedraw();
 });
 
+// rotate icons: mode dropdown reveals the degrees knob; the hint reframes the
+// knob ('±jitter' vs 'tilt') so the same slider reads right per mode.
+const ROTATE_HINTS: Record<string, string> = {
+  brightness: "▸ dark leans one way, light the other — an orientation field ✦",
+  jitter: "▸ scatter unlocked! &nbsp; each icon tilts up to ±this much",
+  fixed: '▸ tilt every icon by this angle ✦',
+};
+function syncRotateUI() {
+  const mode = ($('rotate') as HTMLSelectElement).value;
+  disclose('p-rotate', mode !== 'none');
+  if (mode !== 'none') $('rotateHint').innerHTML = ROTATE_HINTS[mode];
+  $('rotateDegVal').textContent = `${($('rotateDeg') as HTMLInputElement).value}°`;
+}
+$('rotate').addEventListener('change', (e) => {
+  settings.rotate = (e.target as HTMLSelectElement).value as Settings['rotate'];
+  syncRotateUI();
+  scheduleRedraw();
+});
+$('rotateDeg').addEventListener('input', (e) => {
+  settings.rotateDeg = +(e.target as HTMLInputElement).value;
+  $('rotateDegVal').textContent = `${settings.rotateDeg}°`;
+  scheduleRedraw();
+});
+$('fadeByBrightness').addEventListener('change', (e) => {
+  settings.fadeByBrightness = (e.target as HTMLInputElement).checked;
+  disclose('p-fadeRange', (e.target as HTMLInputElement).checked);
+  scheduleRedraw();
+});
+$('fadeMin').addEventListener('input', (e) => {
+  settings.fadeRange[0] = +(e.target as HTMLInputElement).value;
+  $('fadeMinVal').textContent = settings.fadeRange[0].toFixed(2);
+  scheduleRedraw();
+});
+$('fadeMax').addEventListener('input', (e) => {
+  settings.fadeRange[1] = +(e.target as HTMLInputElement).value;
+  $('fadeMaxVal').textContent = settings.fadeRange[1].toFixed(2);
+  scheduleRedraw();
+});
+
 $('layered').addEventListener('change', async (e) => {
   const cb = e.target as HTMLInputElement;
   if (cb.checked && needsHeavyWarning({ layered: true })) {
@@ -336,8 +375,10 @@ function syncSchemeUI() {
 // The three NEW disclosure insets (scheme insets are handled by syncSchemeUI).
 function syncDisclosure() {
   disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
+  disclose('p-fadeRange', ($('fadeByBrightness') as HTMLInputElement).checked);
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
+  syncRotateUI();
   refreshExportState();
 }
 
@@ -443,6 +484,11 @@ function syncControls() {
   set('sizeByBrightness', settings.sizeByBrightness);
   set('sizeMin', settings.sizeRange[0]); $('sizeMinVal').textContent = settings.sizeRange[0].toFixed(2);
   set('sizeMax', settings.sizeRange[1]); $('sizeMaxVal').textContent = settings.sizeRange[1].toFixed(2);
+  set('rotate', settings.rotate);
+  set('rotateDeg', settings.rotateDeg); $('rotateDegVal').textContent = `${settings.rotateDeg}°`;
+  set('fadeByBrightness', settings.fadeByBrightness);
+  set('fadeMin', settings.fadeRange[0]); $('fadeMinVal').textContent = settings.fadeRange[0].toFixed(2);
+  set('fadeMax', settings.fadeRange[1]); $('fadeMaxVal').textContent = settings.fadeRange[1].toFixed(2);
   set('layered', settings.layered);
   set('layerStyle', settings.layerStyle);
   set('layerCount', settings.layerCount);

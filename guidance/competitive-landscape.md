@@ -37,7 +37,11 @@ upload-your-own-icon + tint + channel-split + animate + export, client-side.
    glyphs; SVG recolorers do one icon, not a mosaic. The combination —
    *your* icon as the repeated, per-cell-tinted unit, with multi-icon
    brightness ramping (dark→light, ASCII-style but vector) — isn't offered
-   elsewhere together.
+   elsewhere together. Per-cell *orientation* mapping (rotation by brightness =
+   an orientation field) leans on this same edge: only meaningful because the
+   tile is an arbitrary directional vector — halftone dots are radially
+   symmetric, ASCII glyphs can't rotate. (Claim by reasoning, not a fresh
+   search — verify before leaning on it in copy.)
 
 3. **Motion that survives export.** Most halftone-SVG tools paywall SVG export
    (HalftonePro: $15). iconizer's CSS-keyframe animation is baked *into* the SVG
