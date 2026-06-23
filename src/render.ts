@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import { poolCells } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
-import { transformColor } from './color.ts';
+import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, type RGB } from './color.ts';
 import { motionStyle, motionAttrs, hash01 } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
@@ -36,6 +36,20 @@ function scaleFor(cell: Cell, settings: Settings): number {
   // floor at a tiny positive value so icons can shrink small but never vanish
   // entirely (sizeRange [0,0] otherwise -> a blank mosaic, looks like a bug).
   return Math.max(0.02, s);
+}
+
+/** Grid position -> u in [0,1] for the gradient-wash overlay, per direction. */
+function overlayU(col: number, row: number, cols: number, rows: number, dir: string): number {
+  switch (dir) {
+    case 'h': return cols > 1 ? col / (cols - 1) : 0;
+    case 'v': return rows > 1 ? row / (rows - 1) : 0;
+    case 'diag': return (col + row) / Math.max(1, cols - 1 + rows - 1);
+    case 'radial': {
+      const cx = (cols - 1) / 2, cy = (rows - 1) / 2;
+      return Math.hypot(col - cx, row - cy) / (Math.hypot(cx, cy) || 1);
+    }
+    default: return 0;
+  }
 }
 
 /** Per-cell rotation in degrees (0 = upright). 'brightness' turns the mosaic into
@@ -231,11 +245,29 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings): st
   const outW = settings.cols * CELL;
   const outH = fullRows * CELL;
 
-  // Single upstream colour remap: everything downstream (filter defs, solid
-  // fill, CMY split) consumes the transformed colour, so schemes compose with
-  // both modes for free. 'none' is identity -> prior output unchanged.
-  if (settings.scheme.kind !== 'none') {
-    grid = grid.map((c) => ({ ...c, ...transformColor(c, settings.scheme) }));
+  // Single upstream colour stage: adjust -> (dither) -> scheme -> (overlay).
+  // Everything downstream (filter defs, solid fill, CMY split) consumes the
+  // result, so the whole stage composes with both modes for free. All-neutral
+  // -> identity -> prior output unchanged. cell.brightness (size/rotation/icon
+  // pick) keeps the ORIGINAL sampled tone, matching prior behaviour.
+  const { adjust, overlay } = settings;
+  const doAdjust = adjustActive(adjust);
+  const doScheme = settings.scheme.kind !== 'none';
+  const doDither = settings.dither && schemeQuantizes(settings.scheme);
+  const doOverlay = overlay.dir !== 'none' && overlay.strength > 0;
+  if (doAdjust || doScheme || doDither || doOverlay) {
+    const spread = settings.ditherStrength * 255;
+    grid = grid.map((c) => {
+      let rgb: RGB = { r: c.r, g: c.g, b: c.b };
+      if (doAdjust) rgb = adjustColor(rgb, adjust);
+      if (doDither) {
+        const off = (bayer(c.col, c.row) - 0.5) * spread;
+        rgb = { r: rgb.r + off, g: rgb.g + off, b: rgb.b + off };
+      }
+      if (doScheme) rgb = transformColor(rgb, settings.scheme);
+      if (doOverlay) rgb = overlayColor(rgb, overlayU(c.col, c.row, cols, rows, overlay.dir), overlay);
+      return { ...c, r: rgb.r, g: rgb.g, b: rgb.b };
+    });
   }
 
   // One <symbol id="icon{i}"> per uploaded SVG; each cell picks one by brightness

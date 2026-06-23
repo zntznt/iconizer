@@ -1,5 +1,5 @@
 import { defaults, type Settings } from './settings.ts';
-import { PALETTES, type Scheme } from './color.ts';
+import { PALETTES, GRADIENTS, NEUTRAL_ADJUST, type Scheme } from './color.ts';
 import type { Motion, StaggerMode } from './motion.ts';
 
 /**
@@ -41,8 +41,10 @@ const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 's
 const STAGGERS: StaggerMode[] = ['none', 'ripple', 'brightness', 'random'];
 const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph'] as const;
 const SCHEMES = ['none', 'grayscale', 'invert', 'sepia', 'threshold', 'hue',
-  'posterize', 'duotone', 'tritone', 'palette'] as const;
+  'posterize', 'duotone', 'tritone', 'gradient', 'solarize', 'channelswap', 'palette'] as const;
 const PALETTE_NAMES = Object.keys(PALETTES);
+const GRADIENT_NAMES = Object.keys(GRADIENTS);
+const SWAP_ORDERS = ['rbg', 'grb', 'gbr', 'brg', 'bgr'] as const;
 const randHex = (pick: (n: number) => number) =>
   '#' + [0, 0, 0].map(() => pick(256).toString(16).padStart(2, '0')).join('');
 
@@ -61,6 +63,9 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   else if (kind === 'hue') scheme = { kind, deg: pick(72) * 5 }; // 0..355 in 5° steps
   else if (kind === 'duotone') scheme = { kind, dark: rgb(randHex(pick)), light: rgb(randHex(pick)) };
   else if (kind === 'tritone') scheme = { kind, dark: rgb(randHex(pick)), mid: rgb(randHex(pick)), light: rgb(randHex(pick)) };
+  else if (kind === 'gradient') scheme = { kind, stops: GRADIENTS[choose(GRADIENT_NAMES)] };
+  else if (kind === 'solarize') scheme = { kind, cutoff: +(0.3 + rnd() * 0.5).toFixed(2) };
+  else if (kind === 'channelswap') scheme = { kind, order: choose(SWAP_ORDERS) };
   else if (kind === 'palette') scheme = { kind, colors: PALETTES[choose(PALETTE_NAMES)] };
   else scheme = { kind } as Scheme; // none | grayscale | invert | sepia
 
@@ -86,6 +91,19 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     rotate,
     rotateDeg,
     fadeByBrightness: rnd() < 0.35,
+    // adjust: usually leave tone alone; sometimes a mild graded push.
+    adjust: rnd() < 0.55 ? { ...NEUTRAL_ADJUST } : {
+      brightness: +(0.85 + rnd() * 0.4).toFixed(2),
+      contrast: +(0.85 + rnd() * 0.5).toFixed(2),
+      saturation: +(0.5 + rnd() * 1.2).toFixed(2),
+      temperature: +((rnd() * 2 - 1) * 0.5).toFixed(2),
+    },
+    dither: rnd() < 0.3,
+    ditherStrength: +(0.3 + rnd() * 0.5).toFixed(2),
+    overlay: rnd() < 0.3
+      ? { dir: choose(['h', 'v', 'diag', 'radial'] as const), preset: choose(GRADIENT_NAMES),
+        blend: choose(['mix', 'multiply', 'screen'] as const), strength: +(0.2 + rnd() * 0.5).toFixed(2) }
+      : { dir: 'none' as const, preset: 'vaporwave', blend: 'mix' as const, strength: 0.5 },
     background: rnd() < 0.7 ? '#ffffff' : randHex(pick),
     layered,
     layerStyle: choose(LAYER_STYLES),

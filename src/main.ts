@@ -3,7 +3,7 @@ import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
-import { PALETTES, type Scheme, type RGB } from './color.ts';
+import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -319,6 +319,13 @@ const hex2rgb = (h: string): RGB => ({
   b: parseInt(h.slice(5, 7), 16),
 });
 
+/** The preset name whose color list equals `colors`, or null (= custom). Lets
+ *  a restored palette/gradient round-trip back to its named preset, not 'custom'. */
+const matchPreset = (table: Record<string, RGB[]>, colors: RGB[]): string | null =>
+  Object.keys(table).find((name) =>
+    table[name].length === colors.length
+    && table[name].every((c, i) => c.r === colors[i]?.r && c.g === colors[i]?.g && c.b === colors[i]?.b)) ?? null;
+
 function readScheme(): Scheme {
   const kind = ($('scheme') as HTMLSelectElement).value;
   switch (kind) {
@@ -335,12 +342,23 @@ function readScheme(): Scheme {
       return { kind, dark: hex2rgb(($('triDark') as HTMLInputElement).value),
         mid: hex2rgb(($('triMid') as HTMLInputElement).value),
         light: hex2rgb(($('triLight') as HTMLInputElement).value) };
+    case 'solarize':
+      return { kind, cutoff: +($('solCutoff') as HTMLInputElement).value };
+    case 'channelswap':
+      return { kind, order: ($('swapOrder') as HTMLSelectElement).value };
     case 'palette': {
       const preset = ($('palettePreset') as HTMLSelectElement).value;
       const colors = preset === 'custom'
         ? ['pal0', 'pal1', 'pal2'].map((id) => hex2rgb(($(id) as HTMLInputElement).value))
         : PALETTES[preset];
       return { kind, colors };
+    }
+    case 'gradient': {
+      const preset = ($('gradientPreset') as HTMLSelectElement).value;
+      const stops = preset === 'custom'
+        ? ['grad0', 'grad1', 'grad2', 'grad3'].map((id) => hex2rgb(($(id) as HTMLInputElement).value))
+        : GRADIENTS[preset];
+      return { kind, stops };
     }
     default:
       return { kind } as Scheme; // none | grayscale | invert | sepia
@@ -362,28 +380,85 @@ function syncSchemeUI() {
   disclose('p-hue', kind === 'hue');
   disclose('p-duotone', kind === 'duotone');
   disclose('p-tritone', kind === 'tritone');
+  disclose('p-gradient', kind === 'gradient');
+  disclose('p-solarize', kind === 'solarize');
+  disclose('p-channelswap', kind === 'channelswap');
   disclose('p-palette', kind === 'palette');
   // palette preset 'custom' reveals the 3 hand-pick swatches; presets hide them.
   disclose('p-palette-custom', kind === 'palette'
     && ($('palettePreset') as HTMLSelectElement).value === 'custom');
+  disclose('p-gradient-custom', kind === 'gradient'
+    && ($('gradientPreset') as HTMLSelectElement).value === 'custom');
   $('levelsVal').textContent = `${($('levels') as HTMLInputElement).value} steps`;
   $('threshVal').textContent = (+($('thresh') as HTMLInputElement).value).toFixed(2);
   $('hueDegVal').textContent = `${($('hueDeg') as HTMLInputElement).value}°`;
+  $('solCutoffVal').textContent = (+($('solCutoff') as HTMLInputElement).value).toFixed(2);
   $('schemeHint').hidden = kind !== 'none'; // hint only while nothing's picked
 }
 
-// The three NEW disclosure insets (scheme insets are handled by syncSchemeUI).
+// The disclosure insets (scheme insets are handled by syncSchemeUI).
 function syncDisclosure() {
   disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
   disclose('p-fadeRange', ($('fadeByBrightness') as HTMLInputElement).checked);
+  disclose('p-dither', ($('dither') as HTMLInputElement).checked);
+  disclose('p-overlay', ($('overlayDir') as HTMLSelectElement).value !== 'none');
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
   syncRotateUI();
   refreshExportState();
 }
 
+// --- adjust panel (sat/bright/contrast/temp) — pre-scheme, always live -------
+function readAdjust(): Settings['adjust'] {
+  return {
+    brightness: +($('adjBright') as HTMLInputElement).value,
+    contrast: +($('adjContrast') as HTMLInputElement).value,
+    saturation: +($('adjSat') as HTMLInputElement).value,
+    temperature: +($('adjTemp') as HTMLInputElement).value,
+  };
+}
+for (const [id, label] of [['adjBright', 'adjBrightVal'], ['adjContrast', 'adjContrastVal'],
+  ['adjSat', 'adjSatVal'], ['adjTemp', 'adjTempVal']] as const) {
+  $(id).addEventListener('input', () => {
+    settings.adjust = readAdjust();
+    $(label).textContent = (+($(id) as HTMLInputElement).value).toFixed(2);
+    scheduleRedraw();
+  });
+}
+
+// --- dither (under quantising schemes) ---------------------------------------
+$('dither').addEventListener('change', (e) => {
+  settings.dither = (e.target as HTMLInputElement).checked;
+  disclose('p-dither', settings.dither);
+  scheduleRedraw();
+});
+$('ditherStrength').addEventListener('input', (e) => {
+  settings.ditherStrength = +(e.target as HTMLInputElement).value;
+  $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  scheduleRedraw();
+});
+
+// --- gradient overlay (post-scheme wash) -------------------------------------
+function readOverlay(): Settings['overlay'] {
+  return {
+    dir: ($('overlayDir') as HTMLSelectElement).value as Settings['overlay']['dir'],
+    preset: ($('overlayPreset') as HTMLSelectElement).value,
+    blend: ($('overlayBlend') as HTMLSelectElement).value as Settings['overlay']['blend'],
+    strength: +($('overlayStrength') as HTMLInputElement).value,
+  };
+}
+for (const id of ['overlayDir', 'overlayPreset', 'overlayBlend', 'overlayStrength']) {
+  $(id).addEventListener('input', () => {
+    settings.overlay = readOverlay();
+    disclose('p-overlay', settings.overlay.dir !== 'none');
+    $('overlayStrengthVal').textContent = settings.overlay.strength.toFixed(2);
+    scheduleRedraw();
+  });
+}
+
 for (const id of ['scheme', 'levels', 'thresh', 'hueDeg', 'duoDark', 'duoLight',
-  'triDark', 'triMid', 'triLight', 'palettePreset', 'pal0', 'pal1', 'pal2']) {
+  'triDark', 'triMid', 'triLight', 'palettePreset', 'pal0', 'pal1', 'pal2',
+  'gradientPreset', 'grad0', 'grad1', 'grad2', 'grad3', 'solCutoff', 'swapOrder']) {
   $(id).addEventListener('input', () => {
     settings.scheme = readScheme();
     syncSchemeUI();
@@ -496,6 +571,18 @@ function syncControls() {
   set('motion', settings.motion);
   set('motionSpeed', settings.motionSpeed); $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   set('staggerMode', settings.staggerMode);
+  // adjust panel
+  set('adjBright', settings.adjust.brightness); $('adjBrightVal').textContent = settings.adjust.brightness.toFixed(2);
+  set('adjContrast', settings.adjust.contrast); $('adjContrastVal').textContent = settings.adjust.contrast.toFixed(2);
+  set('adjSat', settings.adjust.saturation); $('adjSatVal').textContent = settings.adjust.saturation.toFixed(2);
+  set('adjTemp', settings.adjust.temperature); $('adjTempVal').textContent = settings.adjust.temperature.toFixed(2);
+  // dither + overlay
+  set('dither', settings.dither);
+  set('ditherStrength', settings.ditherStrength); $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  set('overlayDir', settings.overlay.dir);
+  set('overlayPreset', settings.overlay.preset);
+  set('overlayBlend', settings.overlay.blend);
+  set('overlayStrength', settings.overlay.strength); $('overlayStrengthVal').textContent = settings.overlay.strength.toFixed(2);
   // scheme + its conditional sub-controls
   set('scheme', settings.scheme.kind);
   if (settings.scheme.kind === 'posterize') set('levels', settings.scheme.levels);
@@ -510,14 +597,20 @@ function syncControls() {
     set('triMid', rgb2hex(settings.scheme.mid));
     set('triLight', rgb2hex(settings.scheme.light));
   }
+  if (settings.scheme.kind === 'solarize') set('solCutoff', settings.scheme.cutoff);
+  if (settings.scheme.kind === 'channelswap') set('swapOrder', settings.scheme.order);
   if (settings.scheme.kind === 'palette') {
     // Match the colors against a known preset; fall back to 'custom' + swatches.
     const colors = settings.scheme.colors;
-    const presetName = Object.keys(PALETTES).find((name) =>
-      PALETTES[name].length === colors.length
-      && PALETTES[name].every((c, i) => c.r === colors[i]?.r && c.g === colors[i]?.g && c.b === colors[i]?.b));
+    const presetName = matchPreset(PALETTES, colors);
     set('palettePreset', presetName ?? 'custom');
     if (!presetName) colors.slice(0, 3).forEach((c, i) => set(`pal${i}`, rgb2hex(c)));
+  }
+  if (settings.scheme.kind === 'gradient') {
+    const stops = settings.scheme.stops;
+    const presetName = matchPreset(GRADIENTS, stops);
+    set('gradientPreset', presetName ?? 'custom');
+    if (!presetName) stops.slice(0, 4).forEach((c, i) => set(`grad${i}`, rgb2hex(c)));
   }
   syncSchemeUI();
   syncLayerCountUI();
