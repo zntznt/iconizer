@@ -280,7 +280,7 @@ $('sizeMax').addEventListener('input', (e) => {
 // rotate icons: mode dropdown reveals the degrees knob; the hint reframes the
 // knob ('±jitter' vs 'tilt') so the same slider reads right per mode.
 const ROTATE_HINTS: Record<string, string> = {
-  brightness: "▸ dark leans one way, light the other — an orientation field ✦",
+  brightness: "▸ dark leans one way, light the other, like an orientation field ✦",
   jitter: "▸ scatter unlocked! &nbsp; each icon tilts up to ±this much",
   fixed: '▸ tilt every icon by this angle ✦',
 };

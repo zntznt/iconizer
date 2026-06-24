@@ -570,7 +570,7 @@
             <div class="row" id="p-layerCount"><label>layers
               <select id="layerCount"><option value="3">3 ▸ full</option><option value="2">2 ▸ drop last</option></select></label></div>
             <div class="row"><label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label><span class="val" id="layerOffsetVal">0</span></div>
-            <div class="dw-nudge">⚠ heavy with Motion FX on a big grid — drop columns if it chugs</div>
+            <div class="dw-nudge">⚠ heavy with Motion FX on a big grid. Drop columns if it chugs</div>
           </div>
         </div>
       </section>
@@ -582,7 +582,7 @@
       <section class="win" id="winScheme">
         <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
-          <div class="teach">▸ adjust &nbsp;—&nbsp; tweak tone before the scheme ✦</div>
+          <div class="teach">▸ adjust: tweak tone before the scheme ✦</div>
           <div class="row"><label>brightness <input id="adjBright" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjBrightVal">1.00</span></div>
           <div class="row"><label>contrast <input id="adjContrast" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjContrastVal">1.00</span></div>
           <div class="row"><label>saturation <input id="adjSat" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjSatVal">1.00</span></div>
@@ -698,7 +698,7 @@
           </div>
           <div class="row"><label><input id="dither" type="checkbox" /> ordered dither (retro crunch)</label></div>
           <div class="inset" id="p-dither" hidden aria-hidden="true">
-            <div class="teach" id="ditherHint">▸ Bayer dither — only bites on threshold / posterize / palette ✦</div>
+            <div class="teach" id="ditherHint">▸ Bayer dither only bites on threshold / posterize / palette ✦</div>
             <div class="row"><label>strength <input id="ditherStrength" type="range" min="0" max="1" step="0.05" value="0.5" /></label><span class="val" id="ditherStrengthVal">0.50</span></div>
           </div>
           <div class="divider">✦ ✦ ✦</div>
@@ -761,7 +761,7 @@
               </select></label></div>
             <!-- shown by main.ts when motion is on AND the grid is big enough to
                  drop frames: a non-blocking nudge (no cap — keeps the full look). -->
-            <div class="dw-nudge" id="motionPerfNudge" hidden>⚠ buttery up to ~50 columns — fewer columns (or chunky blocks) = smoother motion on a big grid</div>
+            <div class="dw-nudge" id="motionPerfNudge" hidden>⚠ buttery up to ~50 columns. Fewer columns (or chunky blocks) = smoother motion on a big grid</div>
           </div>
         </div>
       </section>
