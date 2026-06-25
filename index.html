@@ -321,6 +321,8 @@
       }
       .qs-item { background: var(--face); border: 0; box-shadow: var(--bevel-up); padding: 6px 10px; text-align: left; cursor: pointer; font-size: 13px; }
       .qs-item:disabled { color: #808080; cursor: default; }
+      .qs-scale { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 13px; border-bottom: 1px solid #808080; }
+      .qs-scale select { font-size: 13px; }
 
       /* Start menu */
       .start-menu {
@@ -920,6 +922,7 @@
       <div class="quick-save">
         <button id="quickSave" class="btn98" type="button" aria-haspopup="menu" aria-expanded="false">💾 Save ▾</button>
         <div id="quickSaveMenu" class="qs-menu" hidden>
+          <label class="qs-scale">scale <select id="scaleQuick"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
           <button class="qs-item" type="button" data-proxy="dlSvg">💾 .SVG</button>
           <button class="qs-item" type="button" data-proxy="dlPng">🖼️ .PNG</button>
           <button class="qs-item" type="button" data-proxy="dlGif">🎞️ .GIF</button>

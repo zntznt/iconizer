@@ -994,6 +994,16 @@ startMenu.addEventListener('click', (e) => {
 // quick-save split button: proxies click the canonical export buttons in Export.exe.
 const quickSave = $('quickSave') as HTMLButtonElement;
 const qsMenu = $('quickSaveMenu');
+
+// Two scale pickers, one value: the taskbar Save menu's #scaleQuick mirrors the
+// Export.exe #scale (which the download handlers read), so touching either keeps
+// both in sync. #scale stays the single source the export path reads.
+const scaleMain = $('scale') as HTMLSelectElement;
+const scaleQuick = $('scaleQuick') as HTMLSelectElement;
+scaleQuick.value = scaleMain.value;
+scaleMain.addEventListener('change', () => { scaleQuick.value = scaleMain.value; });
+scaleQuick.addEventListener('change', () => { scaleMain.value = scaleQuick.value; });
+
 quickSave.addEventListener('click', () => {
   qsMenu.hidden = !qsMenu.hidden;
   quickSave.setAttribute('aria-expanded', String(!qsMenu.hidden));
