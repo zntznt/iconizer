@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { transformColor, adjustColor, overlayColor, bayer, schemeQuantizes,
-  NEUTRAL_ADJUST, PALETTES, GRADIENTS, type RGB } from './color.ts';
+  NEUTRAL_ADJUST, PALETTES, GRADIENTS, rgbToHsl, hslToRgb, type RGB } from './color.ts';
 
 const rgb = (r: number, g: number, b: number): RGB => ({ r, g, b });
 
@@ -107,4 +107,18 @@ assert.deepEqual(overlayColor(ovBase, 0.5, { dir: 'h', preset: 'vaporwave', blen
 const ovFull = overlayColor(ovBase, 0, { dir: 'h', preset: 'fire', blend: 'mix', strength: 1 });
 assert.deepEqual(ovFull, GRADIENTS.fire[0], 'overlay mix strength 1 at u=0 = first gradient stop');
 
-console.log('color.test.ts: ok (schemes + adjust + solarize/channelswap + dither + overlay)');
+// HSL round-trip: rgbToHsl then hslToRgb returns the original (within rounding)
+// for saturated colours, and hue is read correctly (red ~0, green ~1/3, blue ~2/3).
+{
+  for (const c of [rgb(200, 40, 40), rgb(40, 200, 60), rgb(40, 80, 220), rgb(123, 200, 75)]) {
+    const back = hslToRgb(rgbToHsl(c));
+    assert.ok(Math.abs(back.r - c.r) <= 1 && Math.abs(back.g - c.g) <= 1 && Math.abs(back.b - c.b) <= 1,
+      `HSL round-trip ${JSON.stringify(c)} -> ${JSON.stringify(back)}`);
+  }
+  assert.ok(Math.abs(rgbToHsl(rgb(255, 0, 0)).h - 0) < 0.01, 'red hue ~ 0');
+  assert.ok(Math.abs(rgbToHsl(rgb(0, 255, 0)).h - 1 / 3) < 0.01, 'green hue ~ 1/3');
+  assert.ok(Math.abs(rgbToHsl(rgb(0, 0, 255)).h - 2 / 3) < 0.01, 'blue hue ~ 2/3');
+  assert.equal(rgbToHsl(rgb(128, 128, 128)).s, 0, 'grey has zero saturation');
+}
+
+console.log('color.test.ts: ok (schemes + adjust + solarize/channelswap + dither + overlay + hsl)');

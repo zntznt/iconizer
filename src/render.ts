@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import { poolCells } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
-import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, type RGB } from './color.ts';
+import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, rgbToHsl, hslToRgb, type RGB } from './color.ts';
 import { motionStyle, motionAttrs, hash01 } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
@@ -89,13 +89,22 @@ function rotateWrap(body: string, cell: Cell, index: number, settings: Settings)
     `transform-origin:center">${body}</g>`;
 }
 
-/** Which icon a cell draws, by brightness: dark cell -> icon 0, light -> last.
- *  Order your SVGs dense->sparse (like ASCII art: '@' dark ... '.' light). */
-function iconIndex(cell: Cell, count: number): number {
+/** Which icon a cell draws. 'brightness' (default): dark cell -> icon 0, light ->
+ *  last, so ordering your SVGs dense->sparse reads like ASCII art ('@' .. '.').
+ *  'hue': the cell's hue angle (0..1 round the wheel) picks the icon, so reds get
+ *  one tile, greens another — the list order becomes "around the colour wheel".
+ *  Near-grey cells (sat below SAT_FLOOR) have no meaningful hue, so they fall back
+ *  to the brightness pick instead of collapsing every desaturated cell onto icon0. */
+const SAT_FLOOR = 0.15;
+function iconIndex(cell: Cell, count: number, metric: Settings['iconMetric']): number {
   if (count <= 1) return 0;
-  // dark cell (low brightness) -> icon0; light -> last. clamp so brightness==1
-  // doesn't overflow to index count.
-  return Math.min(count - 1, Math.floor(cell.brightness * count));
+  let t = cell.brightness; // dark -> 0, light -> 1
+  if (metric === 'hue') {
+    const { h, s } = rgbToHsl({ r: cell.r, g: cell.g, b: cell.b });
+    if (s >= SAT_FLOOR) t = h; // saturated enough to read a hue -> map round the wheel
+  }
+  // clamp so t==1 (light cell / hue at the wheel's top) doesn't overflow to index count.
+  return Math.min(count - 1, Math.floor(t * count));
 }
 
 // Render target. 'export' uses <symbol>+<use> (define the icon once, tiny file —
@@ -304,14 +313,26 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   const doScheme = settings.scheme.kind !== 'none';
   const doDither = settings.dither && schemeQuantizes(settings.scheme);
   const doOverlay = overlay.dir !== 'none' && overlay.strength > 0;
-  if (doAdjust || doScheme || doDither || doOverlay) {
+  const doJitter = settings.colorJitter > 0;
+  if (doAdjust || doScheme || doDither || doOverlay || doJitter) {
     const spread = settings.ditherStrength * 255;
-    grid = grid.map((c) => {
+    grid = grid.map((c, i) => {
       let rgb: RGB = { r: c.r, g: c.g, b: c.b };
       if (doAdjust) rgb = adjustColor(rgb, adjust);
       if (doDither) {
         const off = (bayer(c.col, c.row) - 0.5) * spread;
         rgb = { r: rgb.r + off, g: rgb.g + off, b: rgb.b + off };
+      }
+      // Colour jitter BEFORE the scheme: a deterministic hue+sat nudge per cell
+      // (two decorrelated hashes off the index) so a flat region shimmers into a
+      // sticker-bomb. Pre-scheme means palette/threshold still snap jittered cells
+      // on-palette for free. Amount scales the spread; sat shifts both ways.
+      if (doJitter) {
+        const k = settings.colorJitter;
+        const hsl = rgbToHsl(rgb);
+        hsl.h += (hash01(i) - 0.5) * 0.5 * k;            // up to ±90° of hue at k=1
+        hsl.s = Math.max(0, Math.min(1, hsl.s + (hash01(i * 7 + 1) - 0.5) * k));
+        rgb = hslToRgb(hsl);
       }
       if (doScheme) rgb = transformColor(rgb, settings.scheme);
       if (doOverlay) rgb = overlayColor(rgb, overlayU(c.col, c.row, cols, rows, overlay.dir), overlay);
@@ -338,7 +359,7 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   if (settings.layered) bgFill = SUBTRACTIVE.has(settings.layerStyle) ? '#ffffff' : '#000000';
   const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) =>
-    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length)])).join('');
+    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length, settings.iconMetric)])).join('');
 
   // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
   // lets the maximized CSS size it correctly with min() (CSS can't read a ratio at

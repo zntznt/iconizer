@@ -48,6 +48,43 @@ export type Overlay = {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp255 = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
 
+/** RGB (0-255) -> HSL, each component 0..1. h wraps, so hue 0 == hue 1.
+ *  Shared by the hue-mapped icon pick and the per-cell colour jitter — both need
+ *  a cell's hue/sat, which the luma-preserving `hue` scheme matrix can't give. */
+export function rgbToHsl({ r, g, b }: RGB): { h: number; s: number; l: number } {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l }; // grey: hue is meaningless
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return { h, s, l };
+}
+
+/** HSL (each 0..1, h wraps) -> RGB (0-255). Inverse of rgbToHsl. */
+export function hslToRgb({ h, s, l }: { h: number; s: number; l: number }): RGB {
+  h = ((h % 1) + 1) % 1; // wrap hue into [0,1)
+  if (s === 0) { const v = clamp255(l * 255); return { r: v, g: v, b: v }; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue2rgb = (t: number) => {
+    t = ((t % 1) + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return {
+    r: clamp255(hue2rgb(h + 1 / 3) * 255),
+    g: clamp255(hue2rgb(h) * 255),
+    b: clamp255(hue2rgb(h - 1 / 3) * 255),
+  };
+}
+
 const hex = (h: string): RGB => ({
   r: parseInt(h.slice(1, 3), 16),
   g: parseInt(h.slice(3, 5), 16),

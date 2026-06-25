@@ -185,6 +185,34 @@ assert.ok(render(dark, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon
 assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon1"'),
   'light cell -> icon1 (last)');
 
+// iconMetric 'hue': pick by hue angle, not brightness. A red cell (hue 0) and a
+// cyan cell (hue 0.5) at the SAME brightness must pick DIFFERENT icons — proof the
+// hue channel, not luma, drives the choice. (Same brightness -> identical in
+// 'brightness' mode, so any difference here is the hue map doing its job.)
+const hueRed: Cell[] = [{ col: 0, row: 0, r: 200, g: 40, b: 40, brightness: 0.4 }];
+const hueCyan: Cell[] = [{ col: 0, row: 0, r: 40, g: 200, b: 200, brightness: 0.4 }];
+const hueOpts = { ...defaults, cols: 1, iconMetric: 'hue' as const };
+assert.ok(render(hueRed, twoIcons, hueOpts).includes('href="#icon0"'), 'hue: red (hue~0) -> icon0');
+assert.ok(render(hueCyan, twoIcons, hueOpts).includes('href="#icon1"'), 'hue: cyan (hue~0.5) -> icon1');
+// Saturation floor: a near-grey cell has no usable hue, so it must FALL BACK to
+// the brightness pick (a dark grey -> icon0), not collapse arbitrarily.
+const grey: Cell[] = [{ col: 0, row: 0, r: 30, g: 32, b: 31, brightness: 0.12 }];
+assert.ok(render(grey, twoIcons, hueOpts).includes('href="#icon0"'),
+  'hue: near-grey cell falls back to brightness (dark -> icon0)');
+
+// colorJitter: a non-zero jitter must CHANGE the output of a flat patch (otherwise
+// it is a dead knob), and jitter 0 must be byte-identical to no jitter (regression
+// guard, since it sits in the always-on color stage).
+const flat: Cell[] = [
+  { col: 0, row: 0, r: 80, g: 120, b: 200, brightness: 0.45 },
+  { col: 1, row: 0, r: 80, g: 120, b: 200, brightness: 0.45 },
+];
+const noJit = render(flat, svg, { ...defaults, cols: 2 });
+assert.equal(render(flat, svg, { ...defaults, cols: 2, colorJitter: 0 }), noJit,
+  'colorJitter 0 -> identical to no jitter (regression guard)');
+const jit = render(flat, svg, { ...defaults, cols: 2, colorJitter: 0.8 });
+assert.notEqual(jit, noJit, 'colorJitter > 0 must change a flat patch');
+
 // RGB additive layered style: 3 full-size icons carrying each channel's TRUE
 // value, screen-blended over black so overlaps add back to the original colour.
 // circle icon (not the rect fixture) so counting <rect> only catches backgrounds.

@@ -26,6 +26,8 @@ export type Settings = {
   layerCount: 2 | 3; // cmy/ryb only: inks to stack (3 = full, 2 = drop the last)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
   adjust: Adjust; // pre-scheme tonal/colour tweak (brightness/contrast/sat/temp)
+  colorJitter: number; // 0..1 per-cell hue/sat scatter (deterministic, from cell hash); 0 = off
+  iconMetric: 'brightness' | 'hue'; // which cell channel picks the tile from the icon list
   scheme: Scheme; // remap each cell color upstream of solid/layered
   dither: boolean; // ordered (Bayer) dither under quantising schemes
   ditherStrength: number; // 0..1 dither spread
@@ -53,6 +55,8 @@ export const defaults: Settings = {
   layerCount: 3,
   layerOffset: 0,
   adjust: { ...NEUTRAL_ADJUST },
+  colorJitter: 0,
+  iconMetric: 'brightness',
   scheme: { kind: 'none' },
   dither: false,
   ditherStrength: 0.5,

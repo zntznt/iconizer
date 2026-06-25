@@ -117,6 +117,48 @@ function scheduleRedraw() {
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => { raf = 0; redraw(); });
   }, 50);
+  commitHistory();
+}
+
+// --- undo / redo: a bounded ring of settings snapshots ----------------------
+// Snapshots are debounced (a slider drag = ONE entry, not 30) and pushed only
+// when settings actually changed, so the stack reads like discrete edits. Not
+// persisted across reloads (the permalink already carries the latest state). The
+// image/icons are NOT in here — undo steps the knobs, never your loaded files.
+const HISTORY_CAP = 20;
+const history: Settings[] = [structuredClone(settings)];
+let histAt = 0; // index of the live state within `history`
+let restoring = false; // true while undo/redo applies a snapshot (suppresses re-commit)
+let histTimer: number | undefined;
+function commitHistory() {
+  if (restoring) return;
+  clearTimeout(histTimer);
+  histTimer = setTimeout(() => {
+    if (JSON.stringify(settings) === JSON.stringify(history[histAt])) return; // no real change
+    history.splice(histAt + 1); // drop any redo tail — a new edit forks the future
+    history.push(structuredClone(settings));
+    if (history.length > HISTORY_CAP) history.shift();
+    histAt = history.length - 1;
+    refreshUndoButtons();
+  }, 500);
+}
+function applySnapshot(i: number) {
+  histAt = i;
+  restoring = true;
+  Object.assign(settings, structuredClone(history[i]));
+  syncControls();
+  resample(); // cols/background live in settings, so the grid may need a re-sample
+  redraw();
+  restoring = false;
+  refreshUndoButtons();
+}
+function undo() { if (histAt > 0) applySnapshot(histAt - 1); }
+function redo() { if (histAt < history.length - 1) applySnapshot(histAt + 1); }
+function refreshUndoButtons() {
+  const u = document.getElementById('undoBtn') as HTMLButtonElement | null;
+  const r = document.getElementById('redoBtn') as HTMLButtonElement | null;
+  if (u) u.disabled = histAt <= 0;
+  if (r) r.disabled = histAt >= history.length - 1;
 }
 
 /** Load + validate an image file. Returns true on success. */
@@ -153,6 +195,53 @@ $('image').addEventListener('change', async (e) => {
   else flashBad("that's not a valid image!");
 });
 
+// --- "try a demo": instant first render with NO files of your own ------------
+// Paints a vivid radial-rainbow source on a canvas (no bundled asset to ship) and
+// pairs it with two distinct inline tiles (a filled disc for dark, a thin ring for
+// light) so the brightness ramp AND the hue-pick toggle both visibly do something,
+// then flips `layered` on so the channel-split machine lights up on first paint.
+// Everything goes through the normal load paths.
+const DEMO_TILES = [
+  // dark/dense: a solid disc
+  '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/></svg>',
+  // light/sparse: a heart outline (thin, reads as "less ink")
+  '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 21s-7.5-4.9-9.8-9.3C.8 8.4 2.3 5 5.5 5c2 0 3.4 1.2 4.2 2.5C10.6 6.2 12 5 14 5c3.2 0 4.7 3.4 3.3 6.7C19.5 16.1 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+];
+
+function demoImageFile(): Promise<File> {
+  // a 256x256 radial spectrum: rainbow hue around the centre, bright core to dark
+  // rim. Saturated + full-hue so hue-pick and CMY split both have something to bite.
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const g = cv.getContext('2d')!;
+  const cx = 128, cy = 128;
+  for (let y = 0; y < 256; y++) {
+    for (let x = 0; x < 256; x++) {
+      const dx = x - cx, dy = y - cy;
+      const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+      const dist = Math.min(1, Math.hypot(dx, dy) / 128);
+      g.fillStyle = `hsl(${hue}, 90%, ${70 - dist * 55}%)`;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  return new Promise((resolve) =>
+    cv.toBlob((b) => resolve(new File([b!], 'demo-spectrum.png', { type: 'image/png' })), 'image/png'));
+}
+
+async function loadDemo() {
+  if (icons.length) return; // already has tiles (e.g. a double-click) — don't pile on
+  const ok = await loadImage(await demoImageFile());
+  if (!ok) return;
+  const names = ['demo-disc.svg', 'demo-heart.svg'];
+  await loadSvgFiles(DEMO_TILES.map((s, i) => new File([s], names[i], { type: 'image/svg+xml' })));
+  setDwStage('need-svg'); // (the well hides once the render lands anyway)
+  // turn the differentiator on so the first thing a newcomer sees is the split look.
+  settings.layered = true;
+  syncControls();
+  redraw();
+  commitHistory();
+}
+
 // --- empty-state drop-well: two-stage onboarding (image -> svg) --------------
 
 const dropwell = $('dropwell');
@@ -171,8 +260,10 @@ function flashBad(msg: string) {
 // click anywhere on the well opens the right file picker for the current stage.
 dropwell.addEventListener('click', (e) => {
   if ((e.target as HTMLElement).closest('a')) return; // let the webring link through
+  if ((e.target as HTMLElement).closest('#tryDemo')) return; // demo button has its own handler
   $(dwStage() === 'need-svg' ? 'svg' : 'image').click();
 });
+$('tryDemo').addEventListener('click', (e) => { e.stopPropagation(); loadDemo(); });
 ['dragenter', 'dragover'].forEach((ev) =>
   dropwell.addEventListener(ev, (e) => { e.preventDefault(); dropwell.classList.add('drop-hot'); }),
 );
@@ -192,6 +283,21 @@ dropwell.addEventListener('drop', async (e) => {
   }
 });
 
+// Paste an image straight from the clipboard (Ctrl+V) — screenshots and copied
+// web images that never hit disk. Routes into the SAME load path as a file drop;
+// only acts at the need-image stage so a paste mid-session can't clobber the pic.
+// No clipboard.read()/permission dance: the paste event hands us the blob directly.
+window.addEventListener('paste', async (e) => {
+  if (dwStage() !== 'need-image') return;
+  const item = Array.from(e.clipboardData?.items ?? []).find((it) => it.type.startsWith('image/'));
+  const blob = item?.getAsFile();
+  if (!blob) return; // clipboard held text, not an image -> no-op
+  e.preventDefault();
+  const file = new File([blob], 'pasted.png', { type: blob.type });
+  if (await loadImage(file)) setDwStage('need-svg');
+  else flashBad("couldn't read that pasted image!");
+});
+
 // Render the icon list with remove buttons. Order = dark->light draw order.
 function renderIconList() {
   const list = $('iconList');
@@ -202,9 +308,25 @@ function renderIconList() {
     row.innerHTML = `<span>${i + 1}. ${it.name}</span><button data-i="${i}" type="button">×</button>`;
     list.appendChild(row);
   });
-  // the dark->light ordering rule only matters with 2+ icons; show it then.
-  $('iconOrderHint').hidden = icons.length < 2;
+  // the ordering rule + the brightness/hue picker only matter with 2+ icons.
+  const multi = icons.length >= 2;
+  $('iconOrderHint').hidden = !multi;
+  $('r-iconMetric').hidden = !multi;
+  syncIconMetricUI();
 }
+
+// In 'hue' mode the icon list orders round the colour wheel, not dark->light, so
+// reframe the order hint to avoid confusing the two. Hidden entirely with <2 icons.
+function syncIconMetricUI() {
+  const hue = settings.iconMetric === 'hue' && icons.length >= 2;
+  $('iconMetricHint').hidden = !hue;
+  $('iconOrderHint').hidden = settings.iconMetric === 'hue' || icons.length < 2;
+}
+$('iconMetric').addEventListener('change', (e) => {
+  settings.iconMetric = (e.target as HTMLSelectElement).value as Settings['iconMetric'];
+  syncIconMetricUI();
+  scheduleRedraw();
+});
 
 // Add one or more SVGs to the list (the file input allows multiple).
 $('svg').addEventListener('change', async (e) => {
@@ -439,6 +561,7 @@ function syncDisclosure() {
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
   syncRotateUI();
+  syncIconMetricUI();
   refreshExportState();
 }
 
@@ -469,6 +592,13 @@ $('dither').addEventListener('change', (e) => {
 $('ditherStrength').addEventListener('input', (e) => {
   settings.ditherStrength = +(e.target as HTMLInputElement).value;
   $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  scheduleRedraw();
+});
+
+// --- colour jitter (per-cell hue/sat scatter; pre-scheme, deterministic) ------
+$('colorJitter').addEventListener('input', (e) => {
+  settings.colorJitter = +(e.target as HTMLInputElement).value;
+  $('colorJitterVal').textContent = settings.colorJitter.toFixed(2);
   scheduleRedraw();
 });
 
@@ -613,6 +743,8 @@ function syncControls() {
   // dither + overlay
   set('dither', settings.dither);
   set('ditherStrength', settings.ditherStrength); $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  set('colorJitter', settings.colorJitter); $('colorJitterVal').textContent = settings.colorJitter.toFixed(2);
+  set('iconMetric', settings.iconMetric);
   set('overlayDir', settings.overlay.dir);
   set('overlayPreset', settings.overlay.preset);
   set('overlayBlend', settings.overlay.blend);
@@ -662,6 +794,18 @@ $('surprise').addEventListener('click', () => {
   Object.assign(settings, rollRandom()); // rollRandom never produces the heavy combo
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
+  commitHistory(); // a roll is one undoable step
+});
+
+$('undoBtn').addEventListener('click', undo);
+$('redoBtn').addEventListener('click', redo);
+// Ctrl/Cmd+Z = undo, Ctrl/Cmd+Y (or Shift+Z) = redo. No text inputs exist here,
+// so a global listener never steals a real text-edit undo.
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
 });
 
 $('share').addEventListener('click', async () => {

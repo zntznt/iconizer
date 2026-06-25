@@ -100,6 +100,11 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     },
     dither: rnd() < 0.3,
     ditherStrength: +(0.3 + rnd() * 0.5).toFixed(2),
+    // colour jitter: usually off; a quarter of the time a mild-to-loud sticker-bomb.
+    colorJitter: rnd() < 0.25 ? +(0.2 + rnd() * 0.6).toFixed(2) : 0,
+    // hue-pick is only interesting with 2+ icons (the roll doesn't know how many),
+    // so keep it rare; with one icon it has no visible effect anyway.
+    iconMetric: rnd() < 0.2 ? 'hue' : 'brightness',
     overlay: rnd() < 0.3
       ? { dir: choose(['h', 'v', 'diag', 'radial'] as const), preset: choose(GRADIENT_NAMES),
         blend: choose(['mix', 'multiply', 'screen'] as const), strength: +(0.2 + rnd() * 0.5).toFixed(2) }

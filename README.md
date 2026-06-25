@@ -58,6 +58,8 @@ with `<use>`, which is what keeps a 100×100 grid a small file. Layered
 | `layerStyle`       | `cmy` (multiply-subtract) or `rgb` (channel-proportion solids)      |
 | `layerOffset`      | px chromatic-aberration nudge (`0` = concentric)                    |
 | `scheme`           | recolour each cell upstream (duotone, etc.)                         |
+| `colorJitter`      | per-cell hue/sat scatter, deterministic (`0` = off); sticker-bomb   |
+| `iconMetric`       | pick each cell's tile by `brightness` (dark→light) or `hue`         |
 | `motion`           | a CSS-keyframe animation baked into the SVG (`none` = static)       |
 
 Settings live in the URL. **Copy Share Link** in the Start menu hands someone the

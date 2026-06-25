@@ -185,6 +185,7 @@
       .dw-cur { animation: dosblink 1s steps(1) infinite; }
       .dw-disk { font-family: monospace; font-size: 11px; color: #6a8a2a; }
       .dw-sub { font-family: var(--cursive); font-size: 13px; color: #9bbc0f; }
+      .dw-demo { margin-top: 8px; }
       .dw-nudge { font-family: var(--cursive); font-size: 12px; color: #7a9a3a; }
       .dw-svglink { color: var(--cyan); text-decoration: underline; cursor: pointer; }
       .dw-svglink:hover { color: #fff; }
@@ -341,6 +342,8 @@
       .sm-uname { font-family: monospace; font-weight: bold; font-size: 12px; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
       .sm-banner { font-family: var(--cursive); font-size: 11px; color: var(--navy); text-align: center; padding: 4px; border-bottom: 1px solid #808080; }
       .sm-group { font-size: 11px; font-weight: bold; color: #555; padding: 6px 6px 2px; }
+      .undo-row { display: flex; gap: 6px; padding: 4px 6px 2px; }
+      .undo-row .btn98 { flex: 1; }
       .sm-link, .sm-about { display: block; padding: 6px 10px; text-decoration: none; color: var(--ink); font-size: 13px; }
       .sm-link:hover { background: var(--navy); color: #fff; }
       .sm-about { color: #555; font-style: italic; font-size: 12px; }
@@ -487,7 +490,8 @@
               <span class="dw-stage stage-image">
                 <span class="dw-headline">C:\&gt; feed me a picture<span class="dw-cur">_</span></span>
                 <span class="dw-disk">★ INSERT DISK 1 OF 2 ★</span>
-                <span class="dw-sub">click anywhere or drop an image here</span>
+                <span class="dw-sub">click, drop, or paste (Ctrl+V) an image here</span>
+                <button class="btn98 dw-demo" id="tryDemo" type="button">▶ or TRY A DEMO</button>
               </span>
               <!-- stage 2: image loaded, need an SVG -->
               <span class="dw-stage stage-svg">
@@ -512,6 +516,12 @@
           <div class="row"><label>pick a picture… <input id="image" type="file" accept="image/*" /></label></div>
           <div class="row"><label>add icon SVG(s) ➕ <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label></div>
           <div class="teach" id="iconOrderHint" hidden>▸ top icon = dark areas · bottom = light ✦</div>
+          <div class="row" id="r-iconMetric" hidden><label>pick tile by
+            <select id="iconMetric">
+              <option value="brightness">brightness (dark → light)</option>
+              <option value="hue">hue (around the colour wheel)</option>
+            </select></label></div>
+          <div class="teach" id="iconMetricHint" hidden>▸ hue mode: list order = around the colour wheel, not dark→light ✦</div>
           <div id="iconList"></div>
         </div>
       </section>
@@ -701,6 +711,7 @@
             <div class="teach" id="ditherHint">▸ Bayer dither only bites on threshold / posterize / palette ✦</div>
             <div class="row"><label>strength <input id="ditherStrength" type="range" min="0" max="1" step="0.05" value="0.5" /></label><span class="val" id="ditherStrengthVal">0.50</span></div>
           </div>
+          <div class="row"><label>colour jitter (sticker-bomb) <input id="colorJitter" type="range" min="0" max="1" step="0.05" value="0" /></label><span class="val" id="colorJitterVal">0.00</span></div>
           <div class="divider">✦ ✦ ✦</div>
           <div class="row"><label>gradient overlay
             <select id="overlayDir">
@@ -829,6 +840,10 @@
         <div class="sm-group">Programs</div>
         <button id="surprise" class="arcade-btn" type="button" role="menuitem">🎲 Surprise Me!</button>
         <button id="share" class="arcade-btn" type="button" role="menuitem" title="copies a link with these settings (not the image)">🔗 Copy Share Link</button>
+        <div class="undo-row">
+          <button id="undoBtn" class="btn98" type="button" role="menuitem" title="Undo (Ctrl+Z)" disabled>◀ Undo</button>
+          <button id="redoBtn" class="btn98" type="button" role="menuitem" title="Redo (Ctrl+Y)" disabled>Redo ▶</button>
+        </div>
         <div class="sm-group">Network Neighborhood</div>
         <a class="sm-link" role="menuitem" href="https://www.spacejam.com/1996/" target="_blank" rel="noopener noreferrer">🏀 Space Jam (1996)</a>
         <a class="sm-link" role="menuitem" href="https://www.cameronsworld.net" target="_blank" rel="noopener noreferrer">🌐 Cameron's World</a>
