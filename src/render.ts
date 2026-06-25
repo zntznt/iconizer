@@ -246,19 +246,19 @@ function layeredBody(cell: Cell, settings: Settings, place: Placer): string {
 /** A layered cell: CMY multiply stack or RGB-additive stack, then the motion
  *  wrapper. The scheme already transformed cell.r/g/b upstream, so both styles
  *  pick up the scheme for free. */
-function emitLayered(cell: Cell, settings: Settings, index: number, place: Placer): string {
+function emitLayered(cell: Cell, settings: Settings, index: number, place: Placer, cols = 1, rows = 1): string {
   const body = rotateWrap(layeredBody(cell, settings, place), cell, index, settings);
   // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
   // browser caches the cell's raster and moves/scales the bitmap per frame. No
   // motion -> bare body, output unchanged.
-  const mo = motionAttrs(cell, index, settings);
+  const mo = motionAttrs(cell, index, settings, cols, rows);
   return mo ? `<g${mo}>${body}</g>` : body;
 }
 
 /** One cell's drawable(s): a single tinted icon, or a layered ink stack. `place`
  *  is the per-icon placer (export <use> or live inlined shapes). */
-function emitCellWith(cell: Cell, settings: Settings, index: number, place: Placer): string {
-  if (settings.layered) return emitLayered(cell, settings, index, place);
+function emitCellWith(cell: Cell, settings: Settings, index: number, place: Placer, cols = 1, rows = 1): string {
+  if (settings.layered) return emitLayered(cell, settings, index, place, cols, rows);
 
   const box = cellBox(cell, settings);
   // Tint via color= (makeTintable forces icons to currentColor, so this recolors
@@ -271,7 +271,7 @@ function emitCellWith(cell: Cell, settings: Settings, index: number, place: Plac
   // Motion on a <g> wrapper, not the leaf: fill-box on a <use>->symbol instance
   // resolves inconsistently; a <g>'s fill-box is its children's rendered box, so
   // it pivots around its OWN centre. No motion -> bare element, output unchanged.
-  const mo = motionAttrs(cell, index, settings);
+  const mo = motionAttrs(cell, index, settings, cols, rows);
   return mo ? `<g${mo}>${el}</g>` : el;
 }
 
@@ -359,7 +359,7 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   if (settings.layered) bgFill = SUBTRACTIVE.has(settings.layerStyle) ? '#ffffff' : '#000000';
   const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) =>
-    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length, settings.iconMetric)])).join('');
+    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length, settings.iconMetric)], cols, rows)).join('');
 
   // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
   // lets the maximized CSS size it correctly with min() (CSS can't read a ratio at

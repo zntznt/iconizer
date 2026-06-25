@@ -26,6 +26,26 @@ assert.ok(new Set(delays).size > 1, 'ripple -> multiple distinct delays');
 const noStag = render(grid, svg, { ...defaults, cols: 6, motion: 'spin', staggerMode: 'none' });
 assert.ok(!noStag.includes('animation-delay'), 'staggerMode:none -> no delays');
 
+// radial stagger: the wave rolls out from the centre, so the centre cells carry
+// the SMALLEST delay and the corners the largest (distinct values across the grid).
+{
+  const { cellDelay } = await import('./motion.ts');
+  const opts = { ...defaults, motionSpeed: 2, staggerMode: 'radial' as const };
+  const at = (col: number, row: number) =>
+    cellDelay({ col, row, r: 0, g: 0, b: 0, brightness: 0 }, 0, opts, 6, 6);
+  assert.ok(at(2, 2) < at(0, 0), 'radial: centre delay < corner delay');
+  assert.ok(at(2, 2) < at(5, 5), 'radial: centre delay < far corner delay');
+  assert.equal(at(0, 0), at(5, 5), 'radial: symmetric corners share a delay');
+
+  // sweep stagger: delay depends on COLUMN only — same column -> same delay,
+  // a later column -> a larger delay; rows in a column are in phase.
+  const sweep = { ...defaults, motionSpeed: 2, staggerMode: 'sweep' as const };
+  const sw = (col: number, row: number) =>
+    cellDelay({ col, row, r: 0, g: 0, b: 0, brightness: 0 }, 0, sweep, 6, 6);
+  assert.equal(sw(3, 0), sw(3, 5), 'sweep: same column -> same delay (row-independent)');
+  assert.ok(sw(0, 0) < sw(5, 0), 'sweep: later column -> larger delay');
+}
+
 // motion:none -> NO style/keyframes (byte-for-byte regression guard).
 const still = render(grid, svg, { ...defaults, cols: 6, motion: 'none' });
 assert.ok(!still.includes('@keyframes') && !still.includes('<style>'), 'motion:none -> no style');

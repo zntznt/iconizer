@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import type { Settings } from './settings.ts';
 
 export type Motion = 'none' | 'wiggle' | 'swing' | 'spin' | 'pulse' | 'bob' | 'shimmer';
-export type StaggerMode = 'none' | 'ripple' | 'brightness' | 'random';
+export type StaggerMode = 'none' | 'ripple' | 'radial' | 'sweep' | 'brightness' | 'random';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -42,13 +42,29 @@ export function motionStyle(settings: Settings): string {
  *  Shared with render() so jitter rotation scatters from the same seed source. */
 export const hash01 = (i: number) => ((i * 2654435761) % 1000) / 1000;
 
-/** Per-cell animation-delay (seconds) for the stagger mode. */
-export function cellDelay(cell: Cell, index: number, settings: Settings): number {
+/** Per-cell animation-delay (seconds) for the stagger mode. cols/rows describe the
+ *  grid so the field modes (radial/sweep) can place their centre/ramp; they default
+ *  to 1 so callers that don't care (and the self-checks) still work — at 1x1 every
+ *  mode collapses to 0 delay anyway. */
+export function cellDelay(cell: Cell, index: number, settings: Settings, cols = 1, rows = 1): number {
   const period = settings.motionSpeed;
   switch (settings.staggerMode) {
     case 'ripple':
       // k scales with period so the diagonal wave reads at any speed.
       return r2((cell.col + cell.row) * (period * 0.04));
+    case 'radial': {
+      // a ripple rolling OUT from the image centre, like a stone in a pond. u in
+      // 0..1 = distance to centre over the max corner distance; * period reads at
+      // any speed (mirrors ripple's "normalize then scale by period" shape).
+      const cx = (cols - 1) / 2, cy = (rows - 1) / 2;
+      const maxD = Math.hypot(cx, cy) || 1;
+      return r2((Math.hypot(cell.col - cx, cell.row - cy) / maxD) * period);
+    }
+    case 'sweep': {
+      // a wipe marching column by column, like an old CRT refresh. u = col ramp.
+      const u = cols > 1 ? cell.col / (cols - 1) : 0;
+      return r2(u * period);
+    }
     case 'brightness':
       return r2(cell.brightness * period);
     case 'random':
@@ -60,9 +76,9 @@ export function cellDelay(cell: Cell, index: number, settings: Settings): number
 }
 
 /** class + (optional) animation-delay attrs for an animated element. */
-export function motionAttrs(cell: Cell, index: number, settings: Settings): string {
+export function motionAttrs(cell: Cell, index: number, settings: Settings, cols = 1, rows = 1): string {
   if (settings.motion === 'none') return '';
-  const delay = cellDelay(cell, index, settings);
+  const delay = cellDelay(cell, index, settings, cols, rows);
   const d = delay ? ` style="animation-delay:${delay}s"` : '';
   return ` class="motion"${d}`;
 }
