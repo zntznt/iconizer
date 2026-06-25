@@ -4,7 +4,7 @@ import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
-import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
+import { syncUrl, settingsFromUrl, rollRandom, rollWithLocks } from './permalink.ts';
 import { PRESETS } from './presets.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -791,8 +791,27 @@ refreshPips(); // initial LED states (no image/svg/render yet)
 // a state the user didn't just create by hand.
 if (settings.layered && settings.motion !== 'none') heavyAccepted = true;
 
+// --- Surprise Me, with per-window locks --------------------------------------
+// Lock the knobs you love; Surprise rerolls only the UNLOCKED windows, like a slot
+// machine you can hold reels on. The group->keys map and the merge (incl. the
+// no-heavy-combo guard) live in permalink.ts so they're unit-tested. Locks are
+// session-only — they're NOT in the permalink, so a shared link still rolls cleanly.
+const locks = new Set<string>();
+
+document.querySelectorAll<HTMLElement>('.win-bar .lock').forEach((el) => {
+  const group = el.dataset.lock!;
+  const toggle = () => {
+    const locked = !locks.has(group);
+    locked ? locks.add(group) : locks.delete(group);
+    el.textContent = locked ? '🔒' : '🔓';
+    el.setAttribute('aria-pressed', String(locked));
+  };
+  el.addEventListener('click', toggle);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+});
+
 $('surprise').addEventListener('click', () => {
-  Object.assign(settings, rollRandom()); // rollRandom never produces the heavy combo
+  Object.assign(settings, rollWithLocks(settings, rollRandom(), locks));
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
   commitHistory(); // a roll is one undoable step

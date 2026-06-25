@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { defaults } from './settings.ts';
-import { encodeSettings, decodeSettings, rollRandom } from './permalink.ts';
+import { encodeSettings, decodeSettings, rollRandom, rollWithLocks, LOCK_GROUPS } from './permalink.ts';
 
 // btoa/atob exist in Node 26 globals — same as the browser.
 
@@ -53,4 +53,49 @@ for (let s = 0; s < 200; s++) {
   }
 }
 
-console.log('permalink.test.ts: ok (round-trip, compat, garbage, roll never heavy-combo, presets)');
+// --- rollWithLocks: held reels stay, unlocked reroll, never a heavy combo -----
+{
+  // a recognizable "current" look, and a roll that differs in every group.
+  const current = { ...defaults, cols: 10, layered: true, layerStyle: 'rgb' as const,
+    scheme: { kind: 'invert' as const }, motion: 'spin' as const };
+  const roll = { ...defaults, cols: 99, layered: false, layerStyle: 'cmy' as const,
+    scheme: { kind: 'sepia' as const }, motion: 'bob' as const, motionSpeed: 3 };
+
+  // lock SCHEME only: scheme is kept from current, everything else takes the roll.
+  const a = rollWithLocks(current, roll, new Set(['scheme']));
+  assert.deepEqual(a.scheme, current.scheme, 'locked scheme is kept');
+  assert.equal(a.cols, roll.cols, 'unlocked grid takes the roll');
+  assert.equal(a.motion, roll.motion, 'unlocked motion takes the roll');
+
+  // nothing locked: every group takes the roll (a plain reroll).
+  const b = rollWithLocks(current, roll, new Set());
+  for (const keys of Object.values(LOCK_GROUPS)) for (const k of keys)
+    assert.deepEqual((b as any)[k], (roll as any)[k], `unlocked key ${k} takes the roll`);
+
+  // HEAVY-COMBO GUARD, branch 1 — layer locked ON, motion rerolls ON: drop motion
+  // (the unlocked side), so the result is never layered + motion.
+  const lockLayerOn = rollWithLocks(
+    { ...defaults, layered: true }, { ...defaults, motion: 'wiggle' as const }, new Set(['layer']));
+  assert.ok(lockLayerOn.layered && lockLayerOn.motion === 'none',
+    'layer locked on + motion rerolled -> motion dropped (no heavy combo)');
+
+  // branch 2 — motion locked ON, layer rerolls ON: drop layered instead.
+  const lockMotionOn = rollWithLocks(
+    { ...defaults, motion: 'wiggle' as const }, { ...defaults, layered: true }, new Set(['motion']));
+  assert.ok(lockMotionOn.motion !== 'none' && !lockMotionOn.layered,
+    'motion locked on + layer rerolled -> layered dropped (no heavy combo)');
+
+  // exhaustively: across many rolls and every lock subset, the result is NEVER heavy.
+  const groups = Object.keys(LOCK_GROUPS);
+  for (let mask = 0; mask < (1 << groups.length); mask++) {
+    const set = new Set(groups.filter((_, i) => mask & (1 << i)));
+    let k = mask + 1;
+    const r = rollRandom(() => { k = (k * 1103515245 + 12345) & 0x7fffffff; return (k % 1000) / 1000; });
+    // start from a heavy current to stress the guard hardest.
+    const merged = rollWithLocks({ ...defaults, layered: true, motion: 'spin' }, r, set);
+    assert.ok(!(merged.layered && merged.motion !== 'none'),
+      `lock set {${[...set]}} must never yield heavy combo`);
+  }
+}
+
+console.log('permalink.test.ts: ok (round-trip, compat, garbage, roll never heavy-combo, presets, locks)');

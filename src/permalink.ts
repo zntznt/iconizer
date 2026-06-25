@@ -125,3 +125,34 @@ const rgb = (h: string) => ({
   g: parseInt(h.slice(3, 5), 16),
   b: parseInt(h.slice(5, 7), 16),
 });
+
+// --- Surprise with locks -----------------------------------------------------
+
+/** Which Settings keys each lockable window owns. A locked window keeps its keys
+ *  on a reroll; unlocked windows take the rolled values. */
+export const LOCK_GROUPS: Record<string, (keyof Settings)[]> = {
+  grid: ['cols', 'blockSize', 'iconScale', 'background', 'sizeByBrightness', 'sizeRange',
+    'rotate', 'rotateDeg', 'fadeByBrightness', 'fadeRange', 'adjust', 'dither', 'ditherStrength',
+    'overlay', 'colorJitter', 'iconMetric'],
+  layer: ['layered', 'layerStyle', 'layerCount', 'layerOffset'],
+  scheme: ['scheme'],
+  motion: ['motion', 'motionSpeed', 'staggerMode'],
+};
+
+/** Merge a fresh `roll` into `current`, taking only the UNLOCKED groups' keys, then
+ *  enforce the no-heavy-combo invariant: a lock can pin layered-on while the layer
+ *  reroll lands motion-on (or vice versa), recreating the combo rollRandom avoids
+ *  on its own. When both end up on, drop the UNLOCKED side so a held reel never
+ *  forces the heavy state. Pure: returns a new Settings, mutates nothing. */
+export function rollWithLocks(current: Settings, roll: Settings, locks: Set<string>): Settings {
+  const out: Settings = { ...current };
+  for (const [group, keys] of Object.entries(LOCK_GROUPS)) {
+    if (locks.has(group)) continue;
+    for (const k of keys) (out as any)[k] = roll[k];
+  }
+  if (out.layered && out.motion !== 'none') {
+    if (!locks.has('motion')) out.motion = 'none';
+    else out.layered = false; // motion locked on -> the unlocked side is layer
+  }
+  return out;
+}

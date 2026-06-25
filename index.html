@@ -227,6 +227,10 @@
       .win.minimized { display: none; }
       .win-bar .btns .mini { cursor: pointer; }
       .win-bar .btns .mini:hover { box-shadow: var(--bevel-down); }
+      .win-bar .btns .lock { cursor: pointer; }
+      .win-bar .btns .lock:hover { box-shadow: var(--bevel-down); }
+      /* a locked window: pressed-in + a warm tint, so the closed padlock reads as "held" */
+      .win-bar .btns .lock[aria-pressed="true"] { box-shadow: var(--bevel-down); background: #ffe9a8; }
       /* taskbar button showing a minimized window: pressed-in look */
       /* minimized window: dimmed/italic stub (distinct from the active pressed look,
          and wins over .active since a minimized window is never "in view") */
@@ -532,7 +536,7 @@
 
       <!-- WINDOW B -->
       <section class="win" id="winGrid">
-        <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns"><i class="lock" role="button" tabindex="0" data-lock="grid" aria-label="lock these settings against Surprise" aria-pressed="false" title="lock against Surprise Me">🔓</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
           <div class="row"><label>chunky blocks <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /></label><span class="val" id="blockVal">1×1</span></div>
@@ -568,7 +572,7 @@
 
       <!-- WINDOW C -->
       <section class="win" id="winLayer">
-        <div class="win-bar"><span class="cap">🌈 Layered Color.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-bar"><span class="cap">🌈 Layered Color.exe</span><span class="btns"><i class="lock" role="button" tabindex="0" data-lock="layer" aria-label="lock these settings against Surprise" aria-pressed="false" title="lock against Surprise Me">🔓</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label><input id="layered" type="checkbox" /> 3D glasses mode (color split)</label></div>
           <div class="inset" id="p-layered" hidden aria-hidden="true">
@@ -594,7 +598,7 @@
       <div class="rail rail-right">
       <!-- WINDOW D -->
       <section class="win" id="winScheme">
-        <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="lock" role="button" tabindex="0" data-lock="scheme" aria-label="lock these settings against Surprise" aria-pressed="false" title="lock against Surprise Me">🔓</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="teach">▸ adjust: tweak tone before the scheme ✦</div>
           <div class="row"><label>brightness <input id="adjBright" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjBrightVal">1.00</span></div>
@@ -757,7 +761,7 @@
 
       <!-- WINDOW E -->
       <section class="win" id="winMotion">
-        <div class="win-bar"><span class="cap">✨ Motion FX.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-bar"><span class="cap">✨ Motion FX.exe</span><span class="btns"><i class="lock" role="button" tabindex="0" data-lock="motion" aria-label="lock these settings against Surprise" aria-pressed="false" title="lock against Surprise Me">🔓</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
           <div class="row"><label>motion
             <select id="motion">
