@@ -831,23 +831,50 @@ async function applySettings(next: Settings) {
   commitHistory(); // one undoable step
 }
 
-// "My Favorites": a curated shelf of named looks in the Start menu. Each loads a
-// full Settings object in one click (the caption hints what the look does). No
-// storage, no editing — a mixtape, not a save slot.
+// "My Favorites": a curated shelf of named looks, in a Win98 flyout submenu off the
+// Start menu. Each loads a full Settings object in one click (the caption hints what
+// the look does). No storage, no editing — a mixtape, not a save slot.
 const presetList = $('presetList');
 PRESETS.forEach((p, i) => {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'preset-item';
-  b.setAttribute('role', 'menuitem');
-  b.dataset.i = String(i);
-  b.innerHTML = `<b>${p.name}</b><small>${p.caption}</small>`;
-  presetList.appendChild(b);
+  const item = document.createElement('div');
+  item.className = 'sm-link';
+  item.setAttribute('role', 'menuitem');
+  item.tabIndex = 0;
+  item.dataset.i = String(i);
+  item.innerHTML = `<b>${p.name}</b><small>${p.caption}</small>`;
+  presetList.appendChild(item);
 });
-presetList.addEventListener('click', (e) => {
-  const item = (e.target as HTMLElement).closest<HTMLButtonElement>('.preset-item');
-  if (!item) return;
+function applyPreset(item: HTMLElement) {
   applySettings(PRESETS[+item.dataset.i!].settings);
+  closeFav();
+  setStart(false); // a chosen look closes the whole Start menu (Win98 behaviour)
+}
+presetList.addEventListener('click', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>('.sm-link');
+  if (item) applyPreset(item);
+});
+presetList.addEventListener('keydown', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>('.sm-link');
+  if (item && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); applyPreset(item); }
+});
+
+// The My Favorites flyout: open on hover or click/Enter of the parent, close on
+// leave or Esc. aria-expanded on the wrapper drives the CSS reveal.
+const favParent = $('favParent');
+const favTrigger = favParent.querySelector('.sm-parent') as HTMLElement;
+const openFav = () => { favParent.setAttribute('aria-expanded', 'true'); favTrigger.setAttribute('aria-expanded', 'true'); };
+const closeFav = () => { favParent.setAttribute('aria-expanded', 'false'); favTrigger.setAttribute('aria-expanded', 'false'); };
+favParent.addEventListener('mouseenter', openFav);
+favParent.addEventListener('mouseleave', closeFav);
+favTrigger.addEventListener('click', (e) => {
+  e.stopPropagation(); // don't let the Start-menu's own click-close fire
+  favParent.getAttribute('aria-expanded') === 'true' ? closeFav() : openFav();
+});
+favTrigger.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
+    e.preventDefault(); openFav();
+    (presetList.querySelector('.sm-link') as HTMLElement)?.focus();
+  } else if (e.key === 'Escape' || e.key === 'ArrowLeft') { closeFav(); }
 });
 
 $('undoBtn').addEventListener('click', undo);

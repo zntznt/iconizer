@@ -346,14 +346,34 @@
       .sm-uname { font-family: monospace; font-weight: bold; font-size: 12px; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
       .sm-banner { font-family: var(--cursive); font-size: 11px; color: var(--navy); text-align: center; padding: 4px; border-bottom: 1px solid #808080; }
       .sm-group { font-size: 11px; font-weight: bold; color: #555; padding: 6px 6px 2px; }
-      .undo-row { display: flex; gap: 6px; padding: 4px 6px 2px; }
-      .undo-row .btn98 { flex: 1; }
-      .preset-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 5px 10px; cursor: pointer; color: var(--ink); font-family: inherit; }
-      .preset-item:hover, .preset-item:focus-visible { background: var(--navy); color: #fff; }
-      .preset-item b { font-size: 13px; letter-spacing: .03em; }
-      .preset-item small { display: block; font-size: 11px; opacity: .8; font-style: italic; }
+      /* the lock hint under Surprise — teaches the per-window lock affordance */
+      .sm-tip { font-family: var(--cursive); font-size: 11px; color: var(--navy); padding: 0 10px 4px; line-height: 1.3; }
       .sm-link, .sm-about { display: block; padding: 6px 10px; text-decoration: none; color: var(--ink); font-size: 13px; }
-      .sm-link:hover { background: var(--navy); color: #fff; }
+      .sm-link:hover, .sm-link:focus-visible { background: var(--navy); color: #fff; }
+      /* My Favorites flyout submenu (Win98 Programs ▸ pattern). Parent stays
+         highlighted while open; the submenu floats to the right, reusing .sm-link. */
+      .sm-sub { position: relative; }
+      .sm-parent { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+      .sm-caret { font-size: 11px; }
+      .sm-sub[aria-expanded="true"] .sm-parent, .sm-parent:hover { background: var(--navy); color: #fff; }
+      /* float to the right, bottom-aligned to the parent row so a low My Favorites
+         grows UPWARD and stays on-screen; cap + scroll as a backstop on short screens. */
+      .sm-submenu {
+        position: absolute; left: 100%; bottom: 0; z-index: 57; min-width: 200px;
+        max-height: calc(100dvh - var(--taskbar-h) - 16px); overflow-y: auto;
+        background: var(--face); box-shadow: var(--bevel-up), 0 4px 16px rgba(0,0,0,.5);
+        padding: 4px; display: none;
+      }
+      .sm-sub[aria-expanded="true"] .sm-submenu { display: block; }
+      /* a preset row inside the flyout: name + flavor caption, styled as .sm-link */
+      .sm-submenu .sm-link b { font-size: 13px; letter-spacing: .03em; display: block; }
+      .sm-submenu .sm-link small { font-size: 11px; opacity: .85; font-style: italic; }
+      /* if the flyout would run off the right edge, flip it to the left side */
+      @media (max-width: 560px) { .sm-submenu { left: auto; right: 100%; } }
+      /* taskbar undo/redo group, pinned right of the tasks and left of Save */
+      .tb-undo { flex: none; display: flex; gap: 3px; }
+      .tb-undo .btn98 { padding: 4px 9px; font-size: 13px; }
+      .tb-undo .btn98:disabled { color: #808080; }
       .sm-about { color: #555; font-style: italic; font-size: 12px; }
       .arcade-btn {
         display: block; width: calc(100% - 8px); margin: 4px; padding: 8px 12px; border: 0; cursor: pointer;
@@ -848,13 +868,14 @@
         <div class="sm-banner">★ Welcome to Iconizer ★ Netscape Now!</div>
         <div class="sm-group">Programs</div>
         <button id="surprise" class="arcade-btn" type="button" role="menuitem">🎲 Surprise Me!</button>
+        <div class="sm-tip">▸ tip: click a 🔓 on any window's title bar to <b>lock</b> it, then Surprise Me rerolls only the <i>unlocked</i> windows ✦</div>
         <button id="share" class="arcade-btn" type="button" role="menuitem" title="copies a link with these settings (not the image)">🔗 Copy Share Link</button>
-        <div class="undo-row">
-          <button id="undoBtn" class="btn98" type="button" role="menuitem" title="Undo (Ctrl+Z)" disabled>◀ Undo</button>
-          <button id="redoBtn" class="btn98" type="button" role="menuitem" title="Redo (Ctrl+Y)" disabled>Redo ▶</button>
+        <!-- My Favorites: a Win98 flyout submenu. The parent item reveals #presetList
+             to its right on hover/focus; presets are injected as .sm-link items. -->
+        <div class="sm-sub" id="favParent">
+          <div class="sm-link sm-parent" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false">📁 My Favorites <span class="sm-caret">▸</span></div>
+          <div class="sm-submenu" id="presetList" role="menu" aria-label="My Favorites"></div>
         </div>
-        <div class="sm-group">My Favorites 💾</div>
-        <div id="presetList"></div>
         <div class="sm-group">Network Neighborhood</div>
         <a class="sm-link" role="menuitem" href="https://www.spacejam.com/1996/" target="_blank" rel="noopener noreferrer">🏀 Space Jam (1996)</a>
         <a class="sm-link" role="menuitem" href="https://www.cameronsworld.net" target="_blank" rel="noopener noreferrer">🌐 Cameron's World</a>
@@ -880,6 +901,10 @@
         <button class="task btn98" type="button" data-win="winScheme">🎨 Scheme</button>
         <button class="task btn98" type="button" data-win="winMotion">✨ Motion</button>
         <button class="task btn98" type="button" data-win="winExport">💾 Export</button>
+      </div>
+      <div class="tb-undo">
+        <button id="undoBtn" class="btn98" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>◀</button>
+        <button id="redoBtn" class="btn98" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>▶</button>
       </div>
       <div class="quick-save">
         <button id="quickSave" class="btn98" type="button" aria-haspopup="menu" aria-expanded="false">💾 Save ▾</button>
