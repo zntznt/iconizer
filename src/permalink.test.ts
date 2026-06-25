@@ -40,4 +40,17 @@ for (let s = 0; s < 200; s++) {
     `roll #${s} must not enable layered + motion together (got layered=${r.layered}, motion=${r.motion})`);
 }
 
-console.log('permalink.test.ts: ok (round-trip, compat, garbage, roll never heavy-combo)');
+// Every curated preset must be a COMPLETE Settings (all keys present, so a preset
+// can't silently drop a field to undefined) and must round-trip through the hash.
+{
+  const { PRESETS } = await import('./presets.ts');
+  const keys = Object.keys(defaults).sort();
+  for (const p of PRESETS) {
+    assert.ok(p.name && p.caption, `preset has name + caption: ${p.name}`);
+    assert.deepEqual(Object.keys(p.settings).sort(), keys, `preset "${p.name}" has all Settings keys`);
+    assert.deepEqual(decodeSettings('#' + encodeSettings(p.settings)), p.settings,
+      `preset "${p.name}" round-trips through the permalink`);
+  }
+}
+
+console.log('permalink.test.ts: ok (round-trip, compat, garbage, roll never heavy-combo, presets)');

@@ -5,6 +5,7 @@ import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
+import { PRESETS } from './presets.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -795,6 +796,39 @@ $('surprise').addEventListener('click', () => {
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
   commitHistory(); // a roll is one undoable step
+});
+
+// Apply a whole Settings object at once (a curated preset). Shares Surprise's
+// path, but a preset CAN carry the layered+motion heavy combo, so confirm it
+// first (and remember the choice). Cancelling leaves the current look untouched.
+async function applySettings(next: Settings) {
+  if (next.layered && next.motion !== 'none' && needsHeavyWarning({ layered: true, motion: true })) {
+    if (!(await confirmHeavy())) return;
+    heavyAccepted = true;
+  }
+  Object.assign(settings, structuredClone(next));
+  syncControls();
+  redraw();
+  commitHistory(); // one undoable step
+}
+
+// "My Favorites": a curated shelf of named looks in the Start menu. Each loads a
+// full Settings object in one click (the caption hints what the look does). No
+// storage, no editing — a mixtape, not a save slot.
+const presetList = $('presetList');
+PRESETS.forEach((p, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'preset-item';
+  b.setAttribute('role', 'menuitem');
+  b.dataset.i = String(i);
+  b.innerHTML = `<b>${p.name}</b><small>${p.caption}</small>`;
+  presetList.appendChild(b);
+});
+presetList.addEventListener('click', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLButtonElement>('.preset-item');
+  if (!item) return;
+  applySettings(PRESETS[+item.dataset.i!].settings);
 });
 
 $('undoBtn').addEventListener('click', undo);

@@ -344,6 +344,10 @@
       .sm-group { font-size: 11px; font-weight: bold; color: #555; padding: 6px 6px 2px; }
       .undo-row { display: flex; gap: 6px; padding: 4px 6px 2px; }
       .undo-row .btn98 { flex: 1; }
+      .preset-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 5px 10px; cursor: pointer; color: var(--ink); font-family: inherit; }
+      .preset-item:hover, .preset-item:focus-visible { background: var(--navy); color: #fff; }
+      .preset-item b { font-size: 13px; letter-spacing: .03em; }
+      .preset-item small { display: block; font-size: 11px; opacity: .8; font-style: italic; }
       .sm-link, .sm-about { display: block; padding: 6px 10px; text-decoration: none; color: var(--ink); font-size: 13px; }
       .sm-link:hover { background: var(--navy); color: #fff; }
       .sm-about { color: #555; font-style: italic; font-size: 12px; }
@@ -845,6 +849,8 @@
           <button id="undoBtn" class="btn98" type="button" role="menuitem" title="Undo (Ctrl+Z)" disabled>◀ Undo</button>
           <button id="redoBtn" class="btn98" type="button" role="menuitem" title="Redo (Ctrl+Y)" disabled>Redo ▶</button>
         </div>
+        <div class="sm-group">My Favorites 💾</div>
+        <div id="presetList"></div>
         <div class="sm-group">Network Neighborhood</div>
         <a class="sm-link" role="menuitem" href="https://www.spacejam.com/1996/" target="_blank" rel="noopener noreferrer">🏀 Space Jam (1996)</a>
         <a class="sm-link" role="menuitem" href="https://www.cameronsworld.net" target="_blank" rel="noopener noreferrer">🌐 Cameron's World</a>
