@@ -791,31 +791,32 @@ refreshPips(); // initial LED states (no image/svg/render yet)
 // a state the user didn't just create by hand.
 if (settings.layered && settings.motion !== 'none') heavyAccepted = true;
 
-// --- Surprise Me, with per-window locks --------------------------------------
-// Lock the knobs you love; Surprise rerolls only the UNLOCKED windows, like a slot
-// machine you can hold reels on. The group->keys map and the merge (incl. the
-// no-heavy-combo guard) live in permalink.ts so they're unit-tested. Locks are
-// session-only — they're NOT in the permalink, so a shared link still rolls cleanly.
-const locks = new Set<string>();
+// --- Surprise Lab: hold reels, then roll -------------------------------------
+// Held windows keep their settings; the rest reroll. The "hold" checkboxes live in
+// the Surprise Lab.exe window; reading them at roll time gives the lock Set. The
+// group->keys map and the merge (incl. the no-heavy-combo guard) live in
+// permalink.ts so they stay unit-tested. Holds are session-only, NOT in the
+// permalink, so a shared link still rolls cleanly for the recipient.
+const HOLD_BOXES: Record<string, string> = {
+  grid: 'hold-grid', layer: 'hold-layer', scheme: 'hold-scheme', motion: 'hold-motion',
+};
+function heldGroups(): Set<string> {
+  const set = new Set<string>();
+  for (const [group, id] of Object.entries(HOLD_BOXES))
+    if (($(id) as HTMLInputElement).checked) set.add(group);
+  return set;
+}
 
-document.querySelectorAll<HTMLElement>('.win-bar .lock').forEach((el) => {
-  const group = el.dataset.lock!;
-  const toggle = () => {
-    const locked = !locks.has(group);
-    locked ? locks.add(group) : locks.delete(group);
-    el.textContent = locked ? '🔒' : '🔓';
-    el.setAttribute('aria-pressed', String(locked));
-  };
-  el.addEventListener('click', toggle);
-  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-});
-
-$('surprise').addEventListener('click', () => {
-  Object.assign(settings, rollWithLocks(settings, rollRandom(), locks));
+// One roll, honouring the holds. Reachable from the Start menu (reroll from
+// anywhere) AND from the button inside the Lab window.
+function doRoll() {
+  Object.assign(settings, rollWithLocks(settings, rollRandom(), heldGroups()));
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
   commitHistory(); // a roll is one undoable step
-});
+}
+$('surprise').addEventListener('click', doRoll);
+$('surpriseRoll').addEventListener('click', doRoll);
 
 // Apply a whole Settings object at once (a curated preset). Shares Surprise's
 // path, but a preset CAN carry the layered+motion heavy combo, so confirm it
@@ -984,7 +985,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !startMenu.hidden) { setStart(false); startBtn.focus(); }
 });
 startMenu.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).closest('[role=menuitem]')) setStart(false);
+  const item = (e.target as HTMLElement).closest('[role=menuitem]');
+  // Surprise Me stays open so you can keep rerolling from the menu; every other
+  // item closes it (Win98 behaviour).
+  if (item && item.id !== 'surprise') setStart(false);
 });
 
 // quick-save split button: proxies click the canonical export buttons in Export.exe.
@@ -1083,7 +1087,7 @@ function restoreWin(win: HTMLElement, scroll = true) {
 
 // All control windows in boot order. On first load they start minimized (just the
 // CRT shows); after the first successful render they cascade in one by one.
-const allWins = ['winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion', 'winExport'];
+const allWins = ['winSurprise', 'winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion', 'winExport'];
 function bootMinimizeAll() {
   document.body.classList.add('no-media'); // hide the task buttons until a render exists
   allWins.forEach((id) => {
