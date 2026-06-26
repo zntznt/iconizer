@@ -16,7 +16,10 @@
         --taskbar-h: 42px;
       }
       * { box-sizing: border-box; }
-      html, body { overflow-x: hidden; min-height: 100%; }
+      /* The desktop fills the screen exactly and never scrolls — dvh tracks the
+         mobile dynamic viewport (address-bar math) so the fixed taskbar sits flush
+         at the true bottom instead of a few px past a scroll. */
+      html, body { overflow: hidden; height: 100dvh; }
       [hidden] { display: none !important; } /* load-bearing for ALL disclosure */
 
       body {
@@ -352,15 +355,14 @@
          just above the taskbar. The @media below flips it left on narrow screens. */
       .sm-submenu {
         position: fixed; left: calc(4px + min(280px, 100vw - 12px)); bottom: var(--taskbar-h);
-        z-index: 57; min-width: 200px;
+        z-index: 57; width: min(280px, 100vw - 12px);
         max-height: calc(100dvh - var(--taskbar-h) - 16px); overflow-y: auto;
         background: var(--face); box-shadow: var(--bevel-up), 0 4px 16px rgba(0,0,0,.5);
         padding: 4px; display: none;
       }
       .sm-sub[aria-expanded="true"] .sm-submenu { display: block; }
-      /* a preset row inside the flyout: name + flavor caption, styled as .sm-link */
-      .sm-submenu .sm-link b { font-size: 13px; letter-spacing: .03em; display: block; }
-      .sm-submenu .sm-link small { font-size: 11px; opacity: .85; font-style: italic; }
+      /* preset rows reuse .sm-link verbatim — single-line "emoji name", identical
+         to the other Start-menu items. No special-casing needed. */
       /* On narrow screens the right-side flyout would run off-screen, so pin it to
          the menu's left edge instead (it overlaps the menu, Win98-on-a-phone style). */
       @media (max-width: 560px) { .sm-submenu { left: 4px; right: auto; } }

@@ -1,17 +1,18 @@
 import { defaults, type Settings } from './settings.ts';
 
-/** A named look: a full Settings object plus a one-line flavor caption. Hand
- *  authored, not user-saved (no storage) — a curated shelf, like a mixtape. Each
- *  is `defaults` plus the overrides that make it distinctive, so a new setting
- *  added later inherits its default here for free. The caption is the only hint a
- *  recipient gets that a look needs your own image to fully sing. */
-export type Preset = { name: string; caption: string; settings: Settings };
+/** A named look: a full Settings object, an emoji, plus a one-line flavor caption.
+ *  Hand authored, not user-saved (no storage) — a curated shelf, like a mixtape.
+ *  Each is `defaults` plus the overrides that make it distinctive, so a new setting
+ *  added later inherits its default here for free. The emoji leads the menu row
+ *  (matching the other Start-menu items); the caption is kept as the row's tooltip. */
+export type Preset = { name: string; icon: string; caption: string; settings: Settings };
 
 const make = (over: Partial<Settings>): Settings => ({ ...defaults, ...over });
 
 export const PRESETS: Preset[] = [
   {
-    name: 'XEROX GHOST',
+    name: 'Xerox Ghost',
+    icon: '📄',
     caption: 'high-contrast 1-bit toner, like a 5th-gen photocopy',
     settings: make({
       cols: 70, iconScale: 1.1,
@@ -21,7 +22,8 @@ export const PRESETS: Preset[] = [
     }),
   },
   {
-    name: 'GAMEBOY DISCO',
+    name: 'Gameboy Disco',
+    icon: '🟩',
     caption: 'four shades of DMG green, gently bobbing',
     settings: make({
       cols: 48,
@@ -34,7 +36,8 @@ export const PRESETS: Preset[] = [
     }),
   },
   {
-    name: 'RISO 3-COLOR',
+    name: 'Riso 3-Color',
+    icon: '🎨',
     caption: 'misregistered riso-print CMY, slightly off the grid',
     settings: make({
       cols: 40,
@@ -43,7 +46,8 @@ export const PRESETS: Preset[] = [
     }),
   },
   {
-    name: 'CRT MELTDOWN',
+    name: 'CRT Meltdown',
+    icon: '📺',
     caption: 'RGB subpixels swimming apart on a black tube',
     settings: make({
       cols: 44,
@@ -53,7 +57,8 @@ export const PRESETS: Preset[] = [
     }),
   },
   {
-    name: 'STICKER BOMB',
+    name: 'Sticker Bomb',
+    icon: '🌈',
     caption: 'a flat photo scattered into a hand-placed rainbow',
     settings: make({
       cols: 38, iconScale: 1.2,
@@ -63,7 +68,8 @@ export const PRESETS: Preset[] = [
     }),
   },
   {
-    name: 'VAPOR SWING',
+    name: 'Vapor Swing',
+    icon: '🌴',
     caption: 'duotone neon wash, the whole grid swaying',
     settings: make({
       cols: 42,

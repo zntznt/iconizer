@@ -834,7 +834,10 @@ PRESETS.forEach((p, i) => {
   item.setAttribute('role', 'menuitem');
   item.tabIndex = 0;
   item.dataset.i = String(i);
-  item.innerHTML = `<b>${p.name}</b><small>${p.caption}</small>`;
+  // single-line "emoji name" so a preset row reads exactly like the other
+  // Start-menu items (🏀 Space Jam, etc). The caption rides along as the tooltip.
+  item.textContent = `${p.icon} ${p.name}`;
+  item.title = p.caption;
   presetList.appendChild(item);
 });
 function applyPreset(item: HTMLElement) {
