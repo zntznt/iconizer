@@ -89,22 +89,14 @@ function refreshMotionPerfNudge() {
   nudge.hidden = !(animated && heavy);
 }
 
-// Single source of truth for export button states. SVG/PNG enabled once a render
-// exists; GIF additionally needs motion (shown visible-but-disabled with a reason,
-// not hidden, so users learn why). Mirrors into the footer quick-save proxies.
+// Single source of truth for export button states (the taskbar Save menu rows).
+// SVG/PNG enabled once a render exists; GIF additionally needs motion.
 function refreshExportState() {
   const rendered = !!lastSvg;
   const animated = settings.motion !== 'none';
   ($('dlSvg') as HTMLButtonElement).disabled = !rendered;
   ($('dlPng') as HTMLButtonElement).disabled = !rendered;
   ($('dlGif') as HTMLButtonElement).disabled = !rendered || !animated;
-  // captions double as the reason a button is locked (mirrors the GIF note).
-  $('svgNote').textContent = rendered ? 'vector · crisp · tiny' : 'add a pic + icon first';
-  $('pngNote').textContent = rendered ? 'raster image · @ current scale' : 'add a pic + icon first';
-  const note = document.getElementById('gifNote');
-  if (note) note.textContent = !rendered ? 'add a pic + icon first'
-    : animated ? 'animated · ready' : 'animated · needs Motion FX';
-  syncQuickSave();
 }
 
 // Debounce so dragging a slider doesn't thrash render() on every input event,
@@ -991,18 +983,11 @@ startMenu.addEventListener('click', (e) => {
   if (item && item.id !== 'surprise') setStart(false);
 });
 
-// quick-save split button: proxies click the canonical export buttons in Export.exe.
+// quick-save split button: the menu rows (#dlSvg/#dlPng/#dlGif) ARE the canonical
+// export buttons now — their own click handlers (above) run the download. Here we
+// just open/close the menu; the rows' disabled state is set by refreshExportState.
 const quickSave = $('quickSave') as HTMLButtonElement;
 const qsMenu = $('quickSaveMenu');
-
-// Two scale pickers, one value: the taskbar Save menu's #scaleQuick mirrors the
-// Export.exe #scale (which the download handlers read), so touching either keeps
-// both in sync. #scale stays the single source the export path reads.
-const scaleMain = $('scale') as HTMLSelectElement;
-const scaleQuick = $('scaleQuick') as HTMLSelectElement;
-scaleQuick.value = scaleMain.value;
-scaleMain.addEventListener('change', () => { scaleQuick.value = scaleMain.value; });
-scaleQuick.addEventListener('change', () => { scaleMain.value = scaleQuick.value; });
 
 quickSave.addEventListener('click', () => {
   qsMenu.hidden = !qsMenu.hidden;
@@ -1011,21 +996,11 @@ quickSave.addEventListener('click', () => {
 document.addEventListener('click', (e) => {
   if (!qsMenu.hidden && !qsMenu.contains(e.target as Node) && e.target !== quickSave) qsMenu.hidden = true;
 });
+// close the menu after picking a format (the export itself fires on the row's own
+// handler). Skip close for a disabled row so the menu doesn't vanish on a no-op.
 qsMenu.querySelectorAll<HTMLButtonElement>('.qs-item').forEach((item) => {
-  item.addEventListener('click', () => {
-    ($(item.dataset.proxy!) as HTMLButtonElement).click(); // fire the real export
-    qsMenu.hidden = true;
-  });
+  item.addEventListener('click', () => { if (!item.disabled) qsMenu.hidden = true; });
 });
-// keep proxy items' disabled state mirrored from the canonical buttons. Queries
-// the DOM lazily (not a closed-over const) so it's safe to call during startup,
-// before the quick-save const below is initialized (avoids a TDZ ReferenceError).
-function syncQuickSave() {
-  document.querySelectorAll<HTMLButtonElement>('.qs-item').forEach((item) => {
-    const real = $(item.dataset.proxy!) as HTMLButtonElement;
-    item.disabled = real.disabled || real.hidden;
-  });
-}
 
 // --- minimize / restore windows (genie animation) ---------------------------
 
@@ -1097,7 +1072,7 @@ function restoreWin(win: HTMLElement, scroll = true) {
 
 // All control windows in boot order. On first load they start minimized (just the
 // CRT shows); after the first successful render they cascade in one by one.
-const allWins = ['winSurprise', 'winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion', 'winExport'];
+const allWins = ['winSurprise', 'winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion'];
 function bootMinimizeAll() {
   document.body.classList.add('no-media'); // hide the task buttons until a render exists
   allWins.forEach((id) => {

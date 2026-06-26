@@ -253,14 +253,6 @@
       input[type="color"] { width: 42px; height: 26px; min-width: 0; padding: 0; border: 2px solid #808080; flex: none; }
       input[type="file"] { width: 100%; min-width: 0; font-size: 12px; }
 
-      /* Export.exe "Save as…" rows: full-width stacked buttons with a caption */
-      .save-row {
-        display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-        width: 100%; text-align: left; padding: 6px 10px;
-      }
-      .save-row small { color: #5a6a3a; font-size: 11px; font-weight: normal; }
-      .save-row:disabled small { color: #999; }
-
       /* sunken "properties" inset = revealed conditional sub-region */
       .inset {
         background: var(--face); box-shadow: var(--bevel-down); padding: 9px; margin-top: 2px;
@@ -818,20 +810,7 @@
         </div>
       </section>
 
-      <!-- WINDOW F — Export.exe (canonical home for the export controls) -->
-      <section class="win" id="winExport">
-        <div class="win-bar"><span class="cap">💾 Export.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
-        <div class="win-body">
-          <div class="inset" id="exportSizeBox"><span class="dw-step" style="font-family:monospace">OUTPUT ▸ <span id="exportSize">··· add media to begin ···</span></span></div>
-          <div class="row"><label>output scale
-            <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
-          </label></div>
-          <div class="divider">✦ ✦ ✦</div>
-          <button id="dlSvg" class="btn98 save-row" type="button" disabled>💾 Save as .SVG <small id="svgNote">vector · crisp · tiny</small></button>
-          <button id="dlPng" class="btn98 save-row" type="button" disabled>🖼️ Save as .PNG <small id="pngNote">raster image · @ current scale</small></button>
-          <button id="dlGif" class="btn98 save-row" type="button" disabled>🎞️ Save as .GIF <small id="gifNote">animated · needs Motion FX</small></button>
-        </div>
-      </section>
+      <!-- Export.exe removed: its controls now live in the taskbar Save button. -->
 
       </div><!-- /rail-right -->
     </main>
@@ -913,7 +892,6 @@
         <button class="task btn98" type="button" data-win="winScheme">🎨 Scheme</button>
         <button class="task btn98" type="button" data-win="winMotion">✨ Motion</button>
         <button class="task btn98" type="button" data-win="winSurprise">🎰 Surprise</button>
-        <button class="task btn98" type="button" data-win="winExport">💾 Export</button>
       </div>
       <div class="tb-undo">
         <button id="undoBtn" class="btn98" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>◀</button>
@@ -922,10 +900,10 @@
       <div class="quick-save">
         <button id="quickSave" class="btn98" type="button" aria-haspopup="menu" aria-expanded="false">💾 Save ▾</button>
         <div id="quickSaveMenu" class="qs-menu" hidden>
-          <label class="qs-scale">scale <select id="scaleQuick"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
-          <button class="qs-item" type="button" data-proxy="dlSvg">💾 .SVG</button>
-          <button class="qs-item" type="button" data-proxy="dlPng">🖼️ .PNG</button>
-          <button class="qs-item" type="button" data-proxy="dlGif">🎞️ .GIF</button>
+          <label class="qs-scale">scale <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+          <button id="dlSvg" class="qs-item" type="button" disabled>💾 .SVG</button>
+          <button id="dlPng" class="qs-item" type="button" disabled>🖼️ .PNG</button>
+          <button id="dlGif" class="qs-item" type="button" disabled>🎞️ .GIF</button>
         </div>
       </div>
     </footer>
