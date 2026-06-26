@@ -344,10 +344,15 @@
       .sm-parent { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
       .sm-caret { font-size: 11px; }
       .sm-sub[aria-expanded="true"] .sm-parent, .sm-parent:hover { background: var(--navy); color: #fff; }
-      /* float to the right, bottom-aligned to the parent row so a low My Favorites
-         grows UPWARD and stays on-screen; cap + scroll as a backstop on short screens. */
+      /* Flyout uses position:fixed, NOT absolute. The submenu is a DOM child of
+         .sm-body, which has overflow-y:auto — and overflow on one axis clips the
+         other too, so an absolutely-positioned flyout gets cut off. A fixed element
+         is positioned to the viewport and escapes every ancestor's overflow clip.
+         Pinned to the right edge of the start menu (left:4px + its width), bottom
+         just above the taskbar. The @media below flips it left on narrow screens. */
       .sm-submenu {
-        position: absolute; left: 100%; bottom: 0; z-index: 57; min-width: 200px;
+        position: fixed; left: calc(4px + min(280px, 100vw - 12px)); bottom: var(--taskbar-h);
+        z-index: 57; min-width: 200px;
         max-height: calc(100dvh - var(--taskbar-h) - 16px); overflow-y: auto;
         background: var(--face); box-shadow: var(--bevel-up), 0 4px 16px rgba(0,0,0,.5);
         padding: 4px; display: none;
@@ -356,8 +361,9 @@
       /* a preset row inside the flyout: name + flavor caption, styled as .sm-link */
       .sm-submenu .sm-link b { font-size: 13px; letter-spacing: .03em; display: block; }
       .sm-submenu .sm-link small { font-size: 11px; opacity: .85; font-style: italic; }
-      /* if the flyout would run off the right edge, flip it to the left side */
-      @media (max-width: 560px) { .sm-submenu { left: auto; right: 100%; } }
+      /* On narrow screens the right-side flyout would run off-screen, so pin it to
+         the menu's left edge instead (it overlaps the menu, Win98-on-a-phone style). */
+      @media (max-width: 560px) { .sm-submenu { left: 4px; right: auto; } }
       /* taskbar undo/redo group, pinned right of the tasks and left of Save */
       .tb-undo { flex: none; display: flex; gap: 3px; }
       .tb-undo .btn98 { padding: 4px 9px; font-size: 13px; }
