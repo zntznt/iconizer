@@ -135,6 +135,15 @@ function motionRuleAt(motion: string, p: number, amp = 1): string {
     case 'pulse': return `transform:scale(${(1 + 0.2 * tri * amp).toFixed(3)});${pivot}`;
     case 'bob': return `transform:translateY(${(-30 * tri * amp).toFixed(1)}%);${pivot}`;
     case 'shimmer': return `opacity:${(1 - 0.6 * tri).toFixed(3)}`;
+    // shake: a circular jitter (x = -8%..8%, y = -6%..6%) that loops seamlessly; reads
+    // as the same nervous shake as motion.ts's 4-step keyframes, amplitude-scaled.
+    case 'shake': {
+      const a = 2 * Math.PI * p;
+      return `transform:translate(${(-8 * Math.cos(a) * amp).toFixed(1)}%,${(6 * Math.sin(a) * amp).toFixed(1)}%) rotate(${(2 * Math.sin(a) * amp).toFixed(2)}deg);${pivot}`;
+    }
+    // flip/huecycle are LINEAR (continuous), so use p directly, not the eased tri.
+    case 'flip': return `transform:perspective(220px) rotateY(${(360 * p).toFixed(1)}deg);${pivot}`;
+    case 'huecycle': return `filter:hue-rotate(${(360 * p).toFixed(1)}deg)`; // O(1): one filter rule, all cells
     default: return '';
   }
 }

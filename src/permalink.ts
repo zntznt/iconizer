@@ -37,7 +37,7 @@ export function settingsFromUrl(): Settings | null {
 
 // --- "Surprise me" ---------------------------------------------------------
 
-const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer'];
+const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer', 'shake', 'flip', 'huecycle'];
 const STAGGERS: StaggerMode[] = ['none', 'ripple', 'radial', 'sweep', 'brightness', 'random'];
 const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph', 'halftone'] as const;
 const SCHEMES = ['none', 'grayscale', 'invert', 'sepia', 'threshold', 'hue',

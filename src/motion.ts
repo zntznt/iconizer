@@ -1,7 +1,8 @@
 import type { Cell } from './sample.ts';
 import type { Settings } from './settings.ts';
 
-export type Motion = 'none' | 'wiggle' | 'swing' | 'spin' | 'pulse' | 'bob' | 'shimmer';
+export type Motion = 'none' | 'wiggle' | 'swing' | 'spin' | 'pulse' | 'bob' | 'shimmer'
+  | 'shake' | 'flip' | 'huecycle';
 export type StaggerMode = 'none' | 'ripple' | 'radial' | 'sweep' | 'brightness' | 'random';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -11,7 +12,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 // not a transform. The keyframes for these multiply their reach by var(--amp,1), so
 // an element with no --amp (react off, or spin/shimmer) animates at FULL reach,
 // byte-identical to before.
-export const AMPLITUDE_MOTIONS = new Set<Motion>(['wiggle', 'swing', 'pulse', 'bob']);
+// shake's jitter magnitude scales with amp; flip/spin are full 360° rotations whose
+// amp-scaling would break the seamless loop (like spin), and huecycle is colour.
+export const AMPLITUDE_MOTIONS = new Set<Motion>(['wiggle', 'swing', 'pulse', 'bob', 'shake']);
 
 // Each motion: its @keyframes body + the transform-origin the pivot needs.
 // transform-box:fill-box (in the base class) makes the origin the element's
@@ -24,6 +27,14 @@ const KEYFRAMES: Record<Exclude<Motion, 'none'>, { frames: string; origin: strin
   pulse: { frames: '0%,100%{transform:scale(1)}50%{transform:scale(calc(1 + 0.2*var(--amp,1)))}', origin: 'center' },
   bob: { frames: '0%,100%{transform:translateY(0)}50%{transform:translateY(calc(-30%*var(--amp,1)))}', origin: 'center' },
   shimmer: { frames: '0%,100%{opacity:1}50%{opacity:0.4}', origin: 'center' },
+  // shake: a fast nervous jitter (translate + a touch of rotate), amplitude-scaled.
+  shake: { frames: '0%,100%{transform:translate(calc(-8%*var(--amp,1)),0)}25%{transform:translate(0,calc(6%*var(--amp,1))) rotate(calc(2deg*var(--amp,1)))}50%{transform:translate(calc(8%*var(--amp,1)),0)}75%{transform:translate(0,calc(-6%*var(--amp,1))) rotate(calc(-2deg*var(--amp,1)))}', origin: 'center' },
+  // flip: a 3D card-flip about the vertical axis. perspective lives in the transform
+  // so it reads as 3D without restructuring the .motion class. Full 360 -> seamless.
+  flip: { frames: '0%{transform:perspective(220px) rotateY(0)}100%{transform:perspective(220px) rotateY(360deg)}', origin: 'center' },
+  // huecycle: every icon cycles the colour wheel. A FILTER animation (not a transform)
+  // — see motionStyle for its separate keyframes + the filter-only base rule.
+  huecycle: { frames: '0%{filter:hue-rotate(0)}100%{filter:hue-rotate(360deg)}', origin: 'center' },
 };
 
 /** The <style> block for the selected motion, or '' for none (no regression). */
@@ -31,15 +42,22 @@ export function motionStyle(settings: Settings): string {
   if (settings.motion === 'none') return '';
   const { frames, origin } = KEYFRAMES[settings.motion];
   const period = r2(settings.motionSpeed);
+  // Continuous full-cycle motions (spin/flip/huecycle) want LINEAR timing so the
+  // loop doesn't stutter at the 0/100% seam; the back-and-forth ones want ease.
+  const linear = settings.motion === 'spin' || settings.motion === 'flip' || settings.motion === 'huecycle';
+  const timing = linear ? 'linear' : 'ease-in-out';
+  // huecycle animates `filter`, not a transform: no pivot, promote filter instead.
+  const base = settings.motion === 'huecycle'
+    ? `.motion{will-change:filter;animation:mo ${period}s ${timing} infinite}`
+    // will-change:transform GPU-promotes each animated element so the browser caches
+    // its raster and moves/scales the cached bitmap instead of re-rasterizing every
+    // frame. transform-box:fill-box makes each icon pivot around its OWN box.
+    : `.motion{transform-box:fill-box;transform-origin:${origin};will-change:transform;` +
+      `animation:mo ${period}s ${timing} infinite}`;
   return (
     `<style>` +
     `@keyframes mo{${frames}}` +
-    // will-change:transform GPU-promotes each animated element so the browser
-    // caches its raster and moves/scales the cached bitmap, instead of
-    // re-rasterizing every frame. This is what makes scale-based motion (pulse)
-    // smooth; without it the browser re-rasterizes each icon crisply per frame.
-    `.motion{transform-box:fill-box;transform-origin:${origin};will-change:transform;` +
-    `animation:mo ${period}s ease-in-out infinite}` +
+    base +
     // accessibility: respect the OS reduce-motion setting (non-negotiable).
     `@media (prefers-reduced-motion: reduce){.motion{animation:none!important}}` +
     `</style>`

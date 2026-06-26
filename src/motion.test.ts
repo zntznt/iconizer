@@ -112,4 +112,29 @@ for (const m of ['spin', 'shimmer'] as const) {
   assert.ok(!out.includes('--amp'), `${m} ignores react-to-image (no --amp at all)`);
 }
 
-console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + layered/solid wrappers + reactive amp)');
+// --- new motions: shake, flip 3D, hue-cycle ----------------------------------
+const motionOut = (m: string) => render(grid, svg, { ...defaults, cols: 6, motion: m, staggerMode: 'none' });
+
+// shake: transform jitter folding var(--amp,1); ease timing; transform pivot.
+const shakeOut = motionOut('shake');
+assert.ok(shakeOut.includes('@keyframes mo{') && shakeOut.includes('var(--amp,1)'), 'shake: keyframes + amp');
+assert.ok(/animation:mo [\d.]+s ease-in-out infinite/.test(shakeOut), 'shake: ease-in-out (back-and-forth)');
+assert.ok(shakeOut.includes('transform-box:fill-box'), 'shake: pivots in place');
+
+// flip: a continuous rotateY with perspective -> LINEAR timing, no amp.
+const flipOut = motionOut('flip');
+assert.ok(flipOut.includes('rotateY(360deg)') && flipOut.includes('perspective('), 'flip: 3D rotateY keyframes');
+assert.ok(/animation:mo [\d.]+s linear infinite/.test(flipOut), 'flip: linear (continuous)');
+
+// hue-cycle: a FILTER animation, not a transform -> filter base rule, no transform-box,
+// will-change:filter, linear timing. (The differentiator: colour, not motion.)
+const hueOut = motionOut('huecycle');
+assert.ok(hueOut.includes('hue-rotate(360deg)'), 'huecycle: filter keyframes');
+assert.ok(hueOut.includes('will-change:filter') && /animation:mo [\d.]+s linear infinite/.test(hueOut),
+  'huecycle: filter-promoted, linear');
+assert.ok(!/\.motion\{transform-box/.test(hueOut), 'huecycle: no transform pivot on the base rule');
+
+// motion:none still emits nothing (regression guard holds with the new keys).
+assert.ok(!motionOut('none').includes('@keyframes'), 'none -> no keyframes (regression)');
+
+console.log('motion.test.ts: ok (keyframes/pivot/stagger + layered/solid + reactive amp + shake/flip/huecycle)');
