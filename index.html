@@ -16,15 +16,23 @@
         --taskbar-h: 42px;
       }
       * { box-sizing: border-box; }
-      /* The desktop fills the screen exactly and never scrolls — dvh tracks the
-         mobile dynamic viewport (address-bar math) so the fixed taskbar sits flush
-         at the true bottom instead of a few px past a scroll. */
-      html, body { overflow: hidden; height: 100dvh; }
+      /* The page scrolls normally (html is the scroller), so the lower windows and
+         the webring below the fold stay reachable. The taskbar is fixed to the
+         viewport bottom (flush regardless of scroll); body padding-bottom reserves
+         its height so the last content (the webring) clears it. overflow-x:hidden is
+         the no-sideways-scroll backstop that the old 100dvh rule was really after. */
+      html, body { overflow-x: hidden; }
+      /* flex column so the webring can be pushed to the bottom of the scrollable
+         page (margin-top:auto on .ringbox) — it sits just above the taskbar whether
+         the windows are tall or short, never floating mid-page. */
+      body { min-height: 100dvh; display: flex; flex-direction: column; }
       [hidden] { display: none !important; } /* load-bearing for ALL disclosure */
 
       body {
         margin: 0; font: 14px/1.4 var(--sans); color: var(--ink);
         background: #000; /* flat Space Jam void; p5 canvas (z-index -3) owns the backdrop */
+        /* reserve exactly the fixed taskbar's height; the webring's own bottom
+           margin is the small gap between it and the taskbar. */
         padding-bottom: var(--taskbar-h);
       }
       /* The p5 Space Jam canvas (public/spacejam.js, z-index -3) now owns the backdrop.
@@ -437,7 +445,11 @@
          If you ever wrap the desktop + ringbox in a shared flex/grid, give the
          ringbox `order: 999` (or make it the last child) to preserve this. */
       .ringbox {
-        max-width: 720px; margin: 14px auto 6px; padding: 6px 8px; text-align: center;
+        max-width: 720px; padding: 6px 8px; text-align: center;
+        /* margin-top:auto eats the leftover space ABOVE the webring, dropping it to
+           the bottom of the flex column; the 14px top keeps a gap from the windows
+           when content IS tall, the 5px bottom margin is the small gap to the taskbar. */
+        margin: 14px auto 5px; margin-top: auto;
         background: #100022; box-shadow: var(--bevel-up), 0 0 0 2px var(--magenta);
         font-family: var(--cursive); color: var(--cyan);
         position: static; /* load-bearing: stays in flow as the last content block */
