@@ -82,4 +82,34 @@ const solid = render(grid, svg, { ...defaults, cols: 6, motion: 'wiggle', stagge
 assert.ok(/<g class="motion"><use\b/.test(solid), 'solid motion -> <g> wraps the <use>');
 assert.ok(!/<use[^>]*class="motion"/.test(solid), 'solid -> class on the <g>, not the <use>');
 
-console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + layered/solid motion wrappers)');
+// --- "react to image": per-cell motion amplitude by brightness ---------------
+// Two cells, one bright one dark, so a reactive amp must differ between them.
+const ampGrid: Cell[] = [
+  { col: 0, row: 0, r: 240, g: 240, b: 240, brightness: 0.95 }, // bright -> big amp
+  { col: 1, row: 0, r: 20, g: 20, b: 20, brightness: 0.05 },     // dark -> small amp
+];
+const reactWiggle = render(ampGrid, svg, { ...defaults, cols: 2, motion: 'wiggle', staggerMode: 'none', motionReactive: true });
+// amplitude keyframes fold var(--amp,1) into their magnitude.
+assert.ok(reactWiggle.includes('var(--amp,1)'), 'amplitude keyframes carry var(--amp,1)');
+// each cell carries an inline --amp, and the bright cell's is larger than the dark cell's.
+const amps = [...reactWiggle.matchAll(/--amp:([\d.]+)/g)].map((m) => +m[1]);
+assert.equal(amps.length, 2, 'reactive: one --amp per cell');
+assert.ok(Math.max(...amps) > Math.min(...amps), 'bright cell amp > dark cell amp');
+assert.ok(Math.min(...amps) > 0, 'dark cell still moves a little (amp floored > 0)');
+
+// react OFF -> no per-cell --amp DECLARATION (the keyframe's var(--amp,1) fallback
+// stays, giving full reach — byte-identical to the non-reactive path).
+const offWiggle = render(ampGrid, svg, { ...defaults, cols: 2, motion: 'wiggle', staggerMode: 'none', motionReactive: false });
+assert.ok(!/--amp:[\d.]/.test(offWiggle), 'react off -> no per-cell --amp declaration');
+assert.equal(
+  render(ampGrid, svg, { ...defaults, cols: 2, motion: 'wiggle', staggerMode: 'none' }), offWiggle,
+  'react off is identical to default (regression guard)');
+
+// spin + shimmer are NOT amplitude motions -> no per-cell --amp even with react on
+// (and their keyframes never reference var(--amp,1) either).
+for (const m of ['spin', 'shimmer'] as const) {
+  const out = render(ampGrid, svg, { ...defaults, cols: 2, motion: m, staggerMode: 'none', motionReactive: true });
+  assert.ok(!out.includes('--amp'), `${m} ignores react-to-image (no --amp at all)`);
+}
+
+console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + layered/solid wrappers + reactive amp)');

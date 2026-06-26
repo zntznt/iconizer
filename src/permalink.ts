@@ -120,6 +120,7 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     motion,
     motionSpeed: +(0.5 + rnd() * 3).toFixed(1), // 0.5..3.5
     staggerMode: choose(STAGGERS),
+    motionReactive: rnd() < 0.4, // "react to image" is a fun default-ish twist
   };
 }
 
@@ -139,7 +140,7 @@ export const LOCK_GROUPS: Record<string, (keyof Settings)[]> = {
     'overlay', 'colorJitter', 'iconMetric'],
   layer: ['layered', 'layerStyle', 'layerCount', 'layerOffset', 'perChannelIcons'],
   scheme: ['scheme'],
-  motion: ['motion', 'motionSpeed', 'staggerMode'],
+  motion: ['motion', 'motionSpeed', 'staggerMode', 'motionReactive'],
 };
 
 /** Merge a fresh `roll` into `current`, taking only the UNLOCKED groups' keys, then

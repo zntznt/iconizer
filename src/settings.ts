@@ -41,6 +41,11 @@ export type Settings = {
   motion: Motion; // CSS-keyframe animation baked into the SVG; 'none' = static
   motionSpeed: number; // animation period in seconds
   staggerMode: StaggerMode; // per-cell animation-delay pattern
+  // "React to image": scale each cell's motion AMPLITUDE by its brightness, so bright
+  // cells swing/bob/pulse harder and dark cells barely move — the animation traces the
+  // picture. Applies to amplitude motions (wiggle/swing/pulse/bob); spin/shimmer ignore
+  // it (a partial spin breaks the loop; shimmer is opacity, not a transform).
+  motionReactive: boolean;
   // (layered motion always animates the cell as one unit — see render.ts; the old
   //  per-layer 'apart' mode broke the multiply blend and was removed.)
 };
@@ -71,4 +76,5 @@ export const defaults: Settings = {
   motion: 'none',
   motionSpeed: 1.5,
   staggerMode: 'ripple',
+  motionReactive: false,
 };

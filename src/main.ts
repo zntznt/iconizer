@@ -650,6 +650,10 @@ $('staggerMode').addEventListener('change', (e) => {
   settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
   scheduleRedraw();
 });
+$('motionReactive').addEventListener('change', (e) => {
+  settings.motionReactive = (e.target as HTMLInputElement).checked;
+  scheduleRedraw();
+});
 // Tell the p5 backdrop to pause while a raster export runs (it fights the encode
 // for the main thread / GPU). The sketch listens for this on document.
 const setExportBusy = (busy: boolean) =>
@@ -735,6 +739,7 @@ function syncControls() {
   set('motion', settings.motion);
   set('motionSpeed', settings.motionSpeed); $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   set('staggerMode', settings.staggerMode);
+  set('motionReactive', settings.motionReactive);
   // adjust panel
   set('adjBright', settings.adjust.brightness); $('adjBrightVal').textContent = settings.adjust.brightness.toFixed(2);
   set('adjContrast', settings.adjust.contrast); $('adjContrastVal').textContent = settings.adjust.contrast.toFixed(2);

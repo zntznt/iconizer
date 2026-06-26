@@ -105,16 +105,18 @@ export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.p
  *  `transform-box:fill-box; transform-origin:center` makes it pivot IN PLACE even
  *  in a static SVG image (verified). One rule covers ALL cells -> O(1) per frame,
  *  no per-element work. Math mirrors motion.ts's keyframes + ease-in-out. */
-function motionRuleAt(motion: string, p: number): string {
+function motionRuleAt(motion: string, p: number, amp = 1): string {
   const pivot = 'transform-box:fill-box;transform-origin:center';
   const ease = (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
   const tri = ease(1 - Math.abs(1 - 2 * p)); // 0->1->0 eased (symmetric keyframes)
+  // amp scales the amplitude motions (react-to-image); spin/shimmer ignore it,
+  // mirroring motion.ts's var(--amp,1) folded into the same magnitudes.
   switch (motion) {
     case 'spin': return `transform:rotate(${(360 * p).toFixed(1)}deg);${pivot}`;
-    case 'wiggle': return `transform:rotate(${(-6 + 12 * tri).toFixed(2)}deg);${pivot}`;
-    case 'swing': return `transform:rotate(${(-12 + 24 * tri).toFixed(2)}deg);transform-box:fill-box;transform-origin:top center`;
-    case 'pulse': return `transform:scale(${(1 + 0.2 * tri).toFixed(3)});${pivot}`;
-    case 'bob': return `transform:translateY(${(-30 * tri).toFixed(1)}%);${pivot}`;
+    case 'wiggle': return `transform:rotate(${(-6 + 12 * tri) * amp}deg);${pivot}`;
+    case 'swing': return `transform:rotate(${(-12 + 24 * tri) * amp}deg);transform-box:fill-box;transform-origin:top center`;
+    case 'pulse': return `transform:scale(${(1 + 0.2 * tri * amp).toFixed(3)});${pivot}`;
+    case 'bob': return `transform:translateY(${(-30 * tri * amp).toFixed(1)}%);${pivot}`;
     case 'shimmer': return `opacity:${(1 - 0.6 * tri).toFixed(3)}`;
     default: return '';
   }
@@ -158,18 +160,22 @@ export async function downloadGif(
   // motion element carries its own `animation-delay` (the stagger), so it must be
   // frozen at ITS phase, not a global one, or the GIF loses the ripple/wave look.
   const styleStripped = svg.replace(/<style>.*?<\/style>/s, '');
-  // matches a motion element's class attr + optional inline animation-delay style.
-  const motionElRe = /class="motion"(?:\s+style="animation-delay:([\d.-]+)s")?/g;
+  // matches a motion element's class attr + its optional inline style (which may hold
+  // animation-delay, --amp, or both); we parse the delay + amp out of the captured text.
+  const motionElRe = /class="motion"(?:\s+style="([^"]*)")?/g;
   const period = periodSec;
   const frameSvgAt = (i: number) => {
     const t = (period * i) / frames; // global time within one cycle
-    return styleStripped.replace(motionElRe, (_m, delayStr) => {
+    return styleStripped.replace(motionElRe, (_m, styleStr) => {
+      const delayM = styleStr && /animation-delay:([\d.-]+)s/.exec(styleStr);
+      const ampM = styleStr && /--amp:([\d.-]+)/.exec(styleStr);
+      const delay = delayM ? parseFloat(delayM[1]) : 0;
+      const amp = ampM ? parseFloat(ampM[1]) : 1;
       // CSS: effective phase = ((t - delay) / period) wrapped to [0,1).
-      const delay = delayStr ? parseFloat(delayStr) : 0;
       let p = ((t - delay) / period) % 1;
       if (p < 0) p += 1;
       // bake this cell's transform inline; class removed so nothing re-animates.
-      return `style="${motionRuleAt(motion, p)}"`;
+      return `style="${motionRuleAt(motion, p, amp)}"`;
     });
   };
 

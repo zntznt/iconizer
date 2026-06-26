@@ -6,15 +6,23 @@ export type StaggerMode = 'none' | 'ripple' | 'radial' | 'sweep' | 'brightness' 
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+// Motions whose magnitude `--amp` scales for "react to image". spin is excluded (a
+// partial rotation wouldn't return to 0 -> a broken loop) and shimmer is opacity,
+// not a transform. The keyframes for these multiply their reach by var(--amp,1), so
+// an element with no --amp (react off, or spin/shimmer) animates at FULL reach,
+// byte-identical to before.
+export const AMPLITUDE_MOTIONS = new Set<Motion>(['wiggle', 'swing', 'pulse', 'bob']);
+
 // Each motion: its @keyframes body + the transform-origin the pivot needs.
 // transform-box:fill-box (in the base class) makes the origin the element's
 // own box, so icons pivot IN PLACE instead of flinging around the SVG origin.
+// Amplitude motions fold var(--amp,1) into their transform magnitude.
 const KEYFRAMES: Record<Exclude<Motion, 'none'>, { frames: string; origin: string }> = {
-  wiggle: { frames: '0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}', origin: 'center' },
-  swing: { frames: '0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}', origin: 'top center' },
+  wiggle: { frames: '0%,100%{transform:rotate(calc(-6deg*var(--amp,1)))}50%{transform:rotate(calc(6deg*var(--amp,1)))}', origin: 'center' },
+  swing: { frames: '0%,100%{transform:rotate(calc(-12deg*var(--amp,1)))}50%{transform:rotate(calc(12deg*var(--amp,1)))}', origin: 'top center' },
   spin: { frames: '0%{transform:rotate(0)}100%{transform:rotate(360deg)}', origin: 'center' },
-  pulse: { frames: '0%,100%{transform:scale(1)}50%{transform:scale(1.2)}', origin: 'center' },
-  bob: { frames: '0%,100%{transform:translateY(0)}50%{transform:translateY(-30%)}', origin: 'center' },
+  pulse: { frames: '0%,100%{transform:scale(1)}50%{transform:scale(calc(1 + 0.2*var(--amp,1)))}', origin: 'center' },
+  bob: { frames: '0%,100%{transform:translateY(0)}50%{transform:translateY(calc(-30%*var(--amp,1)))}', origin: 'center' },
   shimmer: { frames: '0%,100%{opacity:1}50%{opacity:0.4}', origin: 'center' },
 };
 
@@ -75,10 +83,24 @@ export function cellDelay(cell: Cell, index: number, settings: Settings, cols = 
   }
 }
 
-/** class + (optional) animation-delay attrs for an animated element. */
+/** Per-cell motion amplitude 0..1 when "react to image" is on for an amplitude
+ *  motion: a lerp of brightness floored at 0.15 so dark cells still move a little
+ *  (0 would freeze them, reading as broken). Off / spin / shimmer -> null (no --amp,
+ *  so the keyframe's var(--amp,1) fallback gives full reach, unchanged output). */
+function ampFor(cell: Cell, settings: Settings): number | null {
+  if (!settings.motionReactive || !AMPLITUDE_MOTIONS.has(settings.motion)) return null;
+  return r2(0.15 + 0.85 * cell.brightness);
+}
+
+/** class + (optional) inline style (animation-delay + --amp) for an animated element. */
 export function motionAttrs(cell: Cell, index: number, settings: Settings, cols = 1, rows = 1): string {
   if (settings.motion === 'none') return '';
   const delay = cellDelay(cell, index, settings, cols, rows);
-  const d = delay ? ` style="animation-delay:${delay}s"` : '';
-  return ` class="motion"${d}`;
+  const amp = ampFor(cell, settings);
+  const decls = [
+    delay ? `animation-delay:${delay}s` : '',
+    amp !== null ? `--amp:${amp}` : '',
+  ].filter(Boolean).join(';');
+  const style = decls ? ` style="${decls}"` : '';
+  return ` class="motion"${style}`;
 }
