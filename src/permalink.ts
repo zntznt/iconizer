@@ -39,7 +39,7 @@ export function settingsFromUrl(): Settings | null {
 
 const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer'];
 const STAGGERS: StaggerMode[] = ['none', 'ripple', 'radial', 'sweep', 'brightness', 'random'];
-const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph'] as const;
+const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph', 'halftone'] as const;
 const SCHEMES = ['none', 'grayscale', 'invert', 'sepia', 'threshold', 'hue',
   'posterize', 'duotone', 'tritone', 'gradient', 'solarize', 'channelswap', 'palette'] as const;
 const PALETTE_NAMES = Object.keys(PALETTES);

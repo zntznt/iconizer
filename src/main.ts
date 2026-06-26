@@ -445,6 +445,7 @@ $('layered').addEventListener('change', async (e) => {
 function syncLayerCountUI() {
   const st = settings.layerStyle;
   disclose('p-layerCount', st === 'cmy' || st === 'ryb');
+  $('halftoneHint').hidden = st !== 'halftone';
 }
 $('layerStyle').addEventListener('change', (e) => {
   settings.layerStyle = (e.target as HTMLSelectElement).value as Settings['layerStyle'];

@@ -20,9 +20,10 @@ export type Settings = {
   // The "3D glasses" split styles. Subtractive (multiply over white):
   //   cmy  — cyan/magenta/yellow inks   cmyk — + a black ink for deeper shadows
   //   ryb  — warmer artist primaries (red/yellow/blue)
+  //   halftone — cmyk, each ink rotated to its print screen angle (rosette w/ offset)
   // Additive (screen over black):
   //   rgb       — red/green/blue subpixels    anaglyph — red+cyan 3D-glasses ghosts
-  layerStyle: 'cmy' | 'cmyk' | 'ryb' | 'rgb' | 'anaglyph';
+  layerStyle: 'cmy' | 'cmyk' | 'ryb' | 'rgb' | 'anaglyph' | 'halftone';
   layerCount: 2 | 3; // cmy/ryb only: inks to stack (3 = full, 2 = drop the last)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
   adjust: Adjust; // pre-scheme tonal/colour tweak (brightness/contrast/sat/temp)

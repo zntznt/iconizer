@@ -170,13 +170,16 @@ function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings
 // ponytail: no per-cell white/black rect + isolation any more — every style now
 // blends against the shared page. It's a fun toy; overlapping/animating cells
 // re-blend and that's fine (the user asked for it). Fewer nodes, simpler.
-export const SUBTRACTIVE = new Set(['cmy', 'cmyk', 'ryb']);
+export const SUBTRACTIVE = new Set(['cmy', 'cmyk', 'ryb', 'halftone']);
 
 // Per-style ink layers. Each entry: how to derive the layer's strength from the
 // cell's r/g/b (0..1 each), and the offset direction for the aberration shimmer.
 // SUBTRACTIVE inks are white-minus-one-channel (multiply); ADDITIVE carry the
 // channel's true value (screen). Offsets fan out so layers separate under offset.
-type Ink = { color: (r: number, g: number, b: number) => string; dx: number; dy: number };
+// `angle` (optional, degrees) is the classic print screen-angle for the halftone
+// layerStyle: each ink rotates to its own angle so the channels interfere into a
+// newsprint rosette under offset. Undefined = upright (every non-halftone style).
+type Ink = { color: (r: number, g: number, b: number) => string; dx: number; dy: number; angle?: number };
 const cmyInk = (chan: number): Ink => ({
   color: (...c) => { const rgb = [255, 255, 255]; rgb[chan] = Math.round(c[chan] * 255); return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; },
   dx: [-1, 1, -1][chan], dy: [-1, 1, 1][chan],
@@ -207,11 +210,18 @@ const anaglyphInks: Ink[] = [
   { color: (r, g, b) => { const v = Math.round((0.3 * r + 0.59 * g + 0.11 * b) * 255); return `rgb(${v},0,0)`; }, dx: -1, dy: 0 },
   { color: (r, g, b) => { const v = Math.round((0.3 * r + 0.59 * g + 0.11 * b) * 255); return `rgb(0,${v},${v})`; }, dx: 1, dy: 0 },
 ];
+// Halftone: the four CMYK inks, each rotated to its canonical print screen angle
+// (C 15° / M 75° / Y 0° / K 45°), in CMYK order. With layerOffset > 0 the rotated
+// channels fan apart into a rosette. Multiply-blended over white, like cmyk.
+const HALFTONE_ANGLES = [15, 75, 0, 45];
+const halftoneInks: Ink[] = [cmyInk(0), cmyInk(1), cmyInk(2), kInk]
+  .map((ink, i) => ({ ...ink, angle: HALFTONE_ANGLES[i] }));
 
 /** Pick the ink list + blend mode for a style. layerCount trims CMY/RYB to 2. */
 function inksFor(settings: Settings): { inks: Ink[]; blend: 'multiply' | 'screen' } {
   switch (settings.layerStyle) {
     case 'cmyk': return { inks: [cmyInk(0), cmyInk(1), cmyInk(2), kInk], blend: 'multiply' };
+    case 'halftone': return { inks: halftoneInks, blend: 'multiply' };
     case 'ryb': return { inks: rybInks.slice(0, settings.layerCount), blend: 'multiply' };
     case 'rgb': return { inks: rgbInks, blend: 'screen' };
     case 'anaglyph': return { inks: anaglyphInks, blend: 'screen' };
@@ -238,7 +248,12 @@ function layeredBody(cell: Cell, settings: Settings, place: Placer): string {
     const box = cellBox(cell, settings, scale);
     box.x = r1(box.x + inks[i].dx * off);
     box.y = r1(box.y + inks[i].dy * off);
-    s += place(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    let layer = place(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    // Halftone: rotate this ink to its screen angle, pivoting in place (fill-box) so
+    // it turns around the icon's own centre instead of flinging across the canvas.
+    const angle = inks[i].angle;
+    if (angle) layer = `<g style="transform:rotate(${angle}deg);transform-box:fill-box;transform-origin:center">${layer}</g>`;
+    s += layer;
   }
   return s;
 }

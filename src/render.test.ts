@@ -256,6 +256,7 @@ assert.ok(/<g class="motion"><use/.test(rgbAnim), 'motion wraps the screen <use>
 // SUBTRACTIVE styles (cmy/cmyk/ryb) force a WHITE page (multiply identity);
 // ADDITIVE (rgb/anaglyph) force BLACK. background setting is overridden either way.
 for (const [style, pageBg] of [['cmy', '#ffffff'], ['cmyk', '#ffffff'], ['ryb', '#ffffff'],
+                               ['halftone', '#ffffff'],
                                ['rgb', '#000000'], ['anaglyph', '#000000']] as const) {
   const o = render(cell, circleSvg, { ...defaults, cols: 1, layered: true, layerStyle: style, background: '#abcdef' });
   assert.ok(o.includes(`fill="${pageBg}"`), `${style} forces page bg ${pageBg}, not the #abcdef setting`);
@@ -271,6 +272,19 @@ assert.equal((cmyk.match(/mix-blend-mode:multiply/g) ?? []).length, 4, 'CMYK all
 const cmykFills = [...cmyk.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => [+m[1], +m[2], +m[3]]);
 const kFill = cmykFills[3];
 assert.ok(kFill[0] === kFill[1] && kFill[1] === kFill[2], `K ink is gray (r=g=b), got ${kFill}`);
+
+// HALFTONE: 4 CMYK multiply layers, each rotated to its print screen angle and
+// pivoting IN PLACE (fill-box), so offset fans them into a rosette.
+const halftoneOut = emitCell(mid, { ...defaults, layered: true, layerStyle: 'halftone', layerOffset: 2 });
+assert.equal((halftoneOut.match(/mix-blend-mode:multiply/g) ?? []).length, 4, 'halftone: 4 multiply layers');
+for (const a of [15, 75, 0, 45].filter(Boolean)) // 0deg emits no rotate, skip it
+  assert.ok(halftoneOut.includes(`rotate(${a}deg)`), `halftone carries the ${a}deg screen angle`);
+assert.ok(halftoneOut.includes('transform-box:fill-box'), 'halftone rotation pivots in place (fill-box)');
+// the Y ink is angle 0 -> NO rotate wrapper for it (only 3 rotate groups appear).
+assert.equal((halftoneOut.match(/transform:rotate\(/g) ?? []).length, 3, 'halftone: 3 angled inks wrapped (Y at 0deg is not)');
+// upright styles never emit a screen-angle rotate.
+assert.ok(!emitCell(mid, { ...defaults, layered: true, layerStyle: 'cmyk' }).includes('transform:rotate('),
+  'cmyk (non-halftone) stays upright, no screen-angle rotate');
 // K = max(r,g,b) as gray; cell (180,90,40) -> 180.
 assert.equal(kFill[0], 180, `K gray = max channel (180), got ${kFill[0]}`);
 
