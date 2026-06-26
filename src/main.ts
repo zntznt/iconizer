@@ -855,14 +855,41 @@ presetList.addEventListener('keydown', (e) => {
 // leave or Esc. aria-expanded on the wrapper drives the CSS reveal.
 const favParent = $('favParent');
 const favTrigger = favParent.querySelector('.sm-parent') as HTMLElement;
-const openFav = () => { favParent.setAttribute('aria-expanded', 'true'); favTrigger.setAttribute('aria-expanded', 'true'); };
-const closeFav = () => { favParent.setAttribute('aria-expanded', 'false'); favTrigger.setAttribute('aria-expanded', 'false'); };
-favParent.addEventListener('mouseenter', openFav);
-favParent.addEventListener('mouseleave', closeFav);
+let favCloseTimer: number | undefined;
+const cancelClose = () => { clearTimeout(favCloseTimer); favCloseTimer = undefined; };
+const openFav = () => { cancelClose(); favParent.setAttribute('aria-expanded', 'true'); favTrigger.setAttribute('aria-expanded', 'true'); };
+const closeFav = () => { cancelClose(); favParent.setAttribute('aria-expanded', 'false'); favTrigger.setAttribute('aria-expanded', 'false'); };
+const closeSoon = () => { cancelClose(); favCloseTimer = setTimeout(closeFav, 220); };
+// HOVER DEVICES ONLY. A single tap on a touch device synthesizes mouseenter ->
+// click -> mouseleave, so wiring mouseleave here would arm the close timer right
+// after the tap opened the menu and tear it back down (looked like "tap does
+// nothing"). Gate on (hover: hover) so touch relies purely on tap-to-open +
+// tap-outside-to-close (below). The flyout is position:fixed, sitting in a box
+// detached from the row with a gap; the delayed close + cancel-on-reenter lets the
+// cursor travel that gap to the submenu without it vanishing.
+if (matchMedia('(hover: hover)').matches) {
+  [favParent, presetList].forEach((el) => {
+    el.addEventListener('mouseenter', openFav);
+    el.addEventListener('mouseleave', closeSoon);
+  });
+}
+// Click ALWAYS opens (idempotent), never toggles. Toggling fought touch: a tap
+// emulates mouseenter (-> openFav) then click on the same element, so a toggle
+// would immediately re-close and the tap would appear to do nothing. With open-
+// only here, mobile users tap the label to reveal the submenu; the outside-click
+// handler below is the sole close path for pointer/touch.
 favTrigger.addEventListener('click', (e) => {
   e.stopPropagation(); // don't let the Start-menu's own click-close fire
-  favParent.getAttribute('aria-expanded') === 'true' ? closeFav() : openFav();
+  openFav();
 });
+// Close the flyout when clicking/tapping anything that's NOT the row or the
+// submenu (covers mobile, where there's no mouseleave). #presetList is a child of
+// #favParent, so one contains() check covers both. Capture phase so favTrigger's
+// stopPropagation can't hide an outside click from us.
+document.addEventListener('click', (e) => {
+  if (favParent.getAttribute('aria-expanded') === 'true'
+      && !favParent.contains(e.target as Node)) closeFav();
+}, true);
 favTrigger.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
     e.preventDefault(); openFav();
