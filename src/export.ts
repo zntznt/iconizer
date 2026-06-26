@@ -75,7 +75,7 @@ function decodeSvg(svg: string): { img: HTMLImageElement; url: string; done: Pro
  * ponytail: PNG export verified manually (depends on real browser canvas).
  * Not unit-tested — jsdom has no canvas and a polyfill isn't worth a dep.
  */
-export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.png'): Promise<void> {
+export async function renderPngBlob(svg: string, scale = 1): Promise<Blob> {
   const { w, h } = exportSize(svg, PNG_BASE, scale); // sharp absolute resolution
   const url = URL.createObjectURL(svgBlob(svg));
   try {
@@ -92,13 +92,30 @@ export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.p
     // pull external fonts/images, toBlob() can throw SecurityError; inline them then.
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    const blob: Blob = await new Promise((res, rej) =>
+    return await new Promise((res, rej) =>
       canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'),
     );
-    downloadBlob(blob, filename);
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Rasterize the SVG to PNG and download it. */
+export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.png'): Promise<void> {
+  downloadBlob(await renderPngBlob(svg, scale), filename);
+}
+
+/** Whether copy-image-to-clipboard is supported (ClipboardItem + clipboard.write).
+ *  Safari/Firefox gating varies, so the UI feature-detects with this. */
+export const canCopyImage = (): boolean =>
+  typeof ClipboardItem !== 'undefined' && !!navigator.clipboard?.write;
+
+/** Copy the rendered mosaic to the clipboard as a PNG — the clean image itself,
+ *  none of the CRT chrome (scanlines/bezel are CSS on the wrapper, never in the
+ *  SVG). Same rasterize as the PNG download, ending in clipboard.write. */
+export async function copyPng(svg: string, scale = 1): Promise<void> {
+  const blob = await renderPngBlob(svg, scale);
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
 }
 
 /** The CSS `.motion{...}` body that freezes the animation at phase p (0..1).

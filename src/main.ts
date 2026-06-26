@@ -2,7 +2,7 @@ import { defaults, type Settings } from './settings.ts';
 import { sample, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
-import { downloadSvg, downloadPng, downloadGif } from './export.ts';
+import { downloadSvg, downloadPng, downloadGif, copyPng, canCopyImage } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom, rollWithLocks } from './permalink.ts';
 import { PRESETS } from './presets.ts';
@@ -1078,12 +1078,14 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !propsMo
 // --- CRT right-click context menu (Randomize · export · Properties) -------------
 
 const crtMenu = $('crtMenu');
+// Copy-image only exists where the clipboard API supports it; reveal it once at init.
+if (canCopyImage()) (crtMenu.querySelector('[data-act="copy"]') as HTMLElement).hidden = false;
 function openCrtMenu(x: number, y: number) {
   // gate the export rows on a render existing (same state the Save menu uses).
   const rendered = !!lastSvg;
   crtMenu.querySelectorAll<HTMLButtonElement>('.ctx-item').forEach((b) => {
     const a = b.dataset.act!;
-    b.disabled = (a === 'svg' || a === 'png' || a === 'properties') ? !rendered
+    b.disabled = (a === 'svg' || a === 'png' || a === 'copy' || a === 'properties') ? !rendered
       : a === 'gif' ? (!rendered || settings.motion === 'none') : false; // randomize always on
   });
   crtMenu.hidden = false;
@@ -1103,12 +1105,28 @@ crtMenu.addEventListener('click', (e) => {
   closeCrtMenu();
   switch (item.dataset.act) {
     case 'randomize': doRoll(); break;        // same as Surprise Me
+    case 'copy': copyImage(); break;
     case 'svg': ($('dlSvg') as HTMLButtonElement).click(); break;
     case 'png': ($('dlPng') as HTMLButtonElement).click(); break;
     case 'gif': ($('dlGif') as HTMLButtonElement).click(); break;
     case 'properties': openProperties(); break;
   }
 });
+
+// Copy the clean rendered mosaic (the image, no CRT chrome) to the clipboard.
+async function copyImage() {
+  if (!lastSvg) return;
+  setStatus('exporting'); setProg(40);
+  try {
+    await copyPng(lastSvg); // scale 1 — a quick snapshot, not a print-res export
+    setProg(100);
+    $('progText').textContent = '📋 COPIED TO CLIPBOARD';
+  } catch {
+    $('progText').textContent = '✖ COPY FAILED';
+  } finally {
+    setTimeout(() => { setStatus('ready'); setProg(0); }, 900);
+  }
+}
 // dismiss on any outside click / Escape / scroll
 document.addEventListener('click', (e) => { if (!crtMenu.hidden && !crtMenu.contains(e.target as Node)) closeCrtMenu(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !crtMenu.hidden) closeCrtMenu(); });
