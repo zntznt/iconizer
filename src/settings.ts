@@ -26,6 +26,11 @@ export type Settings = {
   layerStyle: 'cmy' | 'cmyk' | 'ryb' | 'rgb' | 'anaglyph' | 'halftone';
   layerCount: 2 | 3; // cmy/ryb only: inks to stack (3 = full, 2 = drop the last)
   layerOffset: number; // px chromatic-aberration nudge; 0 = concentric
+  // Layered only: draw each ink channel with a DIFFERENT uploaded icon (ink 0 ->
+  // icon 0, ink 1 -> icon 1, ...) instead of N copies of the cell's one icon. Fewer
+  // icons than inks -> the missing channels fall back to the cell's normal pick, so
+  // a single icon renders exactly as before. Misregistration gains personality.
+  perChannelIcons: boolean;
   adjust: Adjust; // pre-scheme tonal/colour tweak (brightness/contrast/sat/temp)
   colorJitter: number; // 0..1 per-cell hue/sat scatter (deterministic, from cell hash); 0 = off
   iconMetric: 'brightness' | 'hue'; // which cell channel picks the tile from the icon list
@@ -55,6 +60,7 @@ export const defaults: Settings = {
   layerStyle: 'cmy',
   layerCount: 3,
   layerOffset: 0,
+  perChannelIcons: false,
   adjust: { ...NEUTRAL_ADJUST },
   colorJitter: 0,
   iconMetric: 'brightness',

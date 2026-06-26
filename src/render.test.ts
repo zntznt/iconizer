@@ -300,4 +300,21 @@ assert.ok(anaFills[1][0] === 0, `anaglyph layer 1 = cyan ghost (r=0), got ${anaF
 const ryb2 = emitCell(mid, { ...defaults, layered: true, layerStyle: 'ryb', layerCount: 2 });
 assert.equal((ryb2.match(/<use\b/g) ?? []).length, 2, 'ryb layerCount:2 -> 2 layers');
 
-console.log('render.test.ts: ok (solid + CMY/CMYK/RYB/RGB/anaglyph + bg forcing + scheme + multi-icon)');
+// PER-CHANNEL ICONS: with 2+ icons + layered, each ink draws a DIFFERENT icon
+// (ink0 -> #icon0, ink1 -> #icon1, ink2 falls back since only 2 icons exist).
+const oneCell: Cell[] = [{ col: 0, row: 0, r: 120, g: 90, b: 60, brightness: 0.4 }];
+const pcOpts = { ...defaults, cols: 1, layered: true, layerStyle: 'cmy' as const, perChannelIcons: true };
+const pc = render(oneCell, twoIcons, pcOpts); // export mode -> href="#iconN"
+assert.ok(pc.includes('href="#icon0"') && pc.includes('href="#icon1"'),
+  'per-channel: distinct inks reference distinct icons');
+// 3 cmy inks, 2 icons -> icon0, icon1, then fall back (icon by the cell's pick) for ink2.
+assert.equal((pc.match(/href="#icon0"/g) ?? []).length + (pc.match(/href="#icon1"/g) ?? []).length, 3,
+  'per-channel: every ink draws some icon (no dropped layer)');
+// OFF (or 1 icon) is byte-identical to normal layered: every ink uses the cell's icon.
+const pcOff = render(oneCell, twoIcons, { ...pcOpts, perChannelIcons: false });
+const oneIconPC = render(oneCell, [twoIcons[0]], pcOpts); // 1 icon + perChannel ON
+const oneIconPlain = render(oneCell, [twoIcons[0]], { ...pcOpts, perChannelIcons: false });
+assert.equal(oneIconPC, oneIconPlain, 'per-channel with 1 icon = identical to off (no regression)');
+assert.notEqual(pc, pcOff, 'per-channel ON with 2 icons changes the output');
+
+console.log('render.test.ts: ok (solid + CMY/CMYK/RYB/RGB/anaglyph + bg forcing + scheme + multi-icon + per-channel)');

@@ -461,6 +461,11 @@ $('layerOffset').addEventListener('input', (e) => {
   $('layerOffsetVal').textContent = String(settings.layerOffset);
   scheduleRedraw();
 });
+$('perChannelIcons').addEventListener('change', (e) => {
+  settings.perChannelIcons = (e.target as HTMLInputElement).checked;
+  $('perChannelHint').hidden = !settings.perChannelIcons;
+  scheduleRedraw();
+});
 
 // hex "#rrggbb" -> RGB
 const hex2rgb = (h: string): RGB => ({
@@ -726,6 +731,7 @@ function syncControls() {
   set('layerStyle', settings.layerStyle);
   set('layerCount', settings.layerCount);
   set('layerOffset', settings.layerOffset); $('layerOffsetVal').textContent = String(settings.layerOffset);
+  set('perChannelIcons', settings.perChannelIcons); $('perChannelHint').hidden = !settings.perChannelIcons;
   set('motion', settings.motion);
   set('motionSpeed', settings.motionSpeed); $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   set('staggerMode', settings.staggerMode);

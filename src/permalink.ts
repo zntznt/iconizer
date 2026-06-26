@@ -113,6 +113,9 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     layered,
     layerStyle: choose(LAYER_STYLES),
     layerOffset: rnd() < 0.5 ? 0 : pick(4),
+    // per-channel icons only bites with 2+ icons (the roll can't know how many) and
+    // is a wilder look, so keep it rare; with one icon it has no visible effect.
+    perChannelIcons: rnd() < 0.2,
     scheme,
     motion,
     motionSpeed: +(0.5 + rnd() * 3).toFixed(1), // 0.5..3.5
@@ -134,7 +137,7 @@ export const LOCK_GROUPS: Record<string, (keyof Settings)[]> = {
   grid: ['cols', 'blockSize', 'iconScale', 'background', 'sizeByBrightness', 'sizeRange',
     'rotate', 'rotateDeg', 'fadeByBrightness', 'fadeRange', 'adjust', 'dither', 'ditherStrength',
     'overlay', 'colorJitter', 'iconMetric'],
-  layer: ['layered', 'layerStyle', 'layerCount', 'layerOffset'],
+  layer: ['layered', 'layerStyle', 'layerCount', 'layerOffset', 'perChannelIcons'],
   scheme: ['scheme'],
   motion: ['motion', 'motionSpeed', 'staggerMode'],
 };
