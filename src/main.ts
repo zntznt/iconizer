@@ -1000,6 +1000,120 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && crt.classList.contains('maximized')) toggleMax(false);
 });
 
+// --- Properties sheet: the current mosaic's own stats (a fake document props) ----
+
+// Bytes -> a friendly "12.3 KB" / "1.1 MB" string (the Win98 size line).
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Plain-words summary of the active scheme / motion / layer style (the "Contains" line).
+const SCHEME_WORDS: Record<string, string> = {
+  none: 'true colour', grayscale: 'grayscale', invert: 'inverted', sepia: 'sepia',
+  threshold: '1-bit threshold', hue: 'hue-rotated', posterize: 'posterized',
+  duotone: 'duotone', tritone: 'tritone', gradient: 'gradient map', solarize: 'solarized',
+  channelswap: 'channel-swapped', palette: 'palette-snapped',
+};
+const LAYER_WORDS: Record<string, string> = {
+  cmy: 'CMY split', cmyk: 'CMYK split', ryb: 'RYB split', rgb: 'RGB split',
+  anaglyph: 'red/cyan 3D', halftone: 'halftone rosette',
+};
+
+/** Per-ink share for layered styles, derived from the page's own ink list math.
+ *  A vibe-accurate breakdown ("C 33% / M 33% / Y 34%"), not a colour-managed reading. */
+function inkBreakdown(): string | null {
+  if (!settings.layered) return null;
+  const map: Record<string, string[]> = {
+    cmy: ['C', 'M', 'Y'], cmyk: ['C', 'M', 'Y', 'K'], halftone: ['C', 'M', 'Y', 'K'],
+    ryb: ['R', 'Y', 'B'], rgb: ['R', 'G', 'B'], anaglyph: ['red', 'cyan'],
+  };
+  let inks = map[settings.layerStyle] ?? [];
+  if ((settings.layerStyle === 'cmy' || settings.layerStyle === 'ryb') && settings.layerCount === 2)
+    inks = inks.slice(0, 2);
+  if (!inks.length) return null;
+  // even split, with the remainder dropped on the last ink so it sums to 100.
+  const each = Math.floor(100 / inks.length);
+  return inks.map((n, i) => `${n} ${i === inks.length - 1 ? 100 - each * (inks.length - 1) : each}%`).join(' / ');
+}
+
+const propsModal = $('propsModal');
+function openProperties() {
+  // dimensions: the export SVG's width/height attrs are the real pixel footprint.
+  const wh = /width="(\d+)" height="(\d+)"/.exec(lastSvg);
+  const dims = wh ? `${wh[1]} x ${wh[2]} px` : 'not rendered yet';
+  // cells = cols x rows after pooling; derive rows from the viewBox (H / CELL=16).
+  const vb = /viewBox="0 0 (\d+) (\d+)"/.exec(lastSvg);
+  const cols = settings.cols, rows = vb ? Math.round(+vb[2] / 16) : 0;
+  const cellCount = lastSvg ? cols * rows : 0;
+
+  const rows2: [string, string][] = [
+    ['Type:', 'Iconizer 98 Document (.ico)'],
+    ['Size:', lastSvg ? fmtBytes(lastSvg.length) : 'nothing rendered'],
+    ['Dimensions:', dims],
+    ['Cells:', lastSvg ? `${cellCount.toLocaleString()} (${cols} x ${rows})` : '0'],
+    ['Tiles:', `${icons.length} icon${icons.length === 1 ? '' : 's'}`],
+    ['Colour:', SCHEME_WORDS[settings.scheme.kind] ?? settings.scheme.kind],
+    ['Motion:', settings.motion === 'none' ? 'static' : settings.motion + (settings.motionReactive ? ' (reactive)' : '')],
+  ];
+  if (settings.layered) rows2.push(['Layered:', LAYER_WORDS[settings.layerStyle] ?? settings.layerStyle]);
+  const ink = inkBreakdown();
+  if (ink) rows2.push(['Ink:', ink]);
+  // flavor lines (verbatim, on-theme)
+  rows2.push(['Colours:', '16-bit (65,536)'], ['Read-only:', 'No'], ['Created with:', 'Iconizer 98']);
+
+  $('propsGrid').innerHTML = rows2
+    .map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('');
+  propsModal.hidden = false;
+  ($('propsOk') as HTMLButtonElement).focus();
+}
+function closeProperties() { propsModal.hidden = true; }
+$('propsOk').addEventListener('click', closeProperties);
+$('propsClose').addEventListener('click', closeProperties);
+$('propsModal').addEventListener('click', (e) => { if (e.target === propsModal) closeProperties(); }); // backdrop
+$('propsMenuItem').addEventListener('click', () => { openProperties(); setStart(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !propsModal.hidden) closeProperties(); });
+
+// --- CRT right-click context menu (Randomize · export · Properties) -------------
+
+const crtMenu = $('crtMenu');
+function openCrtMenu(x: number, y: number) {
+  // gate the export rows on a render existing (same state the Save menu uses).
+  const rendered = !!lastSvg;
+  crtMenu.querySelectorAll<HTMLButtonElement>('.ctx-item').forEach((b) => {
+    const a = b.dataset.act!;
+    b.disabled = (a === 'svg' || a === 'png' || a === 'properties') ? !rendered
+      : a === 'gif' ? (!rendered || settings.motion === 'none') : false; // randomize always on
+  });
+  crtMenu.hidden = false;
+  // place at the cursor, then nudge back inside the viewport if it would overflow.
+  const r = crtMenu.getBoundingClientRect();
+  crtMenu.style.left = `${Math.min(x, window.innerWidth - r.width - 4)}px`;
+  crtMenu.style.top = `${Math.min(y, window.innerHeight - r.height - 4)}px`;
+}
+const closeCrtMenu = () => { crtMenu.hidden = true; };
+crt.addEventListener('contextmenu', (e) => {
+  e.preventDefault(); // suppress the browser menu, show ours
+  openCrtMenu(e.clientX, e.clientY);
+});
+crtMenu.addEventListener('click', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLButtonElement>('.ctx-item');
+  if (!item || item.disabled) return;
+  closeCrtMenu();
+  switch (item.dataset.act) {
+    case 'randomize': doRoll(); break;        // same as Surprise Me
+    case 'svg': ($('dlSvg') as HTMLButtonElement).click(); break;
+    case 'png': ($('dlPng') as HTMLButtonElement).click(); break;
+    case 'gif': ($('dlGif') as HTMLButtonElement).click(); break;
+    case 'properties': openProperties(); break;
+  }
+});
+// dismiss on any outside click / Escape / scroll
+document.addEventListener('click', (e) => { if (!crtMenu.hidden && !crtMenu.contains(e.target as Node)) closeCrtMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !crtMenu.hidden) closeCrtMenu(); });
+window.addEventListener('scroll', () => { if (!crtMenu.hidden) closeCrtMenu(); }, true);
+
 // --- taskbar: Start menu, quick-save proxy, task scroll-spy ------------------
 
 const startBtn = $('startBtn');

@@ -492,6 +492,29 @@
       .dialog-body .warn-ico { font-size: 18px; }
       .dialog-body .reqs { font-family: monospace; font-size: 12px; background: #fff; box-shadow: var(--bevel-down); padding: 8px; }
       .dialog-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+      /* info (non-warning) title bar: the standard navy gradient */
+      .dialog-bar--info { background: linear-gradient(90deg, var(--navy), var(--sky)); }
+      .dialog-bar .btns i { cursor: pointer; }
+      /* properties sheet body */
+      .props-head { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid #808080; margin-bottom: 10px; }
+      .props-icon { font-size: 34px; line-height: 1; }
+      .props-type { color: #555; font-size: 12px; }
+      .props-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
+      .props-grid .k { color: #555; }
+      .props-grid .v { font-family: monospace; }
+      /* CRT right-click context menu — a floating Win98 menu */
+      .ctx-menu {
+        position: fixed; z-index: 80; min-width: 168px; padding: 2px;
+        background: var(--face); box-shadow: var(--bevel-up), 0 4px 14px rgba(0,0,0,.5);
+      }
+      .ctx-item {
+        display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+        padding: 5px 14px; font-family: inherit; font-size: 13px; color: var(--ink);
+      }
+      .ctx-item:hover, .ctx-item:focus-visible { background: var(--navy); color: #fff; outline: none; }
+      .ctx-item:disabled { color: #808080; cursor: default; }
+      .ctx-item:disabled:hover { background: none; color: #808080; }
+      .ctx-sep { height: 0; border-top: 1px solid #808080; border-bottom: 1px solid #fff; margin: 3px 2px; }
     </style>
   </head>
   <body>
@@ -892,6 +915,7 @@
           <div class="sm-link sm-parent" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false">📁 My Favorites <span class="sm-caret">▸</span></div>
           <div class="sm-submenu" id="presetList" role="menu" aria-label="My Favorites"></div>
         </div>
+        <div id="propsMenuItem" class="sm-link" role="menuitem" tabindex="0">🖥️ My Pic (See?)</div>
         <div class="sm-group">Network Neighborhood</div>
         <a class="sm-link" role="menuitem" href="https://www.spacejam.com/1996/" target="_blank" rel="noopener noreferrer">🏀 Space Jam (1996)</a>
         <a class="sm-link" role="menuitem" href="https://www.cameronsworld.net" target="_blank" rel="noopener noreferrer">🌐 Cameron's World</a>
@@ -953,6 +977,37 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Properties sheet: reads the CURRENT mosaic's own stats (a fake document
+         properties dialog). Filled by openProperties() in main.ts; closed by OK /
+         × / Esc / backdrop click. -->
+    <div id="propsModal" class="modal-backdrop" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="propsTitle">
+        <div class="dialog-bar dialog-bar--info"><span id="propsTitle">🖥️ Untitled.ico Properties</span><span class="btns"><i id="propsClose" role="button" tabindex="0" aria-label="close">×</i></span></div>
+        <div class="dialog-body">
+          <div class="props-head">
+            <span class="props-icon">🖼️</span>
+            <div><b id="propsName">Untitled.ico</b><br><span class="props-type" id="propsType">Iconizer 98 Document</span></div>
+          </div>
+          <div class="props-grid" id="propsGrid"><!-- rows injected by JS --></div>
+          <div class="dialog-buttons">
+            <button id="propsOk" class="btn98" type="button">OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CRT right-click context menu: a floating Win98 menu. Positioned + shown by
+         main.ts on contextmenu over the screen. -->
+    <div id="crtMenu" class="ctx-menu" role="menu" hidden>
+      <button class="ctx-item" type="button" data-act="randomize" role="menuitem">🎲 Randomize</button>
+      <div class="ctx-sep" role="separator"></div>
+      <button class="ctx-item" type="button" data-act="svg" role="menuitem">💾 Save as .SVG</button>
+      <button class="ctx-item" type="button" data-act="png" role="menuitem">🖼️ Save as .PNG</button>
+      <button class="ctx-item" type="button" data-act="gif" role="menuitem">🎞️ Save as .GIF</button>
+      <div class="ctx-sep" role="separator"></div>
+      <button class="ctx-item" type="button" data-act="properties" role="menuitem">Properties</button>
     </div>
 
     <!-- Moiré p5 backdrop. Plain (non-module) scripts so global `p5` is visible
