@@ -179,3 +179,16 @@ Per-layer 'apart' CMY motion was built then removed (commit 3f139a8) — animati
 individual CMY layers breaks the multiply blend (black-out + jank). The MB1-MB6
 checks that were here are deleted. Layered motion is covered by M4/M4b above
 (animates as one unit, stays coloured, stays smooth).
+
+## Demo path (`demo.ts` + drop-well buttons)
+
+Browser-only (canvas + DOMParser), so no unit tests — re-run after touching the
+drop-well, `demo.ts`, or the load pipeline:
+
+- **D1 (one click)** Fresh load -> "PLAY DEMO" -> a mosaic renders immediately
+  (test card bars + ramp in hearts), windows cascade in, header says
+  "testcard (built-in)". No file picker should open from the button click.
+- **D2 (starters)** Fresh load -> upload an image -> stage 2 shows ♥ ★ ⚡ -> each
+  adds an icon + renders; clicking a starter must NOT open the file picker.
+- **D3 (still swappable)** After the demo, uploading a real image replaces the
+  test card (resample path), and added SVGs join the built-in heart in the list.

@@ -5,6 +5,7 @@ import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
+import { testCard, STARTERS } from './demo.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -185,9 +186,34 @@ function flashBad(msg: string) {
 
 // click anywhere on the well opens the right file picker for the current stage.
 dropwell.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).closest('a')) return; // let the webring link through
+  // let the webring link and the demo/starter buttons handle their own clicks.
+  if ((e.target as HTMLElement).closest('a,button')) return;
   $(dwStage() === 'need-svg' ? 'svg' : 'image').click();
 });
+
+// --- one-click demo: built-in test card + a starter icon -> first render -----
+
+/** Add a built-in starter icon by name (same pipeline as an uploaded .svg). */
+function addStarter(name: string) {
+  icons.push({ name: `${name}.svg (built-in)`, svg: parseSvg(STARTERS[name]) });
+  renderIconList();
+  refreshPips();
+  redraw();
+}
+$('demoGo').addEventListener('click', async () => {
+  srcBitmap?.close();
+  srcBitmap = await testCard();
+  cells = sample(srcBitmap, settings);
+  needsResample = false;
+  $('srcName').textContent = 'testcard (built-in)';
+  refreshPips();
+  setDwStage('need-svg');
+  // an icon may already be loaded (user did stage 2 first); don't double-add.
+  if (icons.length === 0) addStarter('heart'); // completes the demo -> renders
+  else redraw();
+});
+document.querySelectorAll<HTMLButtonElement>('.dw-starter').forEach((btn) =>
+  btn.addEventListener('click', () => addStarter(btn.dataset.icon!)));
 ['dragenter', 'dragover'].forEach((ev) =>
   dropwell.addEventListener(ev, (e) => { e.preventDefault(); dropwell.classList.add('drop-hot'); }),
 );

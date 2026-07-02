@@ -186,6 +186,8 @@
       .dw-disk { font-family: monospace; font-size: 11px; color: #6a8a2a; }
       .dw-sub { font-family: var(--cursive); font-size: 13px; color: #9bbc0f; }
       .dw-nudge { font-family: var(--cursive); font-size: 12px; color: #7a9a3a; }
+      .dw-demo { margin-top: 6px; }
+      .dw-starter { font-size: 15px; padding: 3px 10px; margin: 0 2px; }
       .dw-svglink { color: var(--cyan); text-decoration: underline; cursor: pointer; }
       .dw-svglink:hover { color: #fff; }
       @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
@@ -488,13 +490,19 @@
                 <span class="dw-headline">C:\&gt; feed me a picture<span class="dw-cur">_</span></span>
                 <span class="dw-disk">★ INSERT DISK 1 OF 2 ★</span>
                 <span class="dw-sub">click anywhere or drop an image here</span>
+                <button class="btn98 dw-demo" id="demoGo" type="button">no pic handy? ▶ PLAY DEMO</button>
               </span>
               <!-- stage 2: image loaded, need an SVG -->
               <span class="dw-stage stage-svg">
                 <span class="dw-headline">C:\&gt; now an icon .svg<span class="dw-cur">_</span></span>
                 <span class="dw-disk">★ INSERT DISK 2 OF 2 ★</span>
                 <span class="dw-sub">click anywhere or drop an .svg here</span>
-                <span class="dw-nudge">need one quick? grab a free .svg from the <a class="dw-svglink" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">webring ↓</a></span>
+                <span class="dw-nudge">or grab a starter:
+                  <button class="btn98 dw-starter" data-icon="heart" type="button" aria-label="add the heart starter icon">♥</button>
+                  <button class="btn98 dw-starter" data-icon="star" type="button" aria-label="add the star starter icon">★</button>
+                  <button class="btn98 dw-starter" data-icon="bolt" type="button" aria-label="add the bolt starter icon">⚡</button>
+                </span>
+                <span class="dw-nudge">need a fancier .svg? grab one free from the <a class="dw-svglink" href="https://fontawesome.com/search?o=r&ic=free" target="_blank" rel="noopener noreferrer">webring ↓</a></span>
               </span>
               <span class="dw-err" id="dwErr">✖ BAD DISK ✖</span>
             </div>
