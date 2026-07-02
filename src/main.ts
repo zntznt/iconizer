@@ -1,5 +1,5 @@
 import { defaults, type Settings } from './settings.ts';
-import { sample, type Cell } from './sample.ts';
+import { sample, gridDims, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
@@ -46,21 +46,36 @@ const settings: Settings = settingsFromUrl() ?? { ...defaults };
 // Inputs that don't change every render: cache the parsed results.
 let cells: Cell[] | null = null;
 let srcBitmap: ImageBitmap | null = null; // decoded once at load; resample reuses it
+let needsResample = false; // set by cols/background input; consumed by redraw()
 const icons: { name: string; svg: ParsedSvg }[] = []; // dark->light order
-let lastSvg = ''; // latest render() output, reused by export (no re-render)
+let rendered = false; // a live render exists; the export SVG is built on demand
+
+// FOR EXPORT (svg/png/gif): the <symbol>+<use> form, built at download time.
+// It's the one that rasterizes reliably; the inline 'live' form decodes faster
+// in micro-benchmarks but breaks <img>/canvas rasterization at full scale
+// (spliced transforms). Built on demand: pre-rendering it on every redraw
+// doubled the cost of each slider tick for a string almost never used.
+function exportSvg(): string {
+  if (!cells || icons.length === 0) return '';
+  return render(cells, icons.map((i) => i.svg), settings, 'export');
+}
 
 function redraw() {
   syncUrl(settings); // keep the permalink current even before an image is loaded
   if (!cells || icons.length === 0) return;
-  const parsed = icons.map((i) => i.svg);
+  if (needsResample && srcBitmap) {
+    cells = sample(srcBitmap, settings);
+    needsResample = false;
+  }
   // ON-SCREEN: inline-shapes form — the browser lays out a flat tree instead of
   // cloning a <symbol> shadow subtree per cell (~85x faster paint on big grids).
-  out.innerHTML = render(cells, parsed, settings, 'live');
-  // FOR EXPORT (svg/png/gif): the <symbol>+<use> form. It's the one that rasterizes
-  // reliably — the inline 'live' form decodes faster in micro-benchmarks but breaks
-  // <img>/canvas rasterization at full scale (spliced transforms), so exports use
-  // this form, NOT the on-screen one.
-  lastSvg = render(cells, parsed, settings, 'export');
+  const live = render(cells, icons.map((i) => i.svg), settings, 'live');
+  out.innerHTML = live;
+  rendered = true;
+  // Hand the backdrop the fresh markup for its palette sampler. It used to
+  // MutationObserver #out and read innerHTML back, which re-serializes 10k+
+  // nodes in the same frame as their layout; we already hold the string.
+  document.dispatchEvent(new CustomEvent('iconizer:render', { detail: { svg: live } }));
   refreshExportState();
   refreshMotionPerfNudge();
   refreshPips();
@@ -80,7 +95,7 @@ function refreshMotionPerfNudge() {
   const animated = settings.motion !== 'none' && !settings.layered;
   let heavy = false;
   if (animated && cells) {
-    const rows = Math.max(...cells.map((c) => c.row)) + 1;
+    const { rows } = gridDims(cells);
     const block = Math.max(1, settings.blockSize);
     const effectiveCells = (settings.cols * rows) / (block * block);
     heavy = effectiveCells > SMOOTH_CELL_BUDGET;
@@ -92,7 +107,6 @@ function refreshMotionPerfNudge() {
 // exists; GIF additionally needs motion (shown visible-but-disabled with a reason,
 // not hidden, so users learn why). Mirrors into the footer quick-save proxies.
 function refreshExportState() {
-  const rendered = !!lastSvg;
   const animated = settings.motion !== 'none';
   ($('dlSvg') as HTMLButtonElement).disabled = !rendered;
   ($('dlPng') as HTMLButtonElement).disabled = !rendered;
@@ -126,6 +140,7 @@ async function loadImage(file: File): Promise<boolean> {
     srcBitmap?.close();              // free the previous image
     srcBitmap = await createImageBitmap(file);
     cells = sample(srcBitmap, settings);
+    needsResample = false; // fresh sample; drop any deferred request
   } catch { return false; } // corrupt/undecodable image
   $('srcName').textContent = file.name;
   refreshPips();
@@ -226,11 +241,12 @@ $('iconList').addEventListener('click', (e) => {
   redraw();
 });
 
-// cols and background change the sampled grid, so they must re-sample — but the
-// decoded bitmap is cached from load, so this is just a re-sample, no re-decode.
+// cols and background change the sampled grid, so they must re-sample. Deferred
+// to the debounced redraw: the raw input event fires dozens of times per slider
+// drag and sample() walks the whole image. (The decoded bitmap is cached from
+// load, so even then it's just a re-sample, no re-decode.)
 function resample() {
-  if (!srcBitmap) return;
-  cells = sample(srcBitmap, settings);
+  needsResample = true;
 }
 
 $('cols').addEventListener('input', (e) => {
@@ -527,14 +543,15 @@ const setExportBusy = (busy: boolean) =>
   document.dispatchEvent(new CustomEvent('iconizer:export', { detail: { busy } }));
 
 $('dlSvg').addEventListener('click', () => {
-  if (lastSvg) downloadSvg(lastSvg);
+  const svg = exportSvg();
+  if (svg) downloadSvg(svg);
 });
 $('dlPng').addEventListener('click', async () => {
-  if (!lastSvg) return;
+  if (!rendered) return;
   setStatus('exporting'); setProg(30);
   setExportBusy(true);
   try {
-    await downloadPng(lastSvg, +($('scale') as HTMLSelectElement).value);
+    await downloadPng(exportSvg(), +($('scale') as HTMLSelectElement).value);
     setProg(100);
   } catch {
     // a failed raster (e.g. iOS canvas cap) must not leave the bar stuck on
@@ -546,7 +563,7 @@ $('dlPng').addEventListener('click', async () => {
   }
 });
 $('dlGif').addEventListener('click', async () => {
-  if (!lastSvg || settings.motion === 'none') return;
+  if (!rendered || settings.motion === 'none') return;
   const btn = $('dlGif') as HTMLButtonElement;
   const old = btn.textContent;
   btn.disabled = true;
@@ -560,7 +577,7 @@ $('dlGif').addEventListener('click', async () => {
   // phone (and trip the encode timeout); 12 keeps it smooth at a tiny cost.
   const frames = matchMedia('(pointer: coarse)').matches ? 12 : 20;
   try {
-    await downloadGif(lastSvg, settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value, frames);
+    await downloadGif(exportSvg(), settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value, frames);
     setProg(100);
   } catch {
     $('progText').textContent = '✖ GIF EXPORT FAILED';
@@ -704,10 +721,10 @@ function setPip(id: string, on: boolean, nudge = false) {
 function refreshPips() {
   setPip('pipImg', !!cells);
   setPip('pipSvg', icons.length > 0, /* nudge when missing: */ true);
-  setPip('pipReady', !!lastSvg);
+  setPip('pipReady', rendered);
   $('pipImg').setAttribute('aria-label', cells ? 'picture: loaded ♡' : 'picture: not loaded');
   $('pipSvg').setAttribute('aria-label', icons.length ? 'icon .svg: ready ✦' : 'icon .svg: none yet, add one!');
-  $('pipReady').setAttribute('aria-label', lastSvg ? 'render: ready to save ✦' : 'render: not ready');
+  $('pipReady').setAttribute('aria-label', rendered ? 'render: ready to save ✦' : 'render: not ready');
 }
 function setStatus(s: 'idle' | 'rendering' | 'ready' | 'exporting') {
   $('sysbar').setAttribute('data-status', s);

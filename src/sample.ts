@@ -16,6 +16,18 @@ export function rowsFor(imgWidth: number, imgHeight: number, cols: number): numb
   return Math.max(1, Math.round(imgHeight / cellW));
 }
 
+/** Grid dimensions by scanning, not `Math.max(...grid.map(...))`: spreading a
+ *  big grid (100 cols on a tall image can pass 65k cells) into a call blows the
+ *  engine's argument limit with a RangeError. */
+export function gridDims(grid: Cell[]): { cols: number; rows: number } {
+  let cols = 0, rows = 0;
+  for (const c of grid) {
+    if (c.col >= cols) cols = c.col + 1;
+    if (c.row >= rows) rows = c.row + 1;
+  }
+  return { cols, rows };
+}
+
 /**
  * Merge each block x block group of cells into ONE averaged cell (a downsample /
  * pooling step). block=1 is identity. block=2 turns a 32-wide grid into 16 icons,
@@ -27,7 +39,7 @@ export function rowsFor(imgWidth: number, imgHeight: number, cols: number): numb
  */
 export function poolCells(grid: Cell[], cols: number, block: number): Cell[] {
   if (block <= 1 || grid.length === 0) return grid;
-  const rows = Math.max(...grid.map((c) => c.row)) + 1;
+  const { rows } = gridDims(grid);
   const at = new Map(grid.map((c) => [c.row * cols + c.col, c]));
   const outCols = Math.ceil(cols / block);
   const outRows = Math.ceil(rows / block);
@@ -97,19 +109,30 @@ export function averageCells(
   return cells;
 }
 
+// Sampling resolution cap. averageCells is a box filter, so letting drawImage
+// downscale first (native code) barely changes the per-cell averages but shrinks
+// the getImageData buffer + JS loop by 10-100x on a big photo. 1024 leaves ~10px
+// per cell even at 100 cols, plenty of samples for a stable average.
+const MAX_SAMPLE_SIDE = 1024;
+
 /** Draw the image to a canvas, read pixels once, average into a Cell[] grid. */
 export function sample(
   image: ImageBitmap | HTMLImageElement,
   settings: Settings,
 ): Cell[] {
-  const width = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
-  const height = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  const srcW = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const srcH = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  const k = Math.min(1, MAX_SAMPLE_SIDE / Math.max(srcW, srcH));
+  const width = Math.max(1, Math.round(srcW * k));
+  const height = Math.max(1, Math.round(srcH * k));
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('2d canvas context unavailable');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high'; // the downscale IS part of the averaging
   // Flatten transparency onto settings.background so transparent PNGs don't
   // average toward black. The composite color is an input to the color model
   // (it sets the CMY floor in Phase 4), not just cosmetic — see batch-02 append.

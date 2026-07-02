@@ -11,10 +11,11 @@
 // rings cover the whole viewport, dimmed (not masked) behind the center content, so
 // there is no dead hole and no symmetry (the centers orbit, so the fringe crawls).
 //
-// COLOR follows the user's work: a MutationObserver samples the dominant hue of the
-// rendered mosaic in #out; set A paints in that hue's COMPLEMENT, set B in the hue
-// itself — two disciplined colors that bloom toward white only where they overlap.
-// Grayscale renders (no meaningful hue) fall back to the default cyan/magenta.
+// COLOR follows the user's work: main.ts dispatches the fresh mosaic markup after
+// each redraw (iconizer:render) and we sample its dominant hue on an idle tick;
+// set A paints in that hue's COMPLEMENT, set B in the hue itself — two disciplined
+// colors that bloom toward white only where they overlap. Grayscale renders (no
+// meaningful hue) fall back to the default cyan/magenta.
 //
 // INTERACTION (canvas is pointer-events:none — we read window pointer/touch and do
 // all math in draw()). Four behaviours, each acting on the SAME rings — NOT overlays:
@@ -174,14 +175,25 @@
       }, { passive: true });
     }
 
-    // ---- palette wiring: observe #out, resample on render change ----
+    // ---- palette wiring: main.ts hands us the render string after each redraw.
+    // (A MutationObserver reading #out's innerHTML back forced the browser to
+    // re-serialize 10k+ freshly laid-out nodes; the string already exists in
+    // main.ts.) The scan itself waits for an idle tick so it never lands in the
+    // same frame as the mosaic's layout; only the newest markup is scanned.
     function wirePalette() {
-      const out = document.getElementById('out');
-      if (!out) { setPaletteFromHue(null); return; }
-      const resample = () => { setPaletteFromHue(dominantHue(out.innerHTML || '')); if (reduce) p.redraw(); };
-      resample();
-      const obs = new MutationObserver(resample);
-      obs.observe(out, { childList: true, subtree: true });
+      setPaletteFromHue(null);
+      const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 60));
+      let pending = '', queued = false;
+      document.addEventListener('iconizer:render', (e) => {
+        pending = (e.detail && e.detail.svg) || '';
+        if (queued) return;
+        queued = true;
+        idle(() => {
+          queued = false;
+          setPaletteFromHue(dominantHue(pending));
+          if (reduce) p.redraw();
+        });
+      });
     }
 
     // DEV-ONLY: a tiny slider panel (only when the URL has ?tune) to dial the three
@@ -265,17 +277,14 @@
     // THIS ripple set overlaps the OTHER, brightness adds -> the moiré fringe arcs.
     function drawRipple(rings, cx, cy, base, accentToward, lensOn, px, py) {
       const maxR = ringCount * ringPitch;
+      const dim = centerDim(cx, cy);     // ripple-center based dim (whole set shares)
+      const curDist = lensOn ? Math.hypot(px - cx, py - cy) : 0; // cursor->center, same for every ring
       for (const rg of rings) {
         const rad0 = rg.idx * ringPitch;
         if (rad0 > maxR) continue;
         // ring is "near cursor" only if the cursor's distance-to-center is within
         // ringPitch of this ring's radius (a thin annulus test) — cheap reject.
-        let lensRing = false, curDist = 0;
-        if (lensOn) {
-          curDist = Math.hypot(px - cx, py - cy);
-          lensRing = Math.abs(curDist - rad0) < R;
-        }
-        const dim = centerDim(cx, cy);   // ripple-center based dim (whole set shares)
+        const lensRing = lensOn && Math.abs(curDist - rad0) < R;
 
         // HEAT pre-pass (cheap, ring-level): how strongly is this ring lit by the
         // cursor or a pulse? Lens heat = falloff of the closest approach (the point

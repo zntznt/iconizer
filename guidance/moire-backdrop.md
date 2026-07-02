@@ -19,10 +19,11 @@ unmistakably as *interference*, never as a grid.
 
 It also does two product-specific things:
 
-1. **Colour follows the user's render.** A `MutationObserver` on `#out` (the rendered
-   mosaic SVG) samples the mosaic's dominant hue; ring-set A paints in that hue's
-   **complement**, ring-set B in the hue itself. So the background is always colour-
-   harmonious with whatever the user just made. Grayscale renders → default cyan/magenta.
+1. **Colour follows the user's render.** After each redraw, `main.ts` dispatches the
+   fresh mosaic markup on a `iconizer:render` event; the sketch samples its dominant
+   hue on an idle tick. Ring-set A paints in that hue's **complement**, ring-set B in
+   the hue itself. So the background is always colour-harmonious with whatever the
+   user just made. Grayscale renders → default cyan/magenta.
 2. **It reacts to hover/touch** by deforming the *actual rings* (not a separate overlay).
 
 ## Why it's built this way (read before changing the geometry)
@@ -71,8 +72,10 @@ All in `public/spacejam.js`:
   saturation-weighted histogram, returns the dominant bucket center — or `null` if the
   render is mostly gray (`<12%` colored pixels, or each pixel's saturation `<0.18`). Pure
   functions; covered by **`test/spacejam.selftest.mjs`** (run via `npm test`).
-- **`wirePalette()`** — `MutationObserver` on `#out` (`childList`+`subtree`). On any render
-  change it re-samples and sets `tgtP`/`tgtC`; `easePalette()` glides `palP`/`palC` toward
+- **`wirePalette()`** — listens for `iconizer:render` on `document` (main.ts dispatches it
+  with the fresh markup after each redraw; a `MutationObserver` reading `#out.innerHTML`
+  back would re-serialize 10k+ nodes right after their layout). The scan runs in a
+  `requestIdleCallback` and sets `tgtP`/`tgtC`; `easePalette()` glides `palP`/`palC` toward
   them (~0.5s) every frame so recolours aren't abrupt. Runs on render change only, never per frame.
 - **`buildFamilies()`** — derives `ringPitch` (from `TUNE.density` ÷ area-scale) and
   `ringCount` (enough rings to span the diagonal). `famA`/`famB` are just ring-index lists.
@@ -145,8 +148,9 @@ Other dials, by where they live:
   fixed. Don't change it back to an absolute path.)
 - **`public/` ships verbatim.** Anything you put in `public/` (e.g. a stray `.mjs`) is copied
   into `dist/`. The self-test lives in `test/`, *not* `public/`, for this reason.
-- **`render()` writes `#out` via `innerHTML`.** That's what the observer watches. If the render
-  path ever switches to a canvas/`<img>`, the sampler needs to read pixels instead.
+- **The sampler reads the render STRING, not the DOM.** `redraw()` in main.ts must keep
+  dispatching `iconizer:render` with the markup. If the render path ever switches to a
+  canvas/`<img>`, the sampler needs to read pixels instead.
 - **Verifying visually is unreliable.** The pattern is subtle and additive; a screenshot diff
   or whole-canvas colour average can miss real changes (this bit us repeatedly). Prefer
   reading sketch state directly (a temporary `window.__sjDebug` hook) or the `?tune` panel.

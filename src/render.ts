@@ -1,5 +1,5 @@
 import type { Cell } from './sample.ts';
-import { poolCells } from './sample.ts';
+import { poolCells, gridDims } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
 import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, type RGB } from './color.ts';
@@ -279,11 +279,10 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   // Pool N x N source cells into one averaged icon (blockSize). Must run before
   // we read cols/rows: it re-indexes the grid to a smaller one, so every
   // downstream use (canvas size, cell placement, filter dedup) stays consistent.
-  const fullRows = Math.max(...grid.map((c) => c.row)) + 1; // before pooling
+  const fullRows = gridDims(grid).rows; // before pooling
   grid = poolCells(grid, settings.cols, settings.blockSize);
   // Derive grid dims from the (possibly pooled) grid, not settings.cols.
-  const cols = Math.max(...grid.map((c) => c.col)) + 1;
-  const rows = Math.max(...grid.map((c) => c.row)) + 1;
+  const { cols, rows } = gridDims(grid);
   // Internal coordinate space = the pooled grid at CELL each. The icons render
   // here, naturally smaller when pooled (fewer, bigger cells).
   const w = cols * CELL;
