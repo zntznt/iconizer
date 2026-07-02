@@ -523,6 +523,13 @@
           <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
           <div class="row"><label>chunky blocks <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /></label><span class="val" id="blockVal">1×1</span></div>
           <div class="row"><label>icon size (1× = fills cell) <input id="iconScale" type="range" min="0.2" max="3" step="0.1" value="1" /></label><span class="val"><span id="iconScaleVal">1</span>×</span></div>
+          <div class="row"><label>tiling
+            <select id="layout">
+              <option value="grid">square grid</option>
+              <option value="brick">brick (offset rows)</option>
+              <option value="hex">honeycomb</option>
+            </select></label></div>
+          <div class="row"><label>cutout (drop bright cells) <input id="cutout" type="range" min="0" max="0.95" step="0.05" value="0" /></label><span class="val" id="cutoutVal">off</span></div>
           <div class="row"><label>canvas background <input id="background" type="color" value="#0d120d" /></label></div>
           <div class="divider">✦ ✦ ✦</div>
           <div class="row"><label><input id="sizeByBrightness" type="checkbox" /> size icons by brightness</label></div>

@@ -15,6 +15,11 @@ export type Settings = {
   rotateDeg: number; // degrees; role depends on rotate mode (see above)
   fadeByBrightness: boolean; // ramp each icon's opacity by cell brightness
   fadeRange: [number, number]; // opacity min..max mapped over brightness (0..1)
+  layout: 'grid' | 'brick' | 'hex'; // square grid, offset rows, or honeycomb pitch
+  // Drop cells brighter than this (0..1); 0 = keep all. The background rect is
+  // omitted (solid mode) so the icon array traces just the dark subject on a
+  // transparent canvas: the die-cut sticker look.
+  cutout: number;
   background: string; // CSS color the source is composited onto; sets CMY floor
   layered: boolean; // false -> solid-tint path; true -> per-cell layered stack
   // The "3D glasses" split styles. Subtractive (multiply over white):
@@ -47,6 +52,8 @@ export const defaults: Settings = {
   rotateDeg: 45,
   fadeByBrightness: false,
   fadeRange: [0.25, 1],
+  layout: 'grid',
+  cutout: 0,
   background: '#0d120d', // off-CRT dark phosphor (not pure black) — reads as an idle tube
   layered: false,
   layerStyle: 'cmy',

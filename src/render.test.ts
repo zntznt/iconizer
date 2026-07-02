@@ -258,4 +258,42 @@ assert.ok(anaFills[1][0] === 0, `anaglyph layer 1 = cyan ghost (r=0), got ${anaF
 const ryb2 = emitCell(mid, { ...defaults, layered: true, layerStyle: 'ryb', layerCount: 2 });
 assert.equal((ryb2.match(/<use\b/g) ?? []).length, 2, 'ryb layerCount:2 -> 2 layers');
 
-console.log('render.test.ts: ok (solid + CMY/CMYK/RYB/RGB/anaglyph + bg forcing + scheme + multi-icon)');
+// --- cutout + layout (un-parked per-cell effects) ----------------------------
+
+// cutout drops cells brighter than the cutoff AND omits the background rect so
+// the holes are transparent (the die-cut sticker). Canvas keeps its footprint.
+const cutGrid: Cell[] = [
+  { col: 0, row: 0, r: 10, g: 10, b: 10, brightness: 0.04 },   // dark -> kept
+  { col: 1, row: 0, r: 240, g: 240, b: 240, brightness: 0.94 }, // bright -> dropped
+];
+const cut = render(cutGrid, svg, { ...defaults, cols: 2, cutout: 0.5 });
+assert.equal((cut.match(/<use\b/g) ?? []).length, 1, 'cutout drops the bright cell');
+assert.ok(!cut.includes('<rect width="32"'), 'cutout omits the bg rect (transparent holes)');
+assert.ok(/viewBox="0 0 32 16"/.test(cut), 'cutout keeps the full canvas footprint');
+// everything cut -> still a valid (empty) svg, no crash.
+assert.ok(render(cutGrid, svg, { ...defaults, cols: 2, cutout: 0.01 }).includes('<svg'),
+  'all cells cut -> valid svg');
+// cutout + layered keeps the forced page: the inks multiply/screen against it.
+const cutLayered = render(cutGrid, circleSvg, { ...defaults, cols: 2, cutout: 0.5, layered: true });
+assert.ok(cutLayered.includes('fill="#ffffff"'), 'cutout+layered keeps the white page (blend math)');
+
+// brick layout: odd rows shift half a cell (+8) right; canvas widens to cover the
+// overhang. Same <use> count as square grid: layout is placement math, not nodes.
+const rows2: Cell[] = [
+  { col: 0, row: 0, r: 0, g: 0, b: 0, brightness: 0 },
+  { col: 0, row: 1, r: 0, g: 0, b: 0, brightness: 0 },
+];
+const brick = render(rows2, svg, { ...defaults, cols: 1, layout: 'brick' });
+assert.ok(brick.includes('x="0"') && brick.includes('x="8"'), 'brick: odd row shifted +8 (CELL/2)');
+assert.ok(/viewBox="0 0 24 32"/.test(brick), 'brick: canvas widens CELL/2 for the overhang');
+assert.equal((brick.match(/<use\b/g) ?? []).length, 2, 'brick: no extra nodes');
+
+// hex layout: odd rows shift AND the row pitch compresses to sqrt(3)/2 * CELL,
+// so staggered rows nest like a honeycomb. 16 * 0.866 = 13.856 -> 13.9.
+const hex = render(rows2, svg, { ...defaults, cols: 1, layout: 'hex' });
+assert.ok(hex.includes('y="13.9"'), 'hex: second row at ~0.866 * CELL');
+// default square grid unchanged (prior output stable): full pitch, no shift.
+const plainGrid = render(rows2, svg, { ...defaults, cols: 1 });
+assert.ok(plainGrid.includes('y="16"') && !plainGrid.includes('x="8"'), 'grid layout unchanged');
+
+console.log('render.test.ts: ok (solid + CMY/CMYK/RYB/RGB/anaglyph + bg forcing + scheme + multi-icon + cutout/layout)');

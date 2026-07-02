@@ -277,6 +277,18 @@ $('background').addEventListener('input', (e) => {
   scheduleRedraw();
 });
 
+// layout and cutout only change placement / which cells emit — no resample.
+$('layout').addEventListener('change', (e) => {
+  settings.layout = (e.target as HTMLSelectElement).value as Settings['layout'];
+  scheduleRedraw();
+});
+const cutoutLabel = (v: number) => (v > 0 ? `> ${v.toFixed(2)} gone` : 'off');
+$('cutout').addEventListener('input', (e) => {
+  settings.cutout = +(e.target as HTMLInputElement).value;
+  $('cutoutVal').textContent = cutoutLabel(settings.cutout);
+  scheduleRedraw();
+});
+
 $('sizeByBrightness').addEventListener('change', (e) => {
   settings.sizeByBrightness = (e.target as HTMLInputElement).checked;
   disclose('p-sizeRange', (e.target as HTMLInputElement).checked);
@@ -606,6 +618,8 @@ function syncControls() {
   set('blockSize', settings.blockSize);
   $('blockVal').textContent = settings.blockSize > 1 ? `${settings.blockSize}×${settings.blockSize} chonk` : '1×1';
   set('iconScale', settings.iconScale); $('iconScaleVal').textContent = String(settings.iconScale);
+  set('layout', settings.layout);
+  set('cutout', settings.cutout); $('cutoutVal').textContent = cutoutLabel(settings.cutout);
   set('background', settings.background);
   set('sizeByBrightness', settings.sizeByBrightness);
   set('sizeMin', settings.sizeRange[0]); $('sizeMinVal').textContent = settings.sizeRange[0].toFixed(2);

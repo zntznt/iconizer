@@ -149,11 +149,20 @@ function makePlacer(icon: ParsedSvg, id: string, mode: RenderMode): Placer {
   return ({ x, y, size }, attrs) => `<g transform="${transform(x, y, size)}"${attrs}>${inner}</g>`;
 }
 
-/** Centered placement box for a cell's icon at a given scale factor. */
+// Honeycomb row pitch: staggered rows sit sqrt(3)/2 of a cell apart, so circle-
+// ish icons nest instead of leaving diagonal gaps (the hexagonal packing ratio).
+const HEX_PITCH = Math.sqrt(3) / 2;
+/** Vertical distance between row origins for the current layout. */
+const rowPitch = (settings: Settings) => (settings.layout === 'hex' ? CELL * HEX_PITCH : CELL);
+
+/** Centered placement box for a cell's icon at a given scale factor. brick/hex
+ *  shift odd rows half a cell right; hex also tightens the row pitch. Placement
+ *  math only: same node count as the square grid. */
 function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
   const size = r1(CELL * scale);
   const pad = r1((CELL - size) / 2); // center the shrunk icon in its box
-  return { x: r1(cell.col * CELL + pad), y: r1(cell.row * CELL + pad), size };
+  const ox = settings.layout !== 'grid' && (cell.row & 1) ? CELL / 2 : 0;
+  return { x: r1(cell.col * CELL + pad + ox), y: r1(cell.row * rowPitch(settings) + pad), size };
 }
 
 // Which layer styles SUBTRACT ink (multiply over a WHITE page) vs ADD light
@@ -283,15 +292,23 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   grid = poolCells(grid, settings.cols, settings.blockSize);
   // Derive grid dims from the (possibly pooled) grid, not settings.cols.
   const { cols, rows } = gridDims(grid);
+  // Cutout: drop bright cells EARLY, after dims (the canvas keeps its full
+  // footprint; the holes are the point) but before the color stage and emit, so
+  // a dropped cell costs nothing and the output DOM only shrinks.
+  // brightness is the ORIGINAL sampled tone, upstream of any scheme.
+  if (settings.cutout > 0) grid = grid.filter((c) => c.brightness <= settings.cutout);
   // Internal coordinate space = the pooled grid at CELL each. The icons render
-  // here, naturally smaller when pooled (fewer, bigger cells).
-  const w = cols * CELL;
-  const h = rows * CELL;
+  // here, naturally smaller when pooled (fewer, bigger cells). brick/hex odd
+  // rows overhang half a cell on the right; hex packs rows tighter vertically.
+  const shift = settings.layout !== 'grid' && rows > 1 ? CELL / 2 : 0;
+  const pitch = rowPitch(settings);
+  const w = cols * CELL + shift;
+  const h = r1(CELL + (rows - 1) * pitch);
   // Rendered (pixel) size = the UN-pooled canvas, so the footprint stays constant
   // as block grows: the viewBox content is scaled up to fill it. block only
   // changes how many icons cover the same area, not the canvas size.
-  const outW = settings.cols * CELL;
-  const outH = fullRows * CELL;
+  const outW = settings.cols * CELL + shift;
+  const outH = r1(CELL + (fullRows - 1) * pitch);
 
   // Single upstream colour stage: adjust -> (dither) -> scheme -> (overlay).
   // Everything downstream (filter defs, solid fill, CMY split) consumes the
@@ -335,7 +352,11 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   // ADDITIVE (rgb/anaglyph) screen -> need a BLACK page (screen's identity).
   let bgFill = settings.background;
   if (settings.layered) bgFill = SUBTRACTIVE.has(settings.layerStyle) ? '#ffffff' : '#000000';
-  const bg = `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
+  // Cutout omits the rect so dropped cells are genuinely transparent (the die-cut
+  // sticker). EXCEPT in layered mode: the inks multiply/screen against the page,
+  // so removing it would break the blend math; there cutout only drops cells.
+  const bg = settings.cutout > 0 && !settings.layered
+    ? '' : `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) =>
     emitCellWith(c, settings, i, placers[iconIndex(c, icons.length)])).join('');
 

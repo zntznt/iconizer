@@ -91,6 +91,9 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     rotate,
     rotateDeg,
     fadeByBrightness: rnd() < 0.35,
+    layout: rnd() < 0.65 ? 'grid' as const : choose(['brick', 'hex'] as const),
+    // occasional sticker mode; cutoff high enough that a subject survives.
+    cutout: rnd() < 0.2 ? +(0.5 + rnd() * 0.35).toFixed(2) : 0,
     // adjust: usually leave tone alone; sometimes a mild graded push.
     adjust: rnd() < 0.55 ? { ...NEUTRAL_ADJUST } : {
       brightness: +(0.85 + rnd() * 0.4).toFixed(2),
