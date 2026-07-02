@@ -902,6 +902,29 @@ function syncControls() {
   syncDisclosure(); // restore the 3 new insets from current control values
 }
 
+// --- Win98 tabbed property sheets: one generic switcher per .tabs strip ------
+document.querySelectorAll<HTMLElement>('.tabs').forEach((strip) => {
+  const tabs = Array.from(strip.querySelectorAll<HTMLButtonElement>('.tab'));
+  const select = (tab: HTMLButtonElement) => {
+    for (const t of tabs) {
+      t.setAttribute('aria-selected', String(t === tab));
+      $(t.getAttribute('aria-controls')!).hidden = t !== tab;
+    }
+  };
+  strip.addEventListener('click', (e) => {
+    const tab = (e.target as HTMLElement).closest<HTMLButtonElement>('.tab');
+    if (tab) select(tab);
+  });
+  strip.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const i = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    next.focus();
+    select(next);
+  });
+});
+
 // Apply settings loaded from a permalink to the controls on startup.
 syncControls();
 refreshPips(); // initial LED states (no image/svg/render yet)
@@ -934,7 +957,6 @@ function doRoll() {
   commitHistory(); // a roll is one undoable step
 }
 $('surprise').addEventListener('click', doRoll);
-$('surpriseRoll').addEventListener('click', doRoll);
 
 // Apply a whole Settings object at once (a curated preset). Shares Surprise's
 // path, but a preset CAN carry the layered+motion heavy combo, so confirm it
@@ -1361,7 +1383,7 @@ function restoreWin(win: HTMLElement, scroll = true) {
 
 // All control windows in boot order. On first load they start minimized (just the
 // CRT shows); after the first successful render they cascade in one by one.
-const allWins = ['winSurprise', 'winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion'];
+const allWins = ['winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion'];
 function bootMinimizeAll() {
   document.body.classList.add('no-media'); // hide the task buttons until a render exists
   allWins.forEach((id) => {

@@ -255,6 +255,21 @@
         font-style: normal; font-size: 10px; line-height: 16px; text-align: center; color: #000;
       }
       .win-body { padding: 10px; display: flex; flex-direction: column; gap: 9px; }
+      /* Win98 tabbed property sheet (Display Properties style). The strip sits on
+         top of a raised panel; the active tab lifts, bolds, and fuses into it. */
+      .tabs { display: flex; gap: 2px; padding: 0 4px; margin-bottom: -6px; z-index: 1; }
+      .tab {
+        font-family: var(--sans); font-size: 12px; background: var(--face); color: var(--ink);
+        box-shadow: var(--bevel-up); border: 0; padding: 3px 10px 4px; cursor: pointer;
+      }
+      .tab[aria-selected="true"] {
+        font-weight: bold; padding-top: 5px; padding-bottom: 7px; position: relative; top: -2px;
+      }
+      .tabpanel {
+        box-shadow: var(--bevel-up); padding: 10px 8px 8px;
+        display: flex; flex-direction: column; gap: 9px;
+      }
+      .tabpanel[hidden] { display: none; }
 
       /* control rows */
       .row { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
@@ -348,6 +363,10 @@
       .sm-uname { font-family: monospace; font-weight: bold; font-size: 12px; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
       .sm-banner { font-family: var(--cursive); font-size: 11px; color: var(--navy); text-align: center; padding: 4px; border-bottom: 1px solid #808080; }
       .sm-group { font-size: 11px; font-weight: bold; color: #555; padding: 6px 6px 2px; }
+      /* Surprise Lab holds, folded into the Start menu under Surprise Me. */
+      .sm-holds { display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px; font-size: 13px; }
+      .sm-holds-cap { font-family: var(--cursive); color: var(--navy); white-space: nowrap; }
+      .sm-holds label { cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
       .sm-link, .sm-about { display: block; padding: 6px 10px; text-decoration: none; color: var(--ink); font-size: 13px; }
       .sm-link:hover, .sm-link:focus-visible { background: var(--navy); color: #fff; }
       /* My Favorites flyout submenu (Win98 Programs ▸ pattern). Parent stays
@@ -578,65 +597,79 @@
       <section class="win" id="winPics">
         <div class="win-bar"><span class="cap">🖼️ My Pictures.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
-          <div class="row"><label>pick a picture… <input id="image" type="file" accept="image/*" /></label></div>
-          <div class="row"><button class="btn98" id="mirrorBtn" type="button" title="your webcam becomes the mosaic, live. nothing leaves the browser.">📹 MIRROR MODE</button></div>
-          <div class="row"><label>add icon SVG(s) ➕ <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label></div>
-          <div class="teach" id="iconOrderHint" hidden>▸ top icon = dark areas · bottom = light ✦</div>
-          <div class="row" id="r-iconMetric" hidden><label>pick tile by
-            <select id="iconMetric">
-              <option value="brightness">brightness (dark → light)</option>
-              <option value="hue">hue (around the colour wheel)</option>
-            </select></label></div>
-          <div class="teach" id="iconMetricHint" hidden>▸ hue mode: list order = around the colour wheel, not dark→light ✦</div>
-          <div id="iconList"></div>
-          <div class="row"><span class="teach">▸ or load a ramp pack (replaces icons):</span></div>
-          <div class="row">
-            <button class="btn98 ramp-btn" data-ramp="moon" type="button" title="5 moon phases, full to sliver">🌘 moon</button>
-            <button class="btn98 ramp-btn" data-ramp="signal" type="button" title="signal bars, 4 down to 1">📶 signal</button>
-            <button class="btn98 ramp-btn" data-ramp="shades" type="button" title="ASCII shade blocks, solid to dot">▓ shades</button>
+          <div class="tabs" role="tablist" aria-label="My Pictures tabs">
+            <button class="tab" role="tab" id="tab-picture" aria-controls="tp-picture" aria-selected="true" type="button">Picture</button>
+            <button class="tab" role="tab" id="tab-tiles" aria-controls="tp-tiles" aria-selected="false" type="button">Tiles</button>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tp-picture" aria-labelledby="tab-picture">
+            <div class="row"><label>pick a picture… <input id="image" type="file" accept="image/*" /></label></div>
+            <div class="row"><button class="btn98" id="mirrorBtn" type="button" title="your webcam becomes the mosaic, live. nothing leaves the browser.">📹 MIRROR MODE</button></div>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tp-tiles" aria-labelledby="tab-tiles" hidden>
+            <div class="row"><label>add icon SVG(s) ➕ <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label></div>
+            <div class="teach" id="iconOrderHint" hidden>▸ top icon = dark areas · bottom = light ✦</div>
+            <div class="row" id="r-iconMetric" hidden><label>pick tile by
+              <select id="iconMetric">
+                <option value="brightness">brightness (dark → light)</option>
+                <option value="hue">hue (around the colour wheel)</option>
+              </select></label></div>
+            <div class="teach" id="iconMetricHint" hidden>▸ hue mode: list order = around the colour wheel, not dark→light ✦</div>
+            <div id="iconList"></div>
+            <div class="row"><span class="teach">▸ or load a ramp pack (replaces icons):</span></div>
+            <div class="row">
+              <button class="btn98 ramp-btn" data-ramp="moon" type="button" title="5 moon phases, full to sliver">🌘 moon</button>
+              <button class="btn98 ramp-btn" data-ramp="signal" type="button" title="signal bars, 4 down to 1">📶 signal</button>
+              <button class="btn98 ramp-btn" data-ramp="shades" type="button" title="ASCII shade blocks, solid to dot">▓ shades</button>
+            </div>
           </div>
         </div>
       </section>
 
       <!-- WINDOW B -->
       <section class="win" id="winGrid">
-        <div class="win-bar"><span class="cap">⚙️ Grid Settings.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-bar"><span class="cap">⚙️ Grid.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
-          <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
-          <div class="row"><label>chunky blocks <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /></label><span class="val" id="blockVal">1×1</span></div>
-          <div class="row"><label>icon size (1× = fills cell) <input id="iconScale" type="range" min="0.2" max="3" step="0.1" value="1" /></label><span class="val"><span id="iconScaleVal">1</span>×</span></div>
-          <div class="row"><label>tiling
-            <select id="layout">
-              <option value="grid">square grid</option>
-              <option value="brick">brick (offset rows)</option>
-              <option value="hex">honeycomb</option>
-            </select></label></div>
-          <div class="row"><label>cutout (drop bright cells) <input id="cutout" type="range" min="0" max="0.95" step="0.05" value="0" /></label><span class="val" id="cutoutVal">off</span></div>
-          <div class="row"><label>canvas background <input id="background" type="color" value="#0d120d" /></label></div>
-          <div class="divider">✦ ✦ ✦</div>
-          <div class="row"><label><input id="sizeByBrightness" type="checkbox" /> size icons by brightness</label></div>
-          <div class="inset" id="p-sizeRange" hidden aria-hidden="true">
-            <div class="teach">▸ brightness knobs unlocked! &nbsp; how small? ~ how big?</div>
-            <div class="row"><label>min <input id="sizeMin" type="range" min="0" max="1" step="0.05" value="0.3" /></label><span class="val" id="sizeMinVal">0.30</span></div>
-            <div class="row"><label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="sizeMaxVal">1.00</span></div>
+          <div class="tabs" role="tablist" aria-label="Grid tabs">
+            <button class="tab" role="tab" id="tab-grid" aria-controls="tp-grid" aria-selected="true" type="button">Grid</button>
+            <button class="tab" role="tab" id="tab-iconstyle" aria-controls="tp-iconstyle" aria-selected="false" type="button">Icon Style</button>
           </div>
-          <div class="divider">✦ ✦ ✦</div>
-          <div class="row"><label>rotate icons
-            <select id="rotate">
-              <option value="none">none</option>
-              <option value="brightness">by brightness (orientation field)</option>
-              <option value="jitter">random jitter (scattered)</option>
-              <option value="fixed">fixed angle</option>
-            </select></label></div>
-          <div class="inset" id="p-rotate" hidden aria-hidden="true">
-            <div class="teach" id="rotateHint">▸ rotation unlocked! &nbsp; spin those icons ✦</div>
-            <div class="row"><label>degrees <input id="rotateDeg" type="range" min="0" max="360" step="5" value="45" /></label><span class="val" id="rotateDegVal">45°</span></div>
+          <div class="tabpanel" role="tabpanel" id="tp-grid" aria-labelledby="tab-grid">
+            <div class="row"><label>columns <input id="cols" type="range" min="4" max="120" value="32" /></label><span class="val" id="colsVal">32</span></div>
+            <div class="row"><label>chunky blocks <input id="blockSize" type="range" min="1" max="8" step="1" value="1" /></label><span class="val" id="blockVal">1×1</span></div>
+            <div class="row"><label>tiling
+              <select id="layout">
+                <option value="grid">square grid</option>
+                <option value="brick">brick (offset rows)</option>
+                <option value="hex">honeycomb</option>
+              </select></label></div>
+            <div class="row"><label>cutout (drop bright cells) <input id="cutout" type="range" min="0" max="0.95" step="0.05" value="0" /></label><span class="val" id="cutoutVal">off</span></div>
+            <div class="row"><label>canvas background <input id="background" type="color" value="#0d120d" /></label></div>
           </div>
-          <div class="row"><label><input id="fadeByBrightness" type="checkbox" /> fade icons by brightness</label></div>
-          <div class="inset" id="p-fadeRange" hidden aria-hidden="true">
-            <div class="teach">▸ fade knobs unlocked! &nbsp; faintest ~ most solid</div>
-            <div class="row"><label>min <input id="fadeMin" type="range" min="0" max="1" step="0.05" value="0.25" /></label><span class="val" id="fadeMinVal">0.25</span></div>
-            <div class="row"><label>max <input id="fadeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="fadeMaxVal">1.00</span></div>
+          <div class="tabpanel" role="tabpanel" id="tp-iconstyle" aria-labelledby="tab-iconstyle" hidden>
+            <div class="row"><label>icon size (1× = fills cell) <input id="iconScale" type="range" min="0.2" max="3" step="0.1" value="1" /></label><span class="val"><span id="iconScaleVal">1</span>×</span></div>
+            <div class="row"><label><input id="sizeByBrightness" type="checkbox" /> size icons by brightness</label></div>
+            <div class="inset" id="p-sizeRange" hidden aria-hidden="true">
+              <div class="teach">▸ brightness knobs unlocked! &nbsp; how small? ~ how big?</div>
+              <div class="row"><label>min <input id="sizeMin" type="range" min="0" max="1" step="0.05" value="0.3" /></label><span class="val" id="sizeMinVal">0.30</span></div>
+              <div class="row"><label>max <input id="sizeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="sizeMaxVal">1.00</span></div>
+            </div>
+            <div class="row"><label>rotate icons
+              <select id="rotate">
+                <option value="none">none</option>
+                <option value="brightness">by brightness (orientation field)</option>
+                <option value="jitter">random jitter (scattered)</option>
+                <option value="fixed">fixed angle</option>
+              </select></label></div>
+            <div class="inset" id="p-rotate" hidden aria-hidden="true">
+              <div class="teach" id="rotateHint">▸ rotation unlocked! &nbsp; spin those icons ✦</div>
+              <div class="row"><label>degrees <input id="rotateDeg" type="range" min="0" max="360" step="5" value="45" /></label><span class="val" id="rotateDegVal">45°</span></div>
+            </div>
+            <div class="row"><label><input id="fadeByBrightness" type="checkbox" /> fade icons by brightness</label></div>
+            <div class="inset" id="p-fadeRange" hidden aria-hidden="true">
+              <div class="teach">▸ fade knobs unlocked! &nbsp; faintest ~ most solid</div>
+              <div class="row"><label>min <input id="fadeMin" type="range" min="0" max="1" step="0.05" value="0.25" /></label><span class="val" id="fadeMinVal">0.25</span></div>
+              <div class="row"><label>max <input id="fadeMax" type="range" min="0" max="1" step="0.05" value="1" /></label><span class="val" id="fadeMaxVal">1.00</span></div>
+            </div>
           </div>
         </div>
       </section>
@@ -672,32 +705,24 @@
 
       <!-- RIGHT RAIL -->
       <div class="rail rail-right">
-      <!-- WINDOW G — Surprise Lab.exe (top of the right rail). A normal window in the
-           set (boots in first with the cascade, has a taskbar button). Tick the reels
-           to HOLD, then roll: only the un-held windows reroll. Surprise Me also lives
-           in the Start menu. -->
-      <section class="win" id="winSurprise">
-        <div class="win-bar"><span class="cap">🎰 Surprise Lab.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
-        <div class="win-body">
-          <div class="teach">▸ hold the reels you love, then roll. held windows keep their settings; the rest reroll 🎰</div>
-          <div class="row"><label><input id="hold-grid" class="hold" type="checkbox" /> 🔒 hold ⚙️ Grid Settings</label></div>
-          <div class="row"><label><input id="hold-layer" class="hold" type="checkbox" /> 🔒 hold 🌈 Layered Color</label></div>
-          <div class="row"><label><input id="hold-scheme" class="hold" type="checkbox" /> 🔒 hold 🎨 Color Scheme</label></div>
-          <div class="row"><label><input id="hold-motion" class="hold" type="checkbox" /> 🔒 hold ✨ Motion FX</label></div>
-          <div class="divider">✦ ✦ ✦</div>
-          <button id="surpriseRoll" class="btn98" type="button">🎲 Surprise Me!</button>
-        </div>
-      </section>
+      <!-- Surprise Lab.exe folded into the Start menu (holds live under Surprise Me). -->
       <!-- WINDOW D -->
       <section class="win" id="winScheme">
-        <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-bar"><span class="cap">🎨 Color.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
         <div class="win-body">
-          <div class="teach">▸ adjust: tweak tone before the scheme ✦</div>
+          <div class="tabs" role="tablist" aria-label="Color tabs">
+            <button class="tab" role="tab" id="tab-scheme" aria-controls="tp-scheme" aria-selected="true" type="button">Scheme</button>
+            <button class="tab" role="tab" id="tab-adjust" aria-controls="tp-adjust" aria-selected="false" type="button">Adjust</button>
+            <button class="tab" role="tab" id="tab-effects" aria-controls="tp-effects" aria-selected="false" type="button">Effects</button>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tp-adjust" aria-labelledby="tab-adjust" hidden>
+          <div class="teach">▸ tweak tone before the scheme kicks in ✦</div>
           <div class="row"><label>brightness <input id="adjBright" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjBrightVal">1.00</span></div>
           <div class="row"><label>contrast <input id="adjContrast" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjContrastVal">1.00</span></div>
           <div class="row"><label>saturation <input id="adjSat" type="range" min="0" max="2" step="0.05" value="1" /></label><span class="val" id="adjSatVal">1.00</span></div>
           <div class="row"><label>temperature <input id="adjTemp" type="range" min="-1" max="1" step="0.05" value="0" /></label><span class="val" id="adjTempVal">0.00</span></div>
-          <div class="divider">✦ ✦ ✦</div>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tp-scheme" aria-labelledby="tab-scheme">
           <div class="row"><label>scheme
             <select id="scheme">
               <option value="none">none</option>
@@ -811,8 +836,9 @@
             <div class="teach" id="ditherHint">▸ Bayer dither only bites on threshold / posterize / palette ✦</div>
             <div class="row"><label>strength <input id="ditherStrength" type="range" min="0" max="1" step="0.05" value="0.5" /></label><span class="val" id="ditherStrengthVal">0.50</span></div>
           </div>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tp-effects" aria-labelledby="tab-effects" hidden>
           <div class="row"><label>colour jitter (sticker-bomb) <input id="colorJitter" type="range" min="0" max="1" step="0.05" value="0" /></label><span class="val" id="colorJitterVal">0.00</span></div>
-          <div class="divider">✦ ✦ ✦</div>
           <div class="row"><label>gradient overlay
             <select id="overlayDir">
               <option value="none">none</option>
@@ -847,6 +873,7 @@
                 <option value="screen">screen</option>
               </select></label></div>
             <div class="row"><label>strength <input id="overlayStrength" type="range" min="0" max="1" step="0.05" value="0.5" /></label><span class="val" id="overlayStrengthVal">0.50</span></div>
+          </div>
           </div>
         </div>
       </section>
@@ -931,6 +958,15 @@
         <div class="sm-banner">★ Welcome to Iconizer ★ Netscape Now!</div>
         <div class="sm-group">Programs</div>
         <button id="surprise" class="arcade-btn" type="button" role="menuitem">🎲 Surprise Me!</button>
+        <!-- the Surprise Lab holds: tick a reel to keep that window's settings on a
+             roll. Not menuitems on purpose: the menu stays open for hold-and-reroll. -->
+        <div class="sm-holds" title="held windows keep their settings when you roll">
+          <span class="sm-holds-cap">🔒 hold:</span>
+          <label><input id="hold-grid" class="hold" type="checkbox" /> ⚙️</label>
+          <label><input id="hold-layer" class="hold" type="checkbox" /> 🌈</label>
+          <label><input id="hold-scheme" class="hold" type="checkbox" /> 🎨</label>
+          <label><input id="hold-motion" class="hold" type="checkbox" /> ✨</label>
+        </div>
         <button id="share" class="arcade-btn" type="button" role="menuitem" title="copies a link with these settings (not the image)">🔗 Copy Share Link</button>
         <!-- My Favorites: a Win98 flyout submenu. The parent item reveals #presetList
              to its right on hover/focus; presets are injected as .sm-link items. -->
@@ -963,7 +999,6 @@
         <button class="task btn98" type="button" data-win="winLayer">🌈 Layered</button>
         <button class="task btn98" type="button" data-win="winScheme">🎨 Scheme</button>
         <button class="task btn98" type="button" data-win="winMotion">✨ Motion</button>
-        <button class="task btn98" type="button" data-win="winSurprise">🎰 Surprise</button>
       </div>
       <div class="tb-undo">
         <button id="undoBtn" class="btn98" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>◀</button>
