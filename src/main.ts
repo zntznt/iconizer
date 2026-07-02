@@ -5,7 +5,7 @@ import { render } from './render.ts';
 import { downloadSvg, downloadPng, downloadGif } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
 import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
-import { testCard, STARTERS } from './demo.ts';
+import { testCard, STARTERS, RAMPS } from './demo.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -214,6 +214,30 @@ $('demoGo').addEventListener('click', async () => {
 });
 document.querySelectorAll<HTMLButtonElement>('.dw-starter').forEach((btn) =>
   btn.addEventListener('click', () => addStarter(btn.dataset.icon!)));
+
+// Ramp packs REPLACE the icon list (order is the whole point: dark -> light).
+document.querySelectorAll<HTMLButtonElement>('.ramp-btn').forEach((btn) =>
+  btn.addEventListener('click', () => {
+    icons.splice(0, icons.length,
+      ...RAMPS[btn.dataset.ramp!].map(([name, svg]) => ({ name, svg: parseSvg(svg) })));
+    renderIconList();
+    refreshPips();
+    redraw();
+  }));
+
+// One-click anaglyph poster: the red/cyan-glasses look with a real offset. Goes
+// through the same heavy-combo gate as the layered checkbox.
+$('poster3d').addEventListener('click', async () => {
+  if (needsHeavyWarning({ layered: true })) {
+    if (!(await confirmHeavy())) return;
+    heavyAccepted = true;
+  }
+  settings.layered = true;
+  settings.layerStyle = 'anaglyph';
+  settings.layerOffset = Math.max(2, settings.layerOffset); // fan the ghosts apart
+  syncControls();
+  redraw();
+});
 ['dragenter', 'dragover'].forEach((ev) =>
   dropwell.addEventListener(ev, (e) => { e.preventDefault(); dropwell.classList.add('drop-hot'); }),
 );

@@ -11,6 +11,52 @@ export const STARTERS: Record<string, string> = {
   bolt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',
 };
 
+// --- icon ramp packs ---------------------------------------------------------
+// Ordered dark->light icon sets that make the multi-icon brightness ramp (a core
+// differentiator: dark cell -> first icon, light -> last) discoverable without
+// hunting down 5 SVGs yourself. Every glyph is ONE <path> (subpaths are fine),
+// preserving the live renderer's spliced fast path.
+
+const wrap = (d: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${d}"/></svg>`;
+
+// Moon terminator trick: left semicircle (r 10), then an inner half-ellipse back
+// up. rx sets the bulge; sweep picks the side (0 = east = gibbous, 1 = west =
+// crescent bite). Ink coverage: 1.0 / .75 / .5 / .25 / .1.
+const MOON: [string, string][] = [
+  ['full moon', 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20z'],
+  ['gibbous', 'M12 2a10 10 0 0 0 0 20a5 10 0 0 0 0-20z'],
+  ['half moon', 'M12 2a10 10 0 0 0 0 20z'],
+  ['crescent', 'M12 2a10 10 0 0 0 0 20a5 10 0 0 1 0-20z'],
+  ['sliver', 'M12 2a10 10 0 0 0 0 20a8 10 0 0 1 0-20z'],
+];
+
+// Signal bars, tallest set first (most ink = darkest cells).
+const BAR = ['M2 16h3.5v6H2z', 'M7.5 12h3.5v10H7.5z', 'M13 7h3.5v15H13z', 'M18.5 2h3.5v20h-3.5z'];
+const SIGNAL: [string, string][] = [4, 3, 2, 1].map((n) =>
+  [`signal ${n}/4`, BAR.slice(0, n).join('')] as [string, string]);
+
+// ASCII-art shade blocks (█ ▓ ▒ ░ ·) as 6x6 hatches of 4px squares.
+const hatch = (keep: (x: number, y: number) => boolean): string => {
+  let d = '';
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++)
+    if (keep(x, y)) d += `M${x * 4} ${y * 4}h4v4h-4z`;
+  return d;
+};
+const SHADES: [string, string][] = [
+  ['solid', 'M0 0h24v24H0z'],
+  ['shade 75%', hatch((x, y) => (x + y) % 4 !== 0)],
+  ['shade 50%', hatch((x, y) => (x + y) % 2 === 0)],
+  ['shade 25%', hatch((x, y) => (x + y) % 4 === 0)],
+  ['dot', 'M8 8h8v8H8z'],
+];
+
+/** name -> ordered [iconName, svgString][] ramps. Replaces the icon list. */
+export const RAMPS: Record<string, [string, string][]> = {
+  moon: MOON.map(([n, d]) => [n, wrap(d)]),
+  signal: SIGNAL.map(([n, d]) => [n, wrap(d)]),
+  shades: SHADES.map(([n, d]) => [n, wrap(d)]),
+};
+
 // SMPTE 75% bars: the classic "please stand by" columns. Saturated primaries +
 // secondaries show off schemes and the CMY split; the ramp below gives the
 // brightness-mapped knobs (size/fade/cutout) a full tonal range to bite into.

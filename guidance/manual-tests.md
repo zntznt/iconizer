@@ -192,3 +192,9 @@ drop-well, `demo.ts`, or the load pipeline:
   adds an icon + renders; clicking a starter must NOT open the file picker.
 - **D3 (still swappable)** After the demo, uploading a real image replaces the
   test card (resample path), and added SVGs join the built-in heart in the list.
+- **D4 (ramp packs)** PLAY DEMO -> each ramp button (moon/signal/shades) replaces
+  the icon list with the ordered pack and re-renders; on the test card's ramp
+  strip the phases/bars/shades must run dense (dark) -> sparse (light).
+- **D5 (3D poster)** PLAY DEMO -> "3D POSTER MODE" -> red/cyan ghost pairs at
+  offset 2, controls sync (layered on, style anaglyph); with motion already on,
+  the heavy-combo modal must appear first.
