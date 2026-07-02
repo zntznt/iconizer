@@ -137,6 +137,7 @@ function scheduleRedraw() {
 /** Load + validate an image file. Returns true on success. */
 async function loadImage(file: File): Promise<boolean> {
   if (!file.type.startsWith('image/')) return false;
+  await stopMirror(false); // a real upload replaces the live feed outright
   try {
     srcBitmap?.close();              // free the previous image
     srcBitmap = await createImageBitmap(file);
@@ -224,6 +225,83 @@ document.querySelectorAll<HTMLButtonElement>('.ramp-btn').forEach((btn) =>
     refreshPips();
     redraw();
   }));
+
+// --- mirror mode: the webcam becomes the mosaic, live ------------------------
+// 100% client-side like everything else: frames go camera -> canvas -> sample(),
+// never off the machine. Ticks are LEAN on purpose: they skip redraw()'s
+// syncUrl (Safari rate-limits history.replaceState; ~7fps would trip it) and
+// the pip/export-state work that doesn't change per frame.
+const MIRROR_MS = 150; // ~7fps: flipboard-feel, and the innerHTML swap stays cheap
+const mirrorVideo = document.createElement('video');
+mirrorVideo.muted = true;
+mirrorVideo.playsInline = true;
+const mirrorCanvas = document.createElement('canvas');
+let mirrorStream: MediaStream | null = null;
+let mirrorTimer = 0;
+let mirrorSkip = 0; // self-pacing: heavy ticks skip their following slots
+
+function mirrorTick() {
+  if (mirrorSkip > 0) { mirrorSkip--; return; }
+  if (document.hidden || exportBusy || mirrorVideo.readyState < 2) return;
+  const t0 = performance.now();
+  const vw = mirrorVideo.videoWidth, vh = mirrorVideo.videoHeight;
+  if (!vw) return;
+  const k = Math.min(1, 480 / Math.max(vw, vh)); // small: it's resampled anyway
+  mirrorCanvas.width = Math.round(vw * k);
+  mirrorCanvas.height = Math.round(vh * k);
+  const ctx = mirrorCanvas.getContext('2d')!;
+  ctx.setTransform(-1, 0, 0, 1, mirrorCanvas.width, 0); // mirror: selfies expect a flip
+  ctx.drawImage(mirrorVideo, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
+  cells = sample(mirrorCanvas, settings);
+  if (icons.length === 0) return;
+  const live = render(cells, icons.map((i) => i.svg), settings, 'live');
+  out.innerHTML = live;
+  rendered = true;
+  document.dispatchEvent(new CustomEvent('iconizer:render', { detail: { svg: live } }));
+  // ponytail: self-pacing, not a cap. A huge grid (100+ cols = 10k-node swaps)
+  // makes a tick overrun its 150ms slot; skip that many following slots so the
+  // frame rate degrades gracefully instead of queueing jank.
+  mirrorSkip = Math.floor((performance.now() - t0) / MIRROR_MS);
+}
+
+async function startMirror() {
+  try {
+    mirrorStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 } }, audio: false });
+  } catch {
+    $('progText').textContent = '✖ NO SIGNAL ✖ camera denied or unavailable';
+    return;
+  }
+  mirrorVideo.srcObject = mirrorStream;
+  await mirrorVideo.play();
+  srcBitmap?.close(); // the live feed replaces any uploaded image
+  srcBitmap = null;
+  needsResample = false;
+  $('mirrorBtn').textContent = '📹 STOP (freeze frame)';
+  $('srcName').textContent = 'webcam mirror (live)';
+  if (icons.length === 0) addStarter('heart'); // complete the loop: render NOW
+  mirrorTick();
+  redraw(); // one full pass (pips, export state, boot cascade), then lean ticks
+  mirrorTimer = window.setInterval(mirrorTick, MIRROR_MS);
+  // camera revoked/unplugged mid-run -> freeze what we have.
+  mirrorStream.getVideoTracks()[0]?.addEventListener('ended', () => stopMirror());
+}
+
+/** Stop the feed. `freeze` keeps the last frame as the working image, so the
+ *  sliders and exports operate on your frozen self (the fun part). */
+async function stopMirror(freeze = true) {
+  if (!mirrorTimer) return;
+  clearInterval(mirrorTimer);
+  mirrorTimer = 0;
+  mirrorStream?.getTracks().forEach((t) => t.stop());
+  mirrorStream = null;
+  $('mirrorBtn').textContent = '📹 MIRROR MODE';
+  if (freeze && mirrorCanvas.width) {
+    srcBitmap = await createImageBitmap(mirrorCanvas);
+    $('srcName').textContent = 'mirror freeze-frame';
+    redraw(); // full pass so the permalink + export state catch up
+  }
+}
+$('mirrorBtn').addEventListener('click', () => { mirrorTimer ? stopMirror() : startMirror(); });
 
 // One-click anaglyph poster: the red/cyan-glasses look with a real offset. Goes
 // through the same heavy-combo gate as the layered checkbox.
@@ -599,10 +677,13 @@ $('staggerMode').addEventListener('change', (e) => {
   settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
   scheduleRedraw();
 });
-// Tell the p5 backdrop to pause while a raster export runs (it fights the encode
-// for the main thread / GPU). The sketch listens for this on document.
-const setExportBusy = (busy: boolean) =>
+// Tell the p5 backdrop (and the mirror tick) to pause while a raster export
+// runs (they fight the encode for the main thread / GPU).
+let exportBusy = false;
+const setExportBusy = (busy: boolean) => {
+  exportBusy = busy;
   document.dispatchEvent(new CustomEvent('iconizer:export', { detail: { busy } }));
+};
 
 $('dlSvg').addEventListener('click', () => {
   const svg = exportSvg();

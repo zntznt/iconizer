@@ -198,3 +198,8 @@ drop-well, `demo.ts`, or the load pipeline:
 - **D5 (3D poster)** PLAY DEMO -> "3D POSTER MODE" -> red/cyan ghost pairs at
   offset 2, controls sync (layered on, style anaglyph); with motion already on,
   the heavy-combo modal must appear first.
+- **D6 (mirror mode)** MIRROR MODE -> browser asks for camera -> the mosaic is
+  you, live (~7fps), horizontally flipped like a mirror; STOP freezes the last
+  frame and sliders/exports work on it. Deny the camera -> "NO SIGNAL" in the
+  status bar, no crash. (Automated checks used a captureStream stub; the real
+  permission prompt + camera path needs a human once.)

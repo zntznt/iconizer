@@ -115,9 +115,10 @@ export function averageCells(
 // per cell even at 100 cols, plenty of samples for a stable average.
 const MAX_SAMPLE_SIDE = 1024;
 
-/** Draw the image to a canvas, read pixels once, average into a Cell[] grid. */
+/** Draw the image to a canvas, read pixels once, average into a Cell[] grid.
+ *  Canvas sources serve mirror mode (a webcam frame drawn each tick). */
 export function sample(
-  image: ImageBitmap | HTMLImageElement,
+  image: ImageBitmap | HTMLImageElement | HTMLCanvasElement,
   settings: Settings,
 ): Cell[] {
   const srcW = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
