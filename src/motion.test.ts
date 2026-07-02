@@ -26,6 +26,26 @@ assert.ok(new Set(delays).size > 1, 'ripple -> multiple distinct delays');
 const noStag = render(grid, svg, { ...defaults, cols: 6, motion: 'spin', staggerMode: 'none' });
 assert.ok(!noStag.includes('animation-delay'), 'staggerMode:none -> no delays');
 
+// radial stagger: the wave rolls out from the centre, so the centre cells carry
+// the SMALLEST delay and the corners the largest (distinct values across the grid).
+{
+  const { cellDelay } = await import('./motion.ts');
+  const opts = { ...defaults, motionSpeed: 2, staggerMode: 'radial' as const };
+  const at = (col: number, row: number) =>
+    cellDelay({ col, row, r: 0, g: 0, b: 0, brightness: 0 }, 0, opts, 6, 6);
+  assert.ok(at(2, 2) < at(0, 0), 'radial: centre delay < corner delay');
+  assert.ok(at(2, 2) < at(5, 5), 'radial: centre delay < far corner delay');
+  assert.equal(at(0, 0), at(5, 5), 'radial: symmetric corners share a delay');
+
+  // sweep stagger: delay depends on COLUMN only — same column -> same delay,
+  // a later column -> a larger delay; rows in a column are in phase.
+  const sweep = { ...defaults, motionSpeed: 2, staggerMode: 'sweep' as const };
+  const sw = (col: number, row: number) =>
+    cellDelay({ col, row, r: 0, g: 0, b: 0, brightness: 0 }, 0, sweep, 6, 6);
+  assert.equal(sw(3, 0), sw(3, 5), 'sweep: same column -> same delay (row-independent)');
+  assert.ok(sw(0, 0) < sw(5, 0), 'sweep: later column -> larger delay');
+}
+
 // motion:none -> NO style/keyframes (byte-for-byte regression guard).
 const still = render(grid, svg, { ...defaults, cols: 6, motion: 'none' });
 assert.ok(!still.includes('@keyframes') && !still.includes('<style>'), 'motion:none -> no style');
@@ -62,4 +82,59 @@ const solid = render(grid, svg, { ...defaults, cols: 6, motion: 'wiggle', stagge
 assert.ok(/<g class="motion"><use\b/.test(solid), 'solid motion -> <g> wraps the <use>');
 assert.ok(!/<use[^>]*class="motion"/.test(solid), 'solid -> class on the <g>, not the <use>');
 
-console.log('motion.test.ts: ok (07 keyframes/pivot/stagger + layered/solid motion wrappers)');
+// --- "react to image": per-cell motion amplitude by brightness ---------------
+// Two cells, one bright one dark, so a reactive amp must differ between them.
+const ampGrid: Cell[] = [
+  { col: 0, row: 0, r: 240, g: 240, b: 240, brightness: 0.95 }, // bright -> big amp
+  { col: 1, row: 0, r: 20, g: 20, b: 20, brightness: 0.05 },     // dark -> small amp
+];
+const reactWiggle = render(ampGrid, svg, { ...defaults, cols: 2, motion: 'wiggle', staggerMode: 'none', motionReactive: true });
+// amplitude keyframes fold var(--amp,1) into their magnitude.
+assert.ok(reactWiggle.includes('var(--amp,1)'), 'amplitude keyframes carry var(--amp,1)');
+// each cell carries an inline --amp, and the bright cell's is larger than the dark cell's.
+const amps = [...reactWiggle.matchAll(/--amp:([\d.]+)/g)].map((m) => +m[1]);
+assert.equal(amps.length, 2, 'reactive: one --amp per cell');
+assert.ok(Math.max(...amps) > Math.min(...amps), 'bright cell amp > dark cell amp');
+assert.ok(Math.min(...amps) > 0, 'dark cell still moves a little (amp floored > 0)');
+
+// react OFF -> no per-cell --amp DECLARATION (the keyframe's var(--amp,1) fallback
+// stays, giving full reach — byte-identical to the non-reactive path).
+const offWiggle = render(ampGrid, svg, { ...defaults, cols: 2, motion: 'wiggle', staggerMode: 'none', motionReactive: false });
+assert.ok(!/--amp:[\d.]/.test(offWiggle), 'react off -> no per-cell --amp declaration');
+assert.equal(
+  render(ampGrid, svg, { ...defaults, cols: 2, motion: 'wiggle', staggerMode: 'none' }), offWiggle,
+  'react off is identical to default (regression guard)');
+
+// spin + shimmer are NOT amplitude motions -> no per-cell --amp even with react on
+// (and their keyframes never reference var(--amp,1) either).
+for (const m of ['spin', 'shimmer'] as const) {
+  const out = render(ampGrid, svg, { ...defaults, cols: 2, motion: m, staggerMode: 'none', motionReactive: true });
+  assert.ok(!out.includes('--amp'), `${m} ignores react-to-image (no --amp at all)`);
+}
+
+// --- new motions: shake, flip 3D, hue-cycle ----------------------------------
+const motionOut = (m: string) => render(grid, svg, { ...defaults, cols: 6, motion: m, staggerMode: 'none' });
+
+// shake: transform jitter folding var(--amp,1); ease timing; transform pivot.
+const shakeOut = motionOut('shake');
+assert.ok(shakeOut.includes('@keyframes mo{') && shakeOut.includes('var(--amp,1)'), 'shake: keyframes + amp');
+assert.ok(/animation:mo [\d.]+s ease-in-out infinite/.test(shakeOut), 'shake: ease-in-out (back-and-forth)');
+assert.ok(shakeOut.includes('transform-box:fill-box'), 'shake: pivots in place');
+
+// flip: a continuous rotateY with perspective -> LINEAR timing, no amp.
+const flipOut = motionOut('flip');
+assert.ok(flipOut.includes('rotateY(360deg)') && flipOut.includes('perspective('), 'flip: 3D rotateY keyframes');
+assert.ok(/animation:mo [\d.]+s linear infinite/.test(flipOut), 'flip: linear (continuous)');
+
+// hue-cycle: a FILTER animation, not a transform -> filter base rule, no transform-box,
+// will-change:filter, linear timing. (The differentiator: colour, not motion.)
+const hueOut = motionOut('huecycle');
+assert.ok(hueOut.includes('hue-rotate(360deg)'), 'huecycle: filter keyframes');
+assert.ok(hueOut.includes('will-change:filter') && /animation:mo [\d.]+s linear infinite/.test(hueOut),
+  'huecycle: filter-promoted, linear');
+assert.ok(!/\.motion\{transform-box/.test(hueOut), 'huecycle: no transform pivot on the base rule');
+
+// motion:none still emits nothing (regression guard holds with the new keys).
+assert.ok(!motionOut('none').includes('@keyframes'), 'none -> no keyframes (regression)');
+
+console.log('motion.test.ts: ok (keyframes/pivot/stagger + layered/solid + reactive amp + shake/flip/huecycle)');

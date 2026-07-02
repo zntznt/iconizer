@@ -20,18 +20,35 @@ export type ParsedSvg = {
  * currentColor. `fill="none"` is LEFT ALONE — stroked/outline icons rely on it;
  * filling those would turn outlines into blobs. Inline `style` fill (which beats
  * the attribute) is stripped so the attribute wins.
- * ponytail: only `fill` is handled, not `stroke`. Stroked-only icons stay their
- * own colour in tint/CMY modes — add a stroke->currentColor pass if that matters.
+ *
+ * Stroke is tinted too, but asymmetrically: an EXISTING stroke (a colour) becomes
+ * currentColor so an outline icon (fill="none" stroke="...") recolors with the
+ * cell — without this, hollow icons like the demo heart keep their authored stroke
+ * colour and ignore tint/CMY. A MISSING stroke is left absent (stroke defaults to
+ * `none`): we must not invent an outline on solid icons. `stroke="none"` stays none.
  */
 function makeTintable(root: SVGSVGElement): void {
   // every shape/group element, including the root's children
   for (const el of root.querySelectorAll('*')) {
     const fill = el.getAttribute('fill');
     if (fill !== 'none') el.setAttribute('fill', 'currentColor');
-    // inline style fill overrides the attribute — drop just the fill declaration.
+    // an authored stroke recolors with the cell; absent stroke stays absent.
+    const stroke = el.getAttribute('stroke');
+    if (stroke && stroke !== 'none') el.setAttribute('stroke', 'currentColor');
+    // inline style fill/stroke override the attribute — drop those declarations so
+    // the attributes win. A coloured `stroke:` in style is first promoted to a
+    // stroke="currentColor" attribute (else stripping it would lose the outline
+    // entirely, since stroke defaults to none). `stroke:none` is kept: the author
+    // asked for no outline.
     const style = el.getAttribute('style');
-    if (style && /(^|;)\s*fill\s*:/i.test(style)) {
-      const cleaned = style.replace(/(^|;)\s*fill\s*:[^;]*/gi, '$1').replace(/^;|;;+/g, ';');
+    if (style && /(^|;)\s*(fill|stroke)\s*:/i.test(style)) {
+      if (/(^|;)\s*stroke\s*:\s*(?!none\b)[^;]+/i.test(style)) {
+        el.setAttribute('stroke', 'currentColor');
+      }
+      const cleaned = style
+        .replace(/(^|;)\s*fill\s*:[^;]*/gi, '$1')
+        .replace(/(^|;)\s*stroke\s*:(?!\s*none\b)[^;]*/gi, '$1')
+        .replace(/^;|;;+/g, ';');
       el.setAttribute('style', cleaned);
     }
   }

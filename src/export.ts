@@ -75,7 +75,7 @@ function decodeSvg(svg: string): { img: HTMLImageElement; url: string; done: Pro
  * ponytail: PNG export verified manually (depends on real browser canvas).
  * Not unit-tested — jsdom has no canvas and a polyfill isn't worth a dep.
  */
-export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.png'): Promise<void> {
+export async function renderPngBlob(svg: string, scale = 1): Promise<Blob> {
   const { w, h } = exportSize(svg, PNG_BASE, scale); // sharp absolute resolution
   const url = URL.createObjectURL(svgBlob(svg));
   try {
@@ -92,30 +92,58 @@ export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.p
     // pull external fonts/images, toBlob() can throw SecurityError; inline them then.
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    const blob: Blob = await new Promise((res, rej) =>
+    return await new Promise((res, rej) =>
       canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'),
     );
-    downloadBlob(blob, filename);
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Rasterize the SVG to PNG and download it. */
+export async function downloadPng(svg: string, scale = 1, filename = 'iconizer.png'): Promise<void> {
+  downloadBlob(await renderPngBlob(svg, scale), filename);
+}
+
+/** Whether copy-image-to-clipboard is supported (ClipboardItem + clipboard.write).
+ *  Safari/Firefox gating varies, so the UI feature-detects with this. */
+export const canCopyImage = (): boolean =>
+  typeof ClipboardItem !== 'undefined' && !!navigator.clipboard?.write;
+
+/** Copy the rendered mosaic to the clipboard as a PNG — the clean image itself,
+ *  none of the CRT chrome (scanlines/bezel are CSS on the wrapper, never in the
+ *  SVG). Same rasterize as the PNG download, ending in clipboard.write. */
+export async function copyPng(svg: string, scale = 1): Promise<void> {
+  const blob = await renderPngBlob(svg, scale);
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
 }
 
 /** The CSS `.motion{...}` body that freezes the animation at phase p (0..1).
  *  `transform-box:fill-box; transform-origin:center` makes it pivot IN PLACE even
  *  in a static SVG image (verified). One rule covers ALL cells -> O(1) per frame,
  *  no per-element work. Math mirrors motion.ts's keyframes + ease-in-out. */
-function motionRuleAt(motion: string, p: number): string {
+function motionRuleAt(motion: string, p: number, amp = 1): string {
   const pivot = 'transform-box:fill-box;transform-origin:center';
   const ease = (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
   const tri = ease(1 - Math.abs(1 - 2 * p)); // 0->1->0 eased (symmetric keyframes)
+  // amp scales the amplitude motions (react-to-image); spin/shimmer ignore it,
+  // mirroring motion.ts's var(--amp,1) folded into the same magnitudes.
   switch (motion) {
     case 'spin': return `transform:rotate(${(360 * p).toFixed(1)}deg);${pivot}`;
-    case 'wiggle': return `transform:rotate(${(-6 + 12 * tri).toFixed(2)}deg);${pivot}`;
-    case 'swing': return `transform:rotate(${(-12 + 24 * tri).toFixed(2)}deg);transform-box:fill-box;transform-origin:top center`;
-    case 'pulse': return `transform:scale(${(1 + 0.2 * tri).toFixed(3)});${pivot}`;
-    case 'bob': return `transform:translateY(${(-30 * tri).toFixed(1)}%);${pivot}`;
+    case 'wiggle': return `transform:rotate(${(-6 + 12 * tri) * amp}deg);${pivot}`;
+    case 'swing': return `transform:rotate(${(-12 + 24 * tri) * amp}deg);transform-box:fill-box;transform-origin:top center`;
+    case 'pulse': return `transform:scale(${(1 + 0.2 * tri * amp).toFixed(3)});${pivot}`;
+    case 'bob': return `transform:translateY(${(-30 * tri * amp).toFixed(1)}%);${pivot}`;
     case 'shimmer': return `opacity:${(1 - 0.6 * tri).toFixed(3)}`;
+    // shake: a circular jitter (x = -8%..8%, y = -6%..6%) that loops seamlessly; reads
+    // as the same nervous shake as motion.ts's 4-step keyframes, amplitude-scaled.
+    case 'shake': {
+      const a = 2 * Math.PI * p;
+      return `transform:translate(${(-8 * Math.cos(a) * amp).toFixed(1)}%,${(6 * Math.sin(a) * amp).toFixed(1)}%) rotate(${(2 * Math.sin(a) * amp).toFixed(2)}deg);${pivot}`;
+    }
+    // flip/huecycle are LINEAR (continuous), so use p directly, not the eased tri.
+    case 'flip': return `transform:perspective(220px) rotateY(${(360 * p).toFixed(1)}deg);${pivot}`;
+    case 'huecycle': return `filter:hue-rotate(${(360 * p).toFixed(1)}deg)`; // O(1): one filter rule, all cells
     default: return '';
   }
 }
@@ -158,18 +186,22 @@ export async function downloadGif(
   // motion element carries its own `animation-delay` (the stagger), so it must be
   // frozen at ITS phase, not a global one, or the GIF loses the ripple/wave look.
   const styleStripped = svg.replace(/<style>.*?<\/style>/s, '');
-  // matches a motion element's class attr + optional inline animation-delay style.
-  const motionElRe = /class="motion"(?:\s+style="animation-delay:([\d.-]+)s")?/g;
+  // matches a motion element's class attr + its optional inline style (which may hold
+  // animation-delay, --amp, or both); we parse the delay + amp out of the captured text.
+  const motionElRe = /class="motion"(?:\s+style="([^"]*)")?/g;
   const period = periodSec;
   const frameSvgAt = (i: number) => {
     const t = (period * i) / frames; // global time within one cycle
-    return styleStripped.replace(motionElRe, (_m, delayStr) => {
+    return styleStripped.replace(motionElRe, (_m, styleStr) => {
+      const delayM = styleStr && /animation-delay:([\d.-]+)s/.exec(styleStr);
+      const ampM = styleStr && /--amp:([\d.-]+)/.exec(styleStr);
+      const delay = delayM ? parseFloat(delayM[1]) : 0;
+      const amp = ampM ? parseFloat(ampM[1]) : 1;
       // CSS: effective phase = ((t - delay) / period) wrapped to [0,1).
-      const delay = delayStr ? parseFloat(delayStr) : 0;
       let p = ((t - delay) / period) % 1;
       if (p < 0) p += 1;
       // bake this cell's transform inline; class removed so nothing re-animates.
-      return `style="${motionRuleAt(motion, p)}"`;
+      return `style="${motionRuleAt(motion, p, amp)}"`;
     });
   };
 

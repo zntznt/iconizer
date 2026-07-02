@@ -16,12 +16,23 @@
         --taskbar-h: 42px;
       }
       * { box-sizing: border-box; }
-      html, body { overflow-x: hidden; min-height: 100%; }
+      /* The page scrolls normally (html is the scroller), so the lower windows and
+         the webring below the fold stay reachable. The taskbar is fixed to the
+         viewport bottom (flush regardless of scroll); body padding-bottom reserves
+         its height so the last content (the webring) clears it. overflow-x:hidden is
+         the no-sideways-scroll backstop that the old 100dvh rule was really after. */
+      html, body { overflow-x: hidden; }
+      /* flex column so the webring can be pushed to the bottom of the scrollable
+         page (margin-top:auto on .ringbox) — it sits just above the taskbar whether
+         the windows are tall or short, never floating mid-page. */
+      body { min-height: 100dvh; display: flex; flex-direction: column; }
       [hidden] { display: none !important; } /* load-bearing for ALL disclosure */
 
       body {
         margin: 0; font: 14px/1.4 var(--sans); color: var(--ink);
         background: #000; /* flat Space Jam void; p5 canvas (z-index -3) owns the backdrop */
+        /* reserve exactly the fixed taskbar's height; the webring's own bottom
+           margin is the small gap between it and the taskbar. */
         padding-bottom: var(--taskbar-h);
       }
       /* The p5 Space Jam canvas (public/spacejam.js, z-index -3) now owns the backdrop.
@@ -185,8 +196,8 @@
       .dw-cur { animation: dosblink 1s steps(1) infinite; }
       .dw-disk { font-family: monospace; font-size: 11px; color: #6a8a2a; }
       .dw-sub { font-family: var(--cursive); font-size: 13px; color: #9bbc0f; }
+      .dw-demo { margin-top: 8px; }
       .dw-nudge { font-family: var(--cursive); font-size: 12px; color: #7a9a3a; }
-      .dw-demo { margin-top: 6px; }
       .dw-starter { font-size: 15px; padding: 3px 10px; margin: 0 2px; }
       .dw-svglink { color: var(--cyan); text-decoration: underline; cursor: pointer; }
       .dw-svglink:hover { color: #fff; }
@@ -254,14 +265,6 @@
       input[type="color"] { width: 42px; height: 26px; min-width: 0; padding: 0; border: 2px solid #808080; flex: none; }
       input[type="file"] { width: 100%; min-width: 0; font-size: 12px; }
 
-      /* Export.exe "Save as…" rows: full-width stacked buttons with a caption */
-      .save-row {
-        display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-        width: 100%; text-align: left; padding: 6px 10px;
-      }
-      .save-row small { color: #5a6a3a; font-size: 11px; font-weight: normal; }
-      .save-row:disabled small { color: #999; }
-
       /* sunken "properties" inset = revealed conditional sub-region */
       .inset {
         background: var(--face); box-shadow: var(--bevel-down); padding: 9px; margin-top: 2px;
@@ -322,6 +325,8 @@
       }
       .qs-item { background: var(--face); border: 0; box-shadow: var(--bevel-up); padding: 6px 10px; text-align: left; cursor: pointer; font-size: 13px; }
       .qs-item:disabled { color: #808080; cursor: default; }
+      .qs-scale { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 13px; border-bottom: 1px solid #808080; }
+      .qs-scale select { font-size: 13px; }
 
       /* Start menu */
       .start-menu {
@@ -344,7 +349,36 @@
       .sm-banner { font-family: var(--cursive); font-size: 11px; color: var(--navy); text-align: center; padding: 4px; border-bottom: 1px solid #808080; }
       .sm-group { font-size: 11px; font-weight: bold; color: #555; padding: 6px 6px 2px; }
       .sm-link, .sm-about { display: block; padding: 6px 10px; text-decoration: none; color: var(--ink); font-size: 13px; }
-      .sm-link:hover { background: var(--navy); color: #fff; }
+      .sm-link:hover, .sm-link:focus-visible { background: var(--navy); color: #fff; }
+      /* My Favorites flyout submenu (Win98 Programs ▸ pattern). Parent stays
+         highlighted while open; the submenu floats to the right, reusing .sm-link. */
+      .sm-sub { position: relative; }
+      .sm-parent { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+      .sm-caret { font-size: 11px; }
+      .sm-sub[aria-expanded="true"] .sm-parent, .sm-parent:hover { background: var(--navy); color: #fff; }
+      /* Flyout uses position:fixed, NOT absolute. The submenu is a DOM child of
+         .sm-body, which has overflow-y:auto — and overflow on one axis clips the
+         other too, so an absolutely-positioned flyout gets cut off. A fixed element
+         is positioned to the viewport and escapes every ancestor's overflow clip.
+         Pinned to the right edge of the start menu (left:4px + its width), bottom
+         just above the taskbar. The @media below flips it left on narrow screens. */
+      .sm-submenu {
+        position: fixed; left: calc(4px + min(280px, 100vw - 12px)); bottom: var(--taskbar-h);
+        z-index: 57; width: min(280px, 100vw - 12px);
+        max-height: calc(100dvh - var(--taskbar-h) - 16px); overflow-y: auto;
+        background: var(--face); box-shadow: var(--bevel-up), 0 4px 16px rgba(0,0,0,.5);
+        padding: 4px; display: none;
+      }
+      .sm-sub[aria-expanded="true"] .sm-submenu { display: block; }
+      /* preset rows reuse .sm-link verbatim — single-line "emoji name", identical
+         to the other Start-menu items. No special-casing needed. */
+      /* On narrow screens the right-side flyout would run off-screen, so pin it to
+         the menu's left edge instead (it overlaps the menu, Win98-on-a-phone style). */
+      @media (max-width: 560px) { .sm-submenu { left: 4px; right: auto; } }
+      /* taskbar undo/redo group, pinned right of the tasks and left of Save */
+      .tb-undo { flex: none; display: flex; gap: 3px; }
+      .tb-undo .btn98 { padding: 4px 9px; font-size: 13px; }
+      .tb-undo .btn98:disabled { color: #808080; }
       .sm-about { color: #555; font-style: italic; font-size: 12px; }
       .arcade-btn {
         display: block; width: calc(100% - 8px); margin: 4px; padding: 8px 12px; border: 0; cursor: pointer;
@@ -412,7 +446,11 @@
          If you ever wrap the desktop + ringbox in a shared flex/grid, give the
          ringbox `order: 999` (or make it the last child) to preserve this. */
       .ringbox {
-        max-width: 720px; margin: 14px auto 6px; padding: 6px 8px; text-align: center;
+        max-width: 720px; padding: 6px 8px; text-align: center;
+        /* margin-top:auto eats the leftover space ABOVE the webring, dropping it to
+           the bottom of the flex column; the 14px top keeps a gap from the windows
+           when content IS tall, the 5px bottom margin is the small gap to the taskbar. */
+        margin: 14px auto 5px; margin-top: auto;
         background: #100022; box-shadow: var(--bevel-up), 0 0 0 2px var(--magenta);
         font-family: var(--cursive); color: var(--cyan);
         position: static; /* load-bearing: stays in flow as the last content block */
@@ -455,6 +493,29 @@
       .dialog-body .warn-ico { font-size: 18px; }
       .dialog-body .reqs { font-family: monospace; font-size: 12px; background: #fff; box-shadow: var(--bevel-down); padding: 8px; }
       .dialog-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+      /* info (non-warning) title bar: the standard navy gradient */
+      .dialog-bar--info { background: linear-gradient(90deg, var(--navy), var(--sky)); }
+      .dialog-bar .btns i { cursor: pointer; }
+      /* properties sheet body */
+      .props-head { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid #808080; margin-bottom: 10px; }
+      .props-icon { font-size: 34px; line-height: 1; }
+      .props-type { color: #555; font-size: 12px; }
+      .props-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
+      .props-grid .k { color: #555; }
+      .props-grid .v { font-family: monospace; }
+      /* CRT right-click context menu — a floating Win98 menu */
+      .ctx-menu {
+        position: fixed; z-index: 80; min-width: 168px; padding: 2px;
+        background: var(--face); box-shadow: var(--bevel-up), 0 4px 14px rgba(0,0,0,.5);
+      }
+      .ctx-item {
+        display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+        padding: 5px 14px; font-family: inherit; font-size: 13px; color: var(--ink);
+      }
+      .ctx-item:hover, .ctx-item:focus-visible { background: var(--navy); color: #fff; outline: none; }
+      .ctx-item:disabled { color: #808080; cursor: default; }
+      .ctx-item:disabled:hover { background: none; color: #808080; }
+      .ctx-sep { height: 0; border-top: 1px solid #808080; border-bottom: 1px solid #fff; margin: 3px 2px; }
     </style>
   </head>
   <body>
@@ -489,8 +550,8 @@
               <span class="dw-stage stage-image">
                 <span class="dw-headline">C:\&gt; feed me a picture<span class="dw-cur">_</span></span>
                 <span class="dw-disk">★ INSERT DISK 1 OF 2 ★</span>
-                <span class="dw-sub">click anywhere or drop an image here</span>
-                <button class="btn98 dw-demo" id="demoGo" type="button">no pic handy? ▶ PLAY DEMO</button>
+                <span class="dw-sub">click, drop, or paste (Ctrl+V) an image here</span>
+                <button class="btn98 dw-demo" id="tryDemo" type="button">▶ or TRY A DEMO</button>
               </span>
               <!-- stage 2: image loaded, need an SVG -->
               <span class="dw-stage stage-svg">
@@ -521,6 +582,12 @@
           <div class="row"><button class="btn98" id="mirrorBtn" type="button" title="your webcam becomes the mosaic, live. nothing leaves the browser.">📹 MIRROR MODE</button></div>
           <div class="row"><label>add icon SVG(s) ➕ <input id="svg" type="file" accept=".svg,image/svg+xml" multiple /></label></div>
           <div class="teach" id="iconOrderHint" hidden>▸ top icon = dark areas · bottom = light ✦</div>
+          <div class="row" id="r-iconMetric" hidden><label>pick tile by
+            <select id="iconMetric">
+              <option value="brightness">brightness (dark → light)</option>
+              <option value="hue">hue (around the colour wheel)</option>
+            </select></label></div>
+          <div class="teach" id="iconMetricHint" hidden>▸ hue mode: list order = around the colour wheel, not dark→light ✦</div>
           <div id="iconList"></div>
           <div class="row"><span class="teach">▸ or load a ramp pack (replaces icons):</span></div>
           <div class="row">
@@ -589,10 +656,14 @@
                 <option value="ryb">RYB ▸ warm / painted</option>
                 <option value="rgb">RGB ▸ glowy / brighter</option>
                 <option value="anaglyph">anaglyph ▸ red/cyan 3D</option>
+                <option value="halftone">halftone ▸ newsprint rosette</option>
               </select></label></div>
             <div class="row" id="p-layerCount"><label>layers
               <select id="layerCount"><option value="3">3 ▸ full</option><option value="2">2 ▸ drop last</option></select></label></div>
             <div class="row"><label>offset <input id="layerOffset" type="range" min="0" max="6" step="0.5" value="0" /></label><span class="val" id="layerOffsetVal">0</span></div>
+            <div class="teach" id="halftoneHint" hidden>▸ crank the offset to fan the rotated channels into a newsprint rosette 🗞️</div>
+            <div class="row"><label><input id="perChannelIcons" type="checkbox" /> each channel = a different icon</label></div>
+            <div class="teach" id="perChannelHint" hidden>▸ add 2+ icons up top, then crank the offset — the channels only resolve at offset 0 ✦</div>
             <div class="dw-nudge">⚠ heavy with Motion FX on a big grid. Drop columns if it chugs</div>
           </div>
         </div>
@@ -601,6 +672,22 @@
 
       <!-- RIGHT RAIL -->
       <div class="rail rail-right">
+      <!-- WINDOW G — Surprise Lab.exe (top of the right rail). A normal window in the
+           set (boots in first with the cascade, has a taskbar button). Tick the reels
+           to HOLD, then roll: only the un-held windows reroll. Surprise Me also lives
+           in the Start menu. -->
+      <section class="win" id="winSurprise">
+        <div class="win-bar"><span class="cap">🎰 Surprise Lab.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
+        <div class="win-body">
+          <div class="teach">▸ hold the reels you love, then roll. held windows keep their settings; the rest reroll 🎰</div>
+          <div class="row"><label><input id="hold-grid" class="hold" type="checkbox" /> 🔒 hold ⚙️ Grid Settings</label></div>
+          <div class="row"><label><input id="hold-layer" class="hold" type="checkbox" /> 🔒 hold 🌈 Layered Color</label></div>
+          <div class="row"><label><input id="hold-scheme" class="hold" type="checkbox" /> 🔒 hold 🎨 Color Scheme</label></div>
+          <div class="row"><label><input id="hold-motion" class="hold" type="checkbox" /> 🔒 hold ✨ Motion FX</label></div>
+          <div class="divider">✦ ✦ ✦</div>
+          <button id="surpriseRoll" class="btn98" type="button">🎲 Surprise Me!</button>
+        </div>
+      </section>
       <!-- WINDOW D -->
       <section class="win" id="winScheme">
         <div class="win-bar"><span class="cap">🎨 Color Scheme.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
@@ -724,6 +811,7 @@
             <div class="teach" id="ditherHint">▸ Bayer dither only bites on threshold / posterize / palette ✦</div>
             <div class="row"><label>strength <input id="ditherStrength" type="range" min="0" max="1" step="0.05" value="0.5" /></label><span class="val" id="ditherStrengthVal">0.50</span></div>
           </div>
+          <div class="row"><label>colour jitter (sticker-bomb) <input id="colorJitter" type="range" min="0" max="1" step="0.05" value="0" /></label><span class="val" id="colorJitterVal">0.00</span></div>
           <div class="divider">✦ ✦ ✦</div>
           <div class="row"><label>gradient overlay
             <select id="overlayDir">
@@ -773,15 +861,19 @@
               <option value="wiggle">wiggle</option><option value="swing">swing</option>
               <option value="spin">spin</option><option value="pulse">pulse</option>
               <option value="bob">bob</option><option value="shimmer">shimmer</option>
+              <option value="shake">shake</option><option value="flip">flip 3D</option>
+              <option value="huecycle">hue-cycle</option>
             </select></label></div>
           <div class="inset" id="p-motion" hidden aria-hidden="true">
             <div class="teach">▸ how fast? ~ how staggered?</div>
             <div class="row"><label>speed <input id="motionSpeed" type="range" min="0.3" max="4" step="0.1" value="1.5" /></label><span class="val" id="motionSpeedVal">1.5×</span></div>
             <div class="row"><label>stagger (delay pattern)
               <select id="staggerMode">
-                <option value="ripple">ripple ▸ outward</option><option value="none">none ▸ all together</option>
+                <option value="ripple">ripple ▸ diagonal</option><option value="radial">radial ▸ from centre</option>
+                <option value="sweep">sweep ▸ column wipe</option><option value="none">none ▸ all together</option>
                 <option value="brightness">brightness ▸ by tone</option><option value="random">random ▸ chaos</option>
               </select></label></div>
+            <div class="row"><label><input id="motionReactive" type="checkbox" /> react to image (bright cells move more)</label></div>
             <!-- shown by main.ts when motion is on AND the grid is big enough to
                  drop frames: a non-blocking nudge (no cap — keeps the full look). -->
             <div class="dw-nudge" id="motionPerfNudge" hidden>⚠ buttery up to ~50 columns. Fewer columns (or chunky blocks) = smoother motion on a big grid</div>
@@ -789,20 +881,8 @@
         </div>
       </section>
 
-      <!-- WINDOW F — Export.exe (canonical home for the export controls) -->
-      <section class="win" id="winExport">
-        <div class="win-bar"><span class="cap">💾 Export.exe</span><span class="btns"><i class="mini" role="button" tabindex="0" aria-label="minimize window">_</i><i aria-hidden="true">□</i><i class="mini" role="button" tabindex="0" aria-label="minimize window">×</i></span></div>
-        <div class="win-body">
-          <div class="inset" id="exportSizeBox"><span class="dw-step" style="font-family:monospace">OUTPUT ▸ <span id="exportSize">··· add media to begin ···</span></span></div>
-          <div class="row"><label>output scale
-            <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
-          </label></div>
-          <div class="divider">✦ ✦ ✦</div>
-          <button id="dlSvg" class="btn98 save-row" type="button" disabled>💾 Save as .SVG <small id="svgNote">vector · crisp · tiny</small></button>
-          <button id="dlPng" class="btn98 save-row" type="button" disabled>🖼️ Save as .PNG <small id="pngNote">raster image · @ current scale</small></button>
-          <button id="dlGif" class="btn98 save-row" type="button" disabled>🎞️ Save as .GIF <small id="gifNote">animated · needs Motion FX</small></button>
-        </div>
-      </section>
+      <!-- Export.exe removed: its controls now live in the taskbar Save button. -->
+
       </div><!-- /rail-right -->
     </main>
 
@@ -852,6 +932,13 @@
         <div class="sm-group">Programs</div>
         <button id="surprise" class="arcade-btn" type="button" role="menuitem">🎲 Surprise Me!</button>
         <button id="share" class="arcade-btn" type="button" role="menuitem" title="copies a link with these settings (not the image)">🔗 Copy Share Link</button>
+        <!-- My Favorites: a Win98 flyout submenu. The parent item reveals #presetList
+             to its right on hover/focus; presets are injected as .sm-link items. -->
+        <div class="sm-sub" id="favParent">
+          <div class="sm-link sm-parent" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false">📁 My Favorites <span class="sm-caret">▸</span></div>
+          <div class="sm-submenu" id="presetList" role="menu" aria-label="My Favorites"></div>
+        </div>
+        <div id="propsMenuItem" class="sm-link" role="menuitem" tabindex="0">🖥️ My Pic (See?)</div>
         <div class="sm-group">Network Neighborhood</div>
         <a class="sm-link" role="menuitem" href="https://www.spacejam.com/1996/" target="_blank" rel="noopener noreferrer">🏀 Space Jam (1996)</a>
         <a class="sm-link" role="menuitem" href="https://www.cameronsworld.net" target="_blank" rel="noopener noreferrer">🌐 Cameron's World</a>
@@ -876,14 +963,19 @@
         <button class="task btn98" type="button" data-win="winLayer">🌈 Layered</button>
         <button class="task btn98" type="button" data-win="winScheme">🎨 Scheme</button>
         <button class="task btn98" type="button" data-win="winMotion">✨ Motion</button>
-        <button class="task btn98" type="button" data-win="winExport">💾 Export</button>
+        <button class="task btn98" type="button" data-win="winSurprise">🎰 Surprise</button>
+      </div>
+      <div class="tb-undo">
+        <button id="undoBtn" class="btn98" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>◀</button>
+        <button id="redoBtn" class="btn98" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>▶</button>
       </div>
       <div class="quick-save">
         <button id="quickSave" class="btn98" type="button" aria-haspopup="menu" aria-expanded="false">💾 Save ▾</button>
         <div id="quickSaveMenu" class="qs-menu" hidden>
-          <button class="qs-item" type="button" data-proxy="dlSvg">💾 .SVG</button>
-          <button class="qs-item" type="button" data-proxy="dlPng">🖼️ .PNG</button>
-          <button class="qs-item" type="button" data-proxy="dlGif">🎞️ .GIF</button>
+          <label class="qs-scale">scale <select id="scale"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+          <button id="dlSvg" class="qs-item" type="button" disabled>💾 .SVG</button>
+          <button id="dlPng" class="qs-item" type="button" disabled>🖼️ .PNG</button>
+          <button id="dlGif" class="qs-item" type="button" disabled>🎞️ .GIF</button>
         </div>
       </div>
     </footer>
@@ -908,6 +1000,38 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Properties sheet: reads the CURRENT mosaic's own stats (a fake document
+         properties dialog). Filled by openProperties() in main.ts; closed by OK /
+         × / Esc / backdrop click. -->
+    <div id="propsModal" class="modal-backdrop" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="propsTitle">
+        <div class="dialog-bar dialog-bar--info"><span id="propsTitle">🖥️ Untitled.ico Properties</span><span class="btns"><i id="propsClose" role="button" tabindex="0" aria-label="close">×</i></span></div>
+        <div class="dialog-body">
+          <div class="props-head">
+            <span class="props-icon">🖼️</span>
+            <div><b id="propsName">Untitled.ico</b><br><span class="props-type" id="propsType">Iconizer 98 Document</span></div>
+          </div>
+          <div class="props-grid" id="propsGrid"><!-- rows injected by JS --></div>
+          <div class="dialog-buttons">
+            <button id="propsOk" class="btn98" type="button">OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CRT right-click context menu: a floating Win98 menu. Positioned + shown by
+         main.ts on contextmenu over the screen. -->
+    <div id="crtMenu" class="ctx-menu" role="menu" hidden>
+      <button class="ctx-item" type="button" data-act="randomize" role="menuitem">🎲 Randomize</button>
+      <div class="ctx-sep" role="separator"></div>
+      <button class="ctx-item" type="button" data-act="copy" role="menuitem" hidden>📋 Copy image</button>
+      <button class="ctx-item" type="button" data-act="svg" role="menuitem">💾 Save as .SVG</button>
+      <button class="ctx-item" type="button" data-act="png" role="menuitem">🖼️ Save as .PNG</button>
+      <button class="ctx-item" type="button" data-act="gif" role="menuitem">🎞️ Save as .GIF</button>
+      <div class="ctx-sep" role="separator"></div>
+      <button class="ctx-item" type="button" data-act="properties" role="menuitem">Properties</button>
     </div>
 
     <!-- Moiré p5 backdrop. Plain (non-module) scripts so global `p5` is visible

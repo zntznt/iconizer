@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import { poolCells, gridDims } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
-import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, type RGB } from './color.ts';
+import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, rgbToHsl, hslToRgb, type RGB } from './color.ts';
 import { motionStyle, motionAttrs, hash01 } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
@@ -89,13 +89,22 @@ function rotateWrap(body: string, cell: Cell, index: number, settings: Settings)
     `transform-origin:center">${body}</g>`;
 }
 
-/** Which icon a cell draws, by brightness: dark cell -> icon 0, light -> last.
- *  Order your SVGs dense->sparse (like ASCII art: '@' dark ... '.' light). */
-function iconIndex(cell: Cell, count: number): number {
+/** Which icon a cell draws. 'brightness' (default): dark cell -> icon 0, light ->
+ *  last, so ordering your SVGs dense->sparse reads like ASCII art ('@' .. '.').
+ *  'hue': the cell's hue angle (0..1 round the wheel) picks the icon, so reds get
+ *  one tile, greens another — the list order becomes "around the colour wheel".
+ *  Near-grey cells (sat below SAT_FLOOR) have no meaningful hue, so they fall back
+ *  to the brightness pick instead of collapsing every desaturated cell onto icon0. */
+const SAT_FLOOR = 0.15;
+function iconIndex(cell: Cell, count: number, metric: Settings['iconMetric']): number {
   if (count <= 1) return 0;
-  // dark cell (low brightness) -> icon0; light -> last. clamp so brightness==1
-  // doesn't overflow to index count.
-  return Math.min(count - 1, Math.floor(cell.brightness * count));
+  let t = cell.brightness; // dark -> 0, light -> 1
+  if (metric === 'hue') {
+    const { h, s } = rgbToHsl({ r: cell.r, g: cell.g, b: cell.b });
+    if (s >= SAT_FLOOR) t = h; // saturated enough to read a hue -> map round the wheel
+  }
+  // clamp so t==1 (light cell / hue at the wheel's top) doesn't overflow to index count.
+  return Math.min(count - 1, Math.floor(t * count));
 }
 
 // Render target. 'export' uses <symbol>+<use> (define the icon once, tiny file —
@@ -170,13 +179,16 @@ function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings
 // ponytail: no per-cell white/black rect + isolation any more — every style now
 // blends against the shared page. It's a fun toy; overlapping/animating cells
 // re-blend and that's fine (the user asked for it). Fewer nodes, simpler.
-export const SUBTRACTIVE = new Set(['cmy', 'cmyk', 'ryb']);
+export const SUBTRACTIVE = new Set(['cmy', 'cmyk', 'ryb', 'halftone']);
 
 // Per-style ink layers. Each entry: how to derive the layer's strength from the
 // cell's r/g/b (0..1 each), and the offset direction for the aberration shimmer.
 // SUBTRACTIVE inks are white-minus-one-channel (multiply); ADDITIVE carry the
 // channel's true value (screen). Offsets fan out so layers separate under offset.
-type Ink = { color: (r: number, g: number, b: number) => string; dx: number; dy: number };
+// `angle` (optional, degrees) is the classic print screen-angle for the halftone
+// layerStyle: each ink rotates to its own angle so the channels interfere into a
+// newsprint rosette under offset. Undefined = upright (every non-halftone style).
+type Ink = { color: (r: number, g: number, b: number) => string; dx: number; dy: number; angle?: number };
 const cmyInk = (chan: number): Ink => ({
   color: (...c) => { const rgb = [255, 255, 255]; rgb[chan] = Math.round(c[chan] * 255); return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; },
   dx: [-1, 1, -1][chan], dy: [-1, 1, 1][chan],
@@ -207,11 +219,18 @@ const anaglyphInks: Ink[] = [
   { color: (r, g, b) => { const v = Math.round((0.3 * r + 0.59 * g + 0.11 * b) * 255); return `rgb(${v},0,0)`; }, dx: -1, dy: 0 },
   { color: (r, g, b) => { const v = Math.round((0.3 * r + 0.59 * g + 0.11 * b) * 255); return `rgb(0,${v},${v})`; }, dx: 1, dy: 0 },
 ];
+// Halftone: the four CMYK inks, each rotated to its canonical print screen angle
+// (C 15° / M 75° / Y 0° / K 45°), in CMYK order. With layerOffset > 0 the rotated
+// channels fan apart into a rosette. Multiply-blended over white, like cmyk.
+const HALFTONE_ANGLES = [15, 75, 0, 45];
+const halftoneInks: Ink[] = [cmyInk(0), cmyInk(1), cmyInk(2), kInk]
+  .map((ink, i) => ({ ...ink, angle: HALFTONE_ANGLES[i] }));
 
 /** Pick the ink list + blend mode for a style. layerCount trims CMY/RYB to 2. */
 function inksFor(settings: Settings): { inks: Ink[]; blend: 'multiply' | 'screen' } {
   switch (settings.layerStyle) {
     case 'cmyk': return { inks: [cmyInk(0), cmyInk(1), cmyInk(2), kInk], blend: 'multiply' };
+    case 'halftone': return { inks: halftoneInks, blend: 'multiply' };
     case 'ryb': return { inks: rybInks.slice(0, settings.layerCount), blend: 'multiply' };
     case 'rgb': return { inks: rgbInks, blend: 'screen' };
     case 'anaglyph': return { inks: anaglyphInks, blend: 'screen' };
@@ -224,7 +243,7 @@ function inksFor(settings: Settings): { inks: Ink[]; blend: 'multiply' | 'screen
  *  shared page (white for multiply styles, black for screen). No per-cell rect
  *  or isolation — the page IS the blend backdrop. Subtractive styles shrink each
  *  successive layer (concentric inks); additive/anaglyph stay full size. */
-function layeredBody(cell: Cell, settings: Settings, place: Placer): string {
+function layeredBody(cell: Cell, settings: Settings, place: Placer, placers: Placer[]): string {
   const { inks, blend } = inksFor(settings);
   const n = inks.length;
   const base = scaleFor(cell, settings);
@@ -232,13 +251,23 @@ function layeredBody(cell: Cell, settings: Settings, place: Placer): string {
   const r = cell.r / 255, g = cell.g / 255, b = cell.b / 255;
   const off = settings.layerOffset;
   const op = opAttr(opacityFor(cell, settings)); // fades the whole stack uniformly
+  // Per-channel icons: ink i draws icon i (a different uploaded shape per channel),
+  // falling back to the cell's normal placer when there aren't enough icons — so 1
+  // icon is byte-identical to before. Off -> every ink uses the cell's one placer.
+  const perChannel = settings.perChannelIcons && placers.length > 1;
   let s = '';
   for (let i = 0; i < n; i++) {
+    const inkPlace = perChannel ? (placers[i] ?? place) : place;
     const scale = shrink ? r1(base * (1 - i / n)) : base; // even concentric steps
     const box = cellBox(cell, settings, scale);
     box.x = r1(box.x + inks[i].dx * off);
     box.y = r1(box.y + inks[i].dy * off);
-    s += place(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    let layer = inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    // Halftone: rotate this ink to its screen angle, pivoting in place (fill-box) so
+    // it turns around the icon's own centre instead of flinging across the canvas.
+    const angle = inks[i].angle;
+    if (angle) layer = `<g style="transform:rotate(${angle}deg);transform-box:fill-box;transform-origin:center">${layer}</g>`;
+    s += layer;
   }
   return s;
 }
@@ -246,19 +275,19 @@ function layeredBody(cell: Cell, settings: Settings, place: Placer): string {
 /** A layered cell: CMY multiply stack or RGB-additive stack, then the motion
  *  wrapper. The scheme already transformed cell.r/g/b upstream, so both styles
  *  pick up the scheme for free. */
-function emitLayered(cell: Cell, settings: Settings, index: number, place: Placer): string {
-  const body = rotateWrap(layeredBody(cell, settings, place), cell, index, settings);
+function emitLayered(cell: Cell, settings: Settings, index: number, place: Placer, placers: Placer[], cols = 1, rows = 1): string {
+  const body = rotateWrap(layeredBody(cell, settings, place, placers), cell, index, settings);
   // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
   // browser caches the cell's raster and moves/scales the bitmap per frame. No
   // motion -> bare body, output unchanged.
-  const mo = motionAttrs(cell, index, settings);
+  const mo = motionAttrs(cell, index, settings, cols, rows);
   return mo ? `<g${mo}>${body}</g>` : body;
 }
 
 /** One cell's drawable(s): a single tinted icon, or a layered ink stack. `place`
  *  is the per-icon placer (export <use> or live inlined shapes). */
-function emitCellWith(cell: Cell, settings: Settings, index: number, place: Placer): string {
-  if (settings.layered) return emitLayered(cell, settings, index, place);
+function emitCellWith(cell: Cell, settings: Settings, index: number, place: Placer, placers: Placer[], cols = 1, rows = 1): string {
+  if (settings.layered) return emitLayered(cell, settings, index, place, placers, cols, rows);
 
   const box = cellBox(cell, settings);
   // Tint via color= (makeTintable forces icons to currentColor, so this recolors
@@ -271,7 +300,7 @@ function emitCellWith(cell: Cell, settings: Settings, index: number, place: Plac
   // Motion on a <g> wrapper, not the leaf: fill-box on a <use>->symbol instance
   // resolves inconsistently; a <g>'s fill-box is its children's rendered box, so
   // it pivots around its OWN centre. No motion -> bare element, output unchanged.
-  const mo = motionAttrs(cell, index, settings);
+  const mo = motionAttrs(cell, index, settings, cols, rows);
   return mo ? `<g${mo}>${el}</g>` : el;
 }
 
@@ -320,14 +349,26 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   const doScheme = settings.scheme.kind !== 'none';
   const doDither = settings.dither && schemeQuantizes(settings.scheme);
   const doOverlay = overlay.dir !== 'none' && overlay.strength > 0;
-  if (doAdjust || doScheme || doDither || doOverlay) {
+  const doJitter = settings.colorJitter > 0;
+  if (doAdjust || doScheme || doDither || doOverlay || doJitter) {
     const spread = settings.ditherStrength * 255;
-    grid = grid.map((c) => {
+    grid = grid.map((c, i) => {
       let rgb: RGB = { r: c.r, g: c.g, b: c.b };
       if (doAdjust) rgb = adjustColor(rgb, adjust);
       if (doDither) {
         const off = (bayer(c.col, c.row) - 0.5) * spread;
         rgb = { r: rgb.r + off, g: rgb.g + off, b: rgb.b + off };
+      }
+      // Colour jitter BEFORE the scheme: a deterministic hue+sat nudge per cell
+      // (two decorrelated hashes off the index) so a flat region shimmers into a
+      // sticker-bomb. Pre-scheme means palette/threshold still snap jittered cells
+      // on-palette for free. Amount scales the spread; sat shifts both ways.
+      if (doJitter) {
+        const k = settings.colorJitter;
+        const hsl = rgbToHsl(rgb);
+        hsl.h += (hash01(i) - 0.5) * 0.5 * k;            // up to ±90° of hue at k=1
+        hsl.s = Math.max(0, Math.min(1, hsl.s + (hash01(i * 7 + 1) - 0.5) * k));
+        rgb = hslToRgb(hsl);
       }
       if (doScheme) rgb = transformColor(rgb, settings.scheme);
       if (doOverlay) rgb = overlayColor(rgb, overlayU(c.col, c.row, cols, rows, overlay.dir), overlay);
@@ -358,7 +399,7 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   const bg = settings.cutout > 0 && !settings.layered
     ? '' : `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
   const uses = grid.map((c, i) =>
-    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length)])).join('');
+    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length, settings.iconMetric)], placers, cols, rows)).join('');
 
   // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
   // lets the maximized CSS size it correctly with min() (CSS can't read a ratio at
@@ -371,7 +412,7 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
 /** Test/back-compat shim: one cell in EXPORT mode (the <use>/<symbol> form the
  *  self-checks assert). Builds a single export placer for #icon0. */
 function emitCell(cell: Cell, settings: Settings, index = 0, _iconCount = 1): string {
-  return emitCellWith(cell, settings, index,
-    makePlacer({ innerSvg: '', viewBox: '0 0 24 24', singleShape: false }, 'icon0', 'export'));
+  const p = makePlacer({ innerSvg: '', viewBox: '0 0 24 24', singleShape: false }, 'icon0', 'export');
+  return emitCellWith(cell, settings, index, p, [p]);
 }
 export { emitCell };

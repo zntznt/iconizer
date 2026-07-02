@@ -37,9 +37,9 @@ export function settingsFromUrl(): Settings | null {
 
 // --- "Surprise me" ---------------------------------------------------------
 
-const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer'];
-const STAGGERS: StaggerMode[] = ['none', 'ripple', 'brightness', 'random'];
-const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph'] as const;
+const MOTIONS: Motion[] = ['none', 'wiggle', 'swing', 'spin', 'pulse', 'bob', 'shimmer', 'shake', 'flip', 'huecycle'];
+const STAGGERS: StaggerMode[] = ['none', 'ripple', 'radial', 'sweep', 'brightness', 'random'];
+const LAYER_STYLES = ['cmy', 'cmyk', 'ryb', 'rgb', 'anaglyph', 'halftone'] as const;
 const SCHEMES = ['none', 'grayscale', 'invert', 'sepia', 'threshold', 'hue',
   'posterize', 'duotone', 'tritone', 'gradient', 'solarize', 'channelswap', 'palette'] as const;
 const PALETTE_NAMES = Object.keys(PALETTES);
@@ -103,6 +103,11 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     },
     dither: rnd() < 0.3,
     ditherStrength: +(0.3 + rnd() * 0.5).toFixed(2),
+    // colour jitter: usually off; a quarter of the time a mild-to-loud sticker-bomb.
+    colorJitter: rnd() < 0.25 ? +(0.2 + rnd() * 0.6).toFixed(2) : 0,
+    // hue-pick is only interesting with 2+ icons (the roll doesn't know how many),
+    // so keep it rare; with one icon it has no visible effect anyway.
+    iconMetric: rnd() < 0.2 ? 'hue' : 'brightness',
     overlay: rnd() < 0.3
       ? { dir: choose(['h', 'v', 'diag', 'radial'] as const), preset: choose(GRADIENT_NAMES),
         blend: choose(['mix', 'multiply', 'screen'] as const), strength: +(0.2 + rnd() * 0.5).toFixed(2) }
@@ -111,10 +116,14 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
     layered,
     layerStyle: choose(LAYER_STYLES),
     layerOffset: rnd() < 0.5 ? 0 : pick(4),
+    // per-channel icons only bites with 2+ icons (the roll can't know how many) and
+    // is a wilder look, so keep it rare; with one icon it has no visible effect.
+    perChannelIcons: rnd() < 0.2,
     scheme,
     motion,
     motionSpeed: +(0.5 + rnd() * 3).toFixed(1), // 0.5..3.5
     staggerMode: choose(STAGGERS),
+    motionReactive: rnd() < 0.4, // "react to image" is a fun default-ish twist
   };
 }
 
@@ -123,3 +132,34 @@ const rgb = (h: string) => ({
   g: parseInt(h.slice(3, 5), 16),
   b: parseInt(h.slice(5, 7), 16),
 });
+
+// --- Surprise with locks -----------------------------------------------------
+
+/** Which Settings keys each lockable window owns. A locked window keeps its keys
+ *  on a reroll; unlocked windows take the rolled values. */
+export const LOCK_GROUPS: Record<string, (keyof Settings)[]> = {
+  grid: ['cols', 'blockSize', 'iconScale', 'background', 'sizeByBrightness', 'sizeRange',
+    'rotate', 'rotateDeg', 'fadeByBrightness', 'fadeRange', 'adjust', 'dither', 'ditherStrength',
+    'overlay', 'colorJitter', 'iconMetric'],
+  layer: ['layered', 'layerStyle', 'layerCount', 'layerOffset', 'perChannelIcons'],
+  scheme: ['scheme'],
+  motion: ['motion', 'motionSpeed', 'staggerMode', 'motionReactive'],
+};
+
+/** Merge a fresh `roll` into `current`, taking only the UNLOCKED groups' keys, then
+ *  enforce the no-heavy-combo invariant: a lock can pin layered-on while the layer
+ *  reroll lands motion-on (or vice versa), recreating the combo rollRandom avoids
+ *  on its own. When both end up on, drop the UNLOCKED side so a held reel never
+ *  forces the heavy state. Pure: returns a new Settings, mutates nothing. */
+export function rollWithLocks(current: Settings, roll: Settings, locks: Set<string>): Settings {
+  const out: Settings = { ...current };
+  for (const [group, keys] of Object.entries(LOCK_GROUPS)) {
+    if (locks.has(group)) continue;
+    for (const k of keys) (out as any)[k] = roll[k];
+  }
+  if (out.layered && out.motion !== 'none') {
+    if (!locks.has('motion')) out.motion = 'none';
+    else out.layered = false; // motion locked on -> the unlocked side is layer
+  }
+  return out;
+}

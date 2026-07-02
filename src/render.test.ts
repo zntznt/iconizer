@@ -185,6 +185,34 @@ assert.ok(render(dark, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon
 assert.ok(render(light, twoIcons, { ...defaults, cols: 1 }).includes('href="#icon1"'),
   'light cell -> icon1 (last)');
 
+// iconMetric 'hue': pick by hue angle, not brightness. A red cell (hue 0) and a
+// cyan cell (hue 0.5) at the SAME brightness must pick DIFFERENT icons — proof the
+// hue channel, not luma, drives the choice. (Same brightness -> identical in
+// 'brightness' mode, so any difference here is the hue map doing its job.)
+const hueRed: Cell[] = [{ col: 0, row: 0, r: 200, g: 40, b: 40, brightness: 0.4 }];
+const hueCyan: Cell[] = [{ col: 0, row: 0, r: 40, g: 200, b: 200, brightness: 0.4 }];
+const hueOpts = { ...defaults, cols: 1, iconMetric: 'hue' as const };
+assert.ok(render(hueRed, twoIcons, hueOpts).includes('href="#icon0"'), 'hue: red (hue~0) -> icon0');
+assert.ok(render(hueCyan, twoIcons, hueOpts).includes('href="#icon1"'), 'hue: cyan (hue~0.5) -> icon1');
+// Saturation floor: a near-grey cell has no usable hue, so it must FALL BACK to
+// the brightness pick (a dark grey -> icon0), not collapse arbitrarily.
+const grey: Cell[] = [{ col: 0, row: 0, r: 30, g: 32, b: 31, brightness: 0.12 }];
+assert.ok(render(grey, twoIcons, hueOpts).includes('href="#icon0"'),
+  'hue: near-grey cell falls back to brightness (dark -> icon0)');
+
+// colorJitter: a non-zero jitter must CHANGE the output of a flat patch (otherwise
+// it is a dead knob), and jitter 0 must be byte-identical to no jitter (regression
+// guard, since it sits in the always-on color stage).
+const flat: Cell[] = [
+  { col: 0, row: 0, r: 80, g: 120, b: 200, brightness: 0.45 },
+  { col: 1, row: 0, r: 80, g: 120, b: 200, brightness: 0.45 },
+];
+const noJit = render(flat, svg, { ...defaults, cols: 2 });
+assert.equal(render(flat, svg, { ...defaults, cols: 2, colorJitter: 0 }), noJit,
+  'colorJitter 0 -> identical to no jitter (regression guard)');
+const jit = render(flat, svg, { ...defaults, cols: 2, colorJitter: 0.8 });
+assert.notEqual(jit, noJit, 'colorJitter > 0 must change a flat patch');
+
 // RGB additive layered style: 3 full-size icons carrying each channel's TRUE
 // value, screen-blended over black so overlaps add back to the original colour.
 // circle icon (not the rect fixture) so counting <rect> only catches backgrounds.
@@ -228,6 +256,7 @@ assert.ok(/<g class="motion"><use/.test(rgbAnim), 'motion wraps the screen <use>
 // SUBTRACTIVE styles (cmy/cmyk/ryb) force a WHITE page (multiply identity);
 // ADDITIVE (rgb/anaglyph) force BLACK. background setting is overridden either way.
 for (const [style, pageBg] of [['cmy', '#ffffff'], ['cmyk', '#ffffff'], ['ryb', '#ffffff'],
+                               ['halftone', '#ffffff'],
                                ['rgb', '#000000'], ['anaglyph', '#000000']] as const) {
   const o = render(cell, circleSvg, { ...defaults, cols: 1, layered: true, layerStyle: style, background: '#abcdef' });
   assert.ok(o.includes(`fill="${pageBg}"`), `${style} forces page bg ${pageBg}, not the #abcdef setting`);
@@ -243,6 +272,19 @@ assert.equal((cmyk.match(/mix-blend-mode:multiply/g) ?? []).length, 4, 'CMYK all
 const cmykFills = [...cmyk.matchAll(/color="rgb\((\d+),(\d+),(\d+)\)"/g)].map((m) => [+m[1], +m[2], +m[3]]);
 const kFill = cmykFills[3];
 assert.ok(kFill[0] === kFill[1] && kFill[1] === kFill[2], `K ink is gray (r=g=b), got ${kFill}`);
+
+// HALFTONE: 4 CMYK multiply layers, each rotated to its print screen angle and
+// pivoting IN PLACE (fill-box), so offset fans them into a rosette.
+const halftoneOut = emitCell(mid, { ...defaults, layered: true, layerStyle: 'halftone', layerOffset: 2 });
+assert.equal((halftoneOut.match(/mix-blend-mode:multiply/g) ?? []).length, 4, 'halftone: 4 multiply layers');
+for (const a of [15, 75, 0, 45].filter(Boolean)) // 0deg emits no rotate, skip it
+  assert.ok(halftoneOut.includes(`rotate(${a}deg)`), `halftone carries the ${a}deg screen angle`);
+assert.ok(halftoneOut.includes('transform-box:fill-box'), 'halftone rotation pivots in place (fill-box)');
+// the Y ink is angle 0 -> NO rotate wrapper for it (only 3 rotate groups appear).
+assert.equal((halftoneOut.match(/transform:rotate\(/g) ?? []).length, 3, 'halftone: 3 angled inks wrapped (Y at 0deg is not)');
+// upright styles never emit a screen-angle rotate.
+assert.ok(!emitCell(mid, { ...defaults, layered: true, layerStyle: 'cmyk' }).includes('transform:rotate('),
+  'cmyk (non-halftone) stays upright, no screen-angle rotate');
 // K = max(r,g,b) as gray; cell (180,90,40) -> 180.
 assert.equal(kFill[0], 180, `K gray = max channel (180), got ${kFill[0]}`);
 
@@ -296,4 +338,21 @@ assert.ok(hex.includes('y="13.9"'), 'hex: second row at ~0.866 * CELL');
 const plainGrid = render(rows2, svg, { ...defaults, cols: 1 });
 assert.ok(plainGrid.includes('y="16"') && !plainGrid.includes('x="8"'), 'grid layout unchanged');
 
-console.log('render.test.ts: ok (solid + CMY/CMYK/RYB/RGB/anaglyph + bg forcing + scheme + multi-icon + cutout/layout)');
+// PER-CHANNEL ICONS: with 2+ icons + layered, each ink draws a DIFFERENT icon
+// (ink0 -> #icon0, ink1 -> #icon1, ink2 falls back since only 2 icons exist).
+const oneCell: Cell[] = [{ col: 0, row: 0, r: 120, g: 90, b: 60, brightness: 0.4 }];
+const pcOpts = { ...defaults, cols: 1, layered: true, layerStyle: 'cmy' as const, perChannelIcons: true };
+const pc = render(oneCell, twoIcons, pcOpts); // export mode -> href="#iconN"
+assert.ok(pc.includes('href="#icon0"') && pc.includes('href="#icon1"'),
+  'per-channel: distinct inks reference distinct icons');
+// 3 cmy inks, 2 icons -> icon0, icon1, then fall back (icon by the cell's pick) for ink2.
+assert.equal((pc.match(/href="#icon0"/g) ?? []).length + (pc.match(/href="#icon1"/g) ?? []).length, 3,
+  'per-channel: every ink draws some icon (no dropped layer)');
+// OFF (or 1 icon) is byte-identical to normal layered: every ink uses the cell's icon.
+const pcOff = render(oneCell, twoIcons, { ...pcOpts, perChannelIcons: false });
+const oneIconPC = render(oneCell, [twoIcons[0]], pcOpts); // 1 icon + perChannel ON
+const oneIconPlain = render(oneCell, [twoIcons[0]], { ...pcOpts, perChannelIcons: false });
+assert.equal(oneIconPC, oneIconPlain, 'per-channel with 1 icon = identical to off (no regression)');
+assert.notEqual(pc, pcOff, 'per-channel ON with 2 icons changes the output');
+
+console.log('render.test.ts: ok (solid + layered styles + bg forcing + scheme + multi-icon + per-channel + cutout/layout)');

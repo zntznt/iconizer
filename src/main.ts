@@ -2,9 +2,10 @@ import { defaults, type Settings } from './settings.ts';
 import { sample, gridDims, type Cell } from './sample.ts';
 import { parseSvg, type ParsedSvg } from './parseSvg.ts';
 import { render } from './render.ts';
-import { downloadSvg, downloadPng, downloadGif } from './export.ts';
+import { downloadSvg, downloadPng, downloadGif, copyPng, canCopyImage } from './export.ts';
 import { PALETTES, GRADIENTS, type Scheme, type RGB } from './color.ts';
-import { syncUrl, settingsFromUrl, rollRandom } from './permalink.ts';
+import { syncUrl, settingsFromUrl, rollRandom, rollWithLocks } from './permalink.ts';
+import { PRESETS } from './presets.ts';
 import { testCard, STARTERS, RAMPS } from './demo.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -104,21 +105,13 @@ function refreshMotionPerfNudge() {
   nudge.hidden = !(animated && heavy);
 }
 
-// Single source of truth for export button states. SVG/PNG enabled once a render
-// exists; GIF additionally needs motion (shown visible-but-disabled with a reason,
-// not hidden, so users learn why). Mirrors into the footer quick-save proxies.
+// Single source of truth for export button states (the taskbar Save menu rows).
+// SVG/PNG enabled once a render exists; GIF additionally needs motion.
 function refreshExportState() {
   const animated = settings.motion !== 'none';
   ($('dlSvg') as HTMLButtonElement).disabled = !rendered;
   ($('dlPng') as HTMLButtonElement).disabled = !rendered;
   ($('dlGif') as HTMLButtonElement).disabled = !rendered || !animated;
-  // captions double as the reason a button is locked (mirrors the GIF note).
-  $('svgNote').textContent = rendered ? 'vector · crisp · tiny' : 'add a pic + icon first';
-  $('pngNote').textContent = rendered ? 'raster image · @ current scale' : 'add a pic + icon first';
-  const note = document.getElementById('gifNote');
-  if (note) note.textContent = !rendered ? 'add a pic + icon first'
-    : animated ? 'animated · ready' : 'animated · needs Motion FX';
-  syncQuickSave();
 }
 
 // Debounce so dragging a slider doesn't thrash render() on every input event,
@@ -132,6 +125,48 @@ function scheduleRedraw() {
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => { raf = 0; redraw(); });
   }, 50);
+  commitHistory();
+}
+
+// --- undo / redo: a bounded ring of settings snapshots ----------------------
+// Snapshots are debounced (a slider drag = ONE entry, not 30) and pushed only
+// when settings actually changed, so the stack reads like discrete edits. Not
+// persisted across reloads (the permalink already carries the latest state). The
+// image/icons are NOT in here — undo steps the knobs, never your loaded files.
+const HISTORY_CAP = 20;
+const history: Settings[] = [structuredClone(settings)];
+let histAt = 0; // index of the live state within `history`
+let restoring = false; // true while undo/redo applies a snapshot (suppresses re-commit)
+let histTimer: number | undefined;
+function commitHistory() {
+  if (restoring) return;
+  clearTimeout(histTimer);
+  histTimer = setTimeout(() => {
+    if (JSON.stringify(settings) === JSON.stringify(history[histAt])) return; // no real change
+    history.splice(histAt + 1); // drop any redo tail — a new edit forks the future
+    history.push(structuredClone(settings));
+    if (history.length > HISTORY_CAP) history.shift();
+    histAt = history.length - 1;
+    refreshUndoButtons();
+  }, 500);
+}
+function applySnapshot(i: number) {
+  histAt = i;
+  restoring = true;
+  Object.assign(settings, structuredClone(history[i]));
+  syncControls();
+  resample(); // cols/background live in settings, so the grid may need a re-sample
+  redraw();
+  restoring = false;
+  refreshUndoButtons();
+}
+function undo() { if (histAt > 0) applySnapshot(histAt - 1); }
+function redo() { if (histAt < history.length - 1) applySnapshot(histAt + 1); }
+function refreshUndoButtons() {
+  const u = document.getElementById('undoBtn') as HTMLButtonElement | null;
+  const r = document.getElementById('redoBtn') as HTMLButtonElement | null;
+  if (u) u.disabled = histAt <= 0;
+  if (r) r.disabled = histAt >= history.length - 1;
 }
 
 /** Load + validate an image file. Returns true on success. */
@@ -201,7 +236,7 @@ function addStarter(name: string) {
   refreshPips();
   redraw();
 }
-$('demoGo').addEventListener('click', async () => {
+$('tryDemo').addEventListener('click', async () => {
   srcBitmap?.close();
   srcBitmap = await testCard();
   cells = sample(srcBitmap, settings);
@@ -315,6 +350,7 @@ $('poster3d').addEventListener('click', async () => {
   settings.layerOffset = Math.max(2, settings.layerOffset); // fan the ghosts apart
   syncControls();
   redraw();
+  commitHistory(); // one undoable step, like a roll
 });
 ['dragenter', 'dragover'].forEach((ev) =>
   dropwell.addEventListener(ev, (e) => { e.preventDefault(); dropwell.classList.add('drop-hot'); }),
@@ -335,6 +371,21 @@ dropwell.addEventListener('drop', async (e) => {
   }
 });
 
+// Paste an image straight from the clipboard (Ctrl+V) — screenshots and copied
+// web images that never hit disk. Routes into the SAME load path as a file drop;
+// only acts at the need-image stage so a paste mid-session can't clobber the pic.
+// No clipboard.read()/permission dance: the paste event hands us the blob directly.
+window.addEventListener('paste', async (e) => {
+  if (dwStage() !== 'need-image') return;
+  const item = Array.from(e.clipboardData?.items ?? []).find((it) => it.type.startsWith('image/'));
+  const blob = item?.getAsFile();
+  if (!blob) return; // clipboard held text, not an image -> no-op
+  e.preventDefault();
+  const file = new File([blob], 'pasted.png', { type: blob.type });
+  if (await loadImage(file)) setDwStage('need-svg');
+  else flashBad("couldn't read that pasted image!");
+});
+
 // Render the icon list with remove buttons. Order = dark->light draw order.
 function renderIconList() {
   const list = $('iconList');
@@ -345,9 +396,25 @@ function renderIconList() {
     row.innerHTML = `<span>${i + 1}. ${it.name}</span><button data-i="${i}" type="button">×</button>`;
     list.appendChild(row);
   });
-  // the dark->light ordering rule only matters with 2+ icons; show it then.
-  $('iconOrderHint').hidden = icons.length < 2;
+  // the ordering rule + the brightness/hue picker only matter with 2+ icons.
+  const multi = icons.length >= 2;
+  $('iconOrderHint').hidden = !multi;
+  $('r-iconMetric').hidden = !multi;
+  syncIconMetricUI();
 }
+
+// In 'hue' mode the icon list orders round the colour wheel, not dark->light, so
+// reframe the order hint to avoid confusing the two. Hidden entirely with <2 icons.
+function syncIconMetricUI() {
+  const hue = settings.iconMetric === 'hue' && icons.length >= 2;
+  $('iconMetricHint').hidden = !hue;
+  $('iconOrderHint').hidden = settings.iconMetric === 'hue' || icons.length < 2;
+}
+$('iconMetric').addEventListener('change', (e) => {
+  settings.iconMetric = (e.target as HTMLSelectElement).value as Settings['iconMetric'];
+  syncIconMetricUI();
+  scheduleRedraw();
+});
 
 // Add one or more SVGs to the list (the file input allows multiple).
 $('svg').addEventListener('change', async (e) => {
@@ -486,6 +553,7 @@ $('layered').addEventListener('change', async (e) => {
 function syncLayerCountUI() {
   const st = settings.layerStyle;
   disclose('p-layerCount', st === 'cmy' || st === 'ryb');
+  $('halftoneHint').hidden = st !== 'halftone';
 }
 $('layerStyle').addEventListener('change', (e) => {
   settings.layerStyle = (e.target as HTMLSelectElement).value as Settings['layerStyle'];
@@ -499,6 +567,11 @@ $('layerCount').addEventListener('change', (e) => {
 $('layerOffset').addEventListener('input', (e) => {
   settings.layerOffset = +(e.target as HTMLInputElement).value;
   $('layerOffsetVal').textContent = String(settings.layerOffset);
+  scheduleRedraw();
+});
+$('perChannelIcons').addEventListener('change', (e) => {
+  settings.perChannelIcons = (e.target as HTMLInputElement).checked;
+  $('perChannelHint').hidden = !settings.perChannelIcons;
   scheduleRedraw();
 });
 
@@ -595,6 +668,7 @@ function syncDisclosure() {
   disclose('p-layered', ($('layered') as HTMLInputElement).checked);
   disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
   syncRotateUI();
+  syncIconMetricUI();
   refreshExportState();
 }
 
@@ -625,6 +699,13 @@ $('dither').addEventListener('change', (e) => {
 $('ditherStrength').addEventListener('input', (e) => {
   settings.ditherStrength = +(e.target as HTMLInputElement).value;
   $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  scheduleRedraw();
+});
+
+// --- colour jitter (per-cell hue/sat scatter; pre-scheme, deterministic) ------
+$('colorJitter').addEventListener('input', (e) => {
+  settings.colorJitter = +(e.target as HTMLInputElement).value;
+  $('colorJitterVal').textContent = settings.colorJitter.toFixed(2);
   scheduleRedraw();
 });
 
@@ -675,6 +756,10 @@ $('motionSpeed').addEventListener('input', (e) => {
 });
 $('staggerMode').addEventListener('change', (e) => {
   settings.staggerMode = (e.target as HTMLSelectElement).value as Settings['staggerMode'];
+  scheduleRedraw();
+});
+$('motionReactive').addEventListener('change', (e) => {
+  settings.motionReactive = (e.target as HTMLInputElement).checked;
   scheduleRedraw();
 });
 // Tell the p5 backdrop (and the mirror tick) to pause while a raster export
@@ -764,9 +849,11 @@ function syncControls() {
   set('layerStyle', settings.layerStyle);
   set('layerCount', settings.layerCount);
   set('layerOffset', settings.layerOffset); $('layerOffsetVal').textContent = String(settings.layerOffset);
+  set('perChannelIcons', settings.perChannelIcons); $('perChannelHint').hidden = !settings.perChannelIcons;
   set('motion', settings.motion);
   set('motionSpeed', settings.motionSpeed); $('motionSpeedVal').textContent = `${settings.motionSpeed.toFixed(1)}×`;
   set('staggerMode', settings.staggerMode);
+  set('motionReactive', settings.motionReactive);
   // adjust panel
   set('adjBright', settings.adjust.brightness); $('adjBrightVal').textContent = settings.adjust.brightness.toFixed(2);
   set('adjContrast', settings.adjust.contrast); $('adjContrastVal').textContent = settings.adjust.contrast.toFixed(2);
@@ -775,6 +862,8 @@ function syncControls() {
   // dither + overlay
   set('dither', settings.dither);
   set('ditherStrength', settings.ditherStrength); $('ditherStrengthVal').textContent = settings.ditherStrength.toFixed(2);
+  set('colorJitter', settings.colorJitter); $('colorJitterVal').textContent = settings.colorJitter.toFixed(2);
+  set('iconMetric', settings.iconMetric);
   set('overlayDir', settings.overlay.dir);
   set('overlayPreset', settings.overlay.preset);
   set('overlayBlend', settings.overlay.blend);
@@ -820,10 +909,132 @@ refreshPips(); // initial LED states (no image/svg/render yet)
 // a state the user didn't just create by hand.
 if (settings.layered && settings.motion !== 'none') heavyAccepted = true;
 
-$('surprise').addEventListener('click', () => {
-  Object.assign(settings, rollRandom()); // rollRandom never produces the heavy combo
+// --- Surprise Lab: hold reels, then roll -------------------------------------
+// Held windows keep their settings; the rest reroll. The "hold" checkboxes live in
+// the Surprise Lab.exe window; reading them at roll time gives the lock Set. The
+// group->keys map and the merge (incl. the no-heavy-combo guard) live in
+// permalink.ts so they stay unit-tested. Holds are session-only, NOT in the
+// permalink, so a shared link still rolls cleanly for the recipient.
+const HOLD_BOXES: Record<string, string> = {
+  grid: 'hold-grid', layer: 'hold-layer', scheme: 'hold-scheme', motion: 'hold-motion',
+};
+function heldGroups(): Set<string> {
+  const set = new Set<string>();
+  for (const [group, id] of Object.entries(HOLD_BOXES))
+    if (($(id) as HTMLInputElement).checked) set.add(group);
+  return set;
+}
+
+// One roll, honouring the holds. Reachable from the Start menu (reroll from
+// anywhere) AND from the button inside the Lab window.
+function doRoll() {
+  Object.assign(settings, rollWithLocks(settings, rollRandom(), heldGroups()));
   syncControls();
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
+  commitHistory(); // a roll is one undoable step
+}
+$('surprise').addEventListener('click', doRoll);
+$('surpriseRoll').addEventListener('click', doRoll);
+
+// Apply a whole Settings object at once (a curated preset). Shares Surprise's
+// path, but a preset CAN carry the layered+motion heavy combo, so confirm it
+// first (and remember the choice). Cancelling leaves the current look untouched.
+async function applySettings(next: Settings) {
+  if (next.layered && next.motion !== 'none' && needsHeavyWarning({ layered: true, motion: true })) {
+    if (!(await confirmHeavy())) return;
+    heavyAccepted = true;
+  }
+  Object.assign(settings, structuredClone(next));
+  syncControls();
+  redraw();
+  commitHistory(); // one undoable step
+}
+
+// "My Favorites": a curated shelf of named looks, in a Win98 flyout submenu off the
+// Start menu. Each loads a full Settings object in one click (the caption hints what
+// the look does). No storage, no editing — a mixtape, not a save slot.
+const presetList = $('presetList');
+PRESETS.forEach((p, i) => {
+  const item = document.createElement('div');
+  item.className = 'sm-link';
+  item.setAttribute('role', 'menuitem');
+  item.tabIndex = 0;
+  item.dataset.i = String(i);
+  // single-line "emoji name" so a preset row reads exactly like the other
+  // Start-menu items (🏀 Space Jam, etc). The caption rides along as the tooltip.
+  item.textContent = `${p.icon} ${p.name}`;
+  item.title = p.caption;
+  presetList.appendChild(item);
+});
+function applyPreset(item: HTMLElement) {
+  applySettings(PRESETS[+item.dataset.i!].settings);
+  closeFav();
+  setStart(false); // a chosen look closes the whole Start menu (Win98 behaviour)
+}
+presetList.addEventListener('click', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>('.sm-link');
+  if (item) applyPreset(item);
+});
+presetList.addEventListener('keydown', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>('.sm-link');
+  if (item && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); applyPreset(item); }
+});
+
+// The My Favorites flyout: open on hover or click/Enter of the parent, close on
+// leave or Esc. aria-expanded on the wrapper drives the CSS reveal.
+const favParent = $('favParent');
+const favTrigger = favParent.querySelector('.sm-parent') as HTMLElement;
+let favCloseTimer: number | undefined;
+const cancelClose = () => { clearTimeout(favCloseTimer); favCloseTimer = undefined; };
+const openFav = () => { cancelClose(); favParent.setAttribute('aria-expanded', 'true'); favTrigger.setAttribute('aria-expanded', 'true'); };
+const closeFav = () => { cancelClose(); favParent.setAttribute('aria-expanded', 'false'); favTrigger.setAttribute('aria-expanded', 'false'); };
+const closeSoon = () => { cancelClose(); favCloseTimer = setTimeout(closeFav, 220); };
+// HOVER DEVICES ONLY. A single tap on a touch device synthesizes mouseenter ->
+// click -> mouseleave, so wiring mouseleave here would arm the close timer right
+// after the tap opened the menu and tear it back down (looked like "tap does
+// nothing"). Gate on (hover: hover) so touch relies purely on tap-to-open +
+// tap-outside-to-close (below). The flyout is position:fixed, sitting in a box
+// detached from the row with a gap; the delayed close + cancel-on-reenter lets the
+// cursor travel that gap to the submenu without it vanishing.
+if (matchMedia('(hover: hover)').matches) {
+  [favParent, presetList].forEach((el) => {
+    el.addEventListener('mouseenter', openFav);
+    el.addEventListener('mouseleave', closeSoon);
+  });
+}
+// Click ALWAYS opens (idempotent), never toggles. Toggling fought touch: a tap
+// emulates mouseenter (-> openFav) then click on the same element, so a toggle
+// would immediately re-close and the tap would appear to do nothing. With open-
+// only here, mobile users tap the label to reveal the submenu; the outside-click
+// handler below is the sole close path for pointer/touch.
+favTrigger.addEventListener('click', (e) => {
+  e.stopPropagation(); // don't let the Start-menu's own click-close fire
+  openFav();
+});
+// Close the flyout when clicking/tapping anything that's NOT the row or the
+// submenu (covers mobile, where there's no mouseleave). #presetList is a child of
+// #favParent, so one contains() check covers both. Capture phase so favTrigger's
+// stopPropagation can't hide an outside click from us.
+document.addEventListener('click', (e) => {
+  if (favParent.getAttribute('aria-expanded') === 'true'
+      && !favParent.contains(e.target as Node)) closeFav();
+}, true);
+favTrigger.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
+    e.preventDefault(); openFav();
+    (presetList.querySelector('.sm-link') as HTMLElement)?.focus();
+  } else if (e.key === 'Escape' || e.key === 'ArrowLeft') { closeFav(); }
+});
+
+$('undoBtn').addEventListener('click', undo);
+$('redoBtn').addEventListener('click', redo);
+// Ctrl/Cmd+Z = undo, Ctrl/Cmd+Y (or Shift+Z) = redo. No text inputs exist here,
+// so a global listener never steals a real text-edit undo.
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
 });
 
 $('share').addEventListener('click', async () => {
@@ -903,6 +1114,139 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && crt.classList.contains('maximized')) toggleMax(false);
 });
 
+// --- Properties sheet: the current mosaic's own stats (a fake document props) ----
+
+// Bytes -> a friendly "12.3 KB" / "1.1 MB" string (the Win98 size line).
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Plain-words summary of the active scheme / motion / layer style (the "Contains" line).
+const SCHEME_WORDS: Record<string, string> = {
+  none: 'true colour', grayscale: 'grayscale', invert: 'inverted', sepia: 'sepia',
+  threshold: '1-bit threshold', hue: 'hue-rotated', posterize: 'posterized',
+  duotone: 'duotone', tritone: 'tritone', gradient: 'gradient map', solarize: 'solarized',
+  channelswap: 'channel-swapped', palette: 'palette-snapped',
+};
+const LAYER_WORDS: Record<string, string> = {
+  cmy: 'CMY split', cmyk: 'CMYK split', ryb: 'RYB split', rgb: 'RGB split',
+  anaglyph: 'red/cyan 3D', halftone: 'halftone rosette',
+};
+
+/** Per-ink share for layered styles, derived from the page's own ink list math.
+ *  A vibe-accurate breakdown ("C 33% / M 33% / Y 34%"), not a colour-managed reading. */
+function inkBreakdown(): string | null {
+  if (!settings.layered) return null;
+  const map: Record<string, string[]> = {
+    cmy: ['C', 'M', 'Y'], cmyk: ['C', 'M', 'Y', 'K'], halftone: ['C', 'M', 'Y', 'K'],
+    ryb: ['R', 'Y', 'B'], rgb: ['R', 'G', 'B'], anaglyph: ['red', 'cyan'],
+  };
+  let inks = map[settings.layerStyle] ?? [];
+  if ((settings.layerStyle === 'cmy' || settings.layerStyle === 'ryb') && settings.layerCount === 2)
+    inks = inks.slice(0, 2);
+  if (!inks.length) return null;
+  // even split, with the remainder dropped on the last ink so it sums to 100.
+  const each = Math.floor(100 / inks.length);
+  return inks.map((n, i) => `${n} ${i === inks.length - 1 ? 100 - each * (inks.length - 1) : each}%`).join(' / ');
+}
+
+const propsModal = $('propsModal');
+function openProperties() {
+  const svg = exportSvg(); // built on demand; a modal open can afford one render
+  // dimensions: the export SVG's width/height attrs are the real pixel footprint.
+  const wh = /width="(\d+)" height="(\d+)"/.exec(svg);
+  const dims = wh ? `${wh[1]} x ${wh[2]} px` : 'not rendered yet';
+  // cells = cols x rows after pooling; derive rows from the viewBox (H / CELL=16).
+  const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+  const cols = settings.cols, rows = vb ? Math.round(+vb[2] / 16) : 0;
+  const cellCount = svg ? cols * rows : 0;
+
+  const rows2: [string, string][] = [
+    ['Type:', 'Iconizer 98 Document (.ico)'],
+    ['Size:', svg ? fmtBytes(svg.length) : 'nothing rendered'],
+    ['Dimensions:', dims],
+    ['Cells:', svg ? `${cellCount.toLocaleString()} (${cols} x ${rows})` : '0'],
+    ['Tiles:', `${icons.length} icon${icons.length === 1 ? '' : 's'}`],
+    ['Colour:', SCHEME_WORDS[settings.scheme.kind] ?? settings.scheme.kind],
+    ['Motion:', settings.motion === 'none' ? 'static' : settings.motion + (settings.motionReactive ? ' (reactive)' : '')],
+  ];
+  if (settings.layered) rows2.push(['Layered:', LAYER_WORDS[settings.layerStyle] ?? settings.layerStyle]);
+  const ink = inkBreakdown();
+  if (ink) rows2.push(['Ink:', ink]);
+  // flavor lines (verbatim, on-theme)
+  rows2.push(['Colours:', '16-bit (65,536)'], ['Read-only:', 'No'], ['Created with:', 'Iconizer 98']);
+
+  $('propsGrid').innerHTML = rows2
+    .map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('');
+  propsModal.hidden = false;
+  ($('propsOk') as HTMLButtonElement).focus();
+}
+function closeProperties() { propsModal.hidden = true; }
+$('propsOk').addEventListener('click', closeProperties);
+$('propsClose').addEventListener('click', closeProperties);
+$('propsModal').addEventListener('click', (e) => { if (e.target === propsModal) closeProperties(); }); // backdrop
+$('propsMenuItem').addEventListener('click', () => { openProperties(); setStart(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !propsModal.hidden) closeProperties(); });
+
+// --- CRT right-click context menu (Randomize · export · Properties) -------------
+
+const crtMenu = $('crtMenu');
+// Copy-image only exists where the clipboard API supports it; reveal it once at init.
+if (canCopyImage()) (crtMenu.querySelector('[data-act="copy"]') as HTMLElement).hidden = false;
+function openCrtMenu(x: number, y: number) {
+  // gate the export rows on a render existing (same `rendered` flag the Save menu uses).
+  crtMenu.querySelectorAll<HTMLButtonElement>('.ctx-item').forEach((b) => {
+    const a = b.dataset.act!;
+    b.disabled = (a === 'svg' || a === 'png' || a === 'copy' || a === 'properties') ? !rendered
+      : a === 'gif' ? (!rendered || settings.motion === 'none') : false; // randomize always on
+  });
+  crtMenu.hidden = false;
+  // place at the cursor, then nudge back inside the viewport if it would overflow.
+  const r = crtMenu.getBoundingClientRect();
+  crtMenu.style.left = `${Math.min(x, window.innerWidth - r.width - 4)}px`;
+  crtMenu.style.top = `${Math.min(y, window.innerHeight - r.height - 4)}px`;
+}
+const closeCrtMenu = () => { crtMenu.hidden = true; };
+crt.addEventListener('contextmenu', (e) => {
+  e.preventDefault(); // suppress the browser menu, show ours
+  openCrtMenu(e.clientX, e.clientY);
+});
+crtMenu.addEventListener('click', (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLButtonElement>('.ctx-item');
+  if (!item || item.disabled) return;
+  closeCrtMenu();
+  switch (item.dataset.act) {
+    case 'randomize': doRoll(); break;        // same as Surprise Me
+    case 'copy': copyImage(); break;
+    case 'svg': ($('dlSvg') as HTMLButtonElement).click(); break;
+    case 'png': ($('dlPng') as HTMLButtonElement).click(); break;
+    case 'gif': ($('dlGif') as HTMLButtonElement).click(); break;
+    case 'properties': openProperties(); break;
+  }
+});
+
+// Copy the clean rendered mosaic (the image, no CRT chrome) to the clipboard.
+async function copyImage() {
+  const svg = exportSvg();
+  if (!svg) return;
+  setStatus('exporting'); setProg(40);
+  try {
+    await copyPng(svg); // scale 1 — a quick snapshot, not a print-res export
+    setProg(100);
+    $('progText').textContent = '📋 COPIED TO CLIPBOARD';
+  } catch {
+    $('progText').textContent = '✖ COPY FAILED';
+  } finally {
+    setTimeout(() => { setStatus('ready'); setProg(0); }, 900);
+  }
+}
+// dismiss on any outside click / Escape / scroll
+document.addEventListener('click', (e) => { if (!crtMenu.hidden && !crtMenu.contains(e.target as Node)) closeCrtMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !crtMenu.hidden) closeCrtMenu(); });
+window.addEventListener('scroll', () => { if (!crtMenu.hidden) closeCrtMenu(); }, true);
+
 // --- taskbar: Start menu, quick-save proxy, task scroll-spy ------------------
 
 const startBtn = $('startBtn');
@@ -922,12 +1266,18 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !startMenu.hidden) { setStart(false); startBtn.focus(); }
 });
 startMenu.addEventListener('click', (e) => {
-  if ((e.target as HTMLElement).closest('[role=menuitem]')) setStart(false);
+  const item = (e.target as HTMLElement).closest('[role=menuitem]');
+  // Surprise Me stays open so you can keep rerolling from the menu; every other
+  // item closes it (Win98 behaviour).
+  if (item && item.id !== 'surprise') setStart(false);
 });
 
-// quick-save split button: proxies click the canonical export buttons in Export.exe.
+// quick-save split button: the menu rows (#dlSvg/#dlPng/#dlGif) ARE the canonical
+// export buttons now — their own click handlers (above) run the download. Here we
+// just open/close the menu; the rows' disabled state is set by refreshExportState.
 const quickSave = $('quickSave') as HTMLButtonElement;
 const qsMenu = $('quickSaveMenu');
+
 quickSave.addEventListener('click', () => {
   qsMenu.hidden = !qsMenu.hidden;
   quickSave.setAttribute('aria-expanded', String(!qsMenu.hidden));
@@ -935,21 +1285,11 @@ quickSave.addEventListener('click', () => {
 document.addEventListener('click', (e) => {
   if (!qsMenu.hidden && !qsMenu.contains(e.target as Node) && e.target !== quickSave) qsMenu.hidden = true;
 });
+// close the menu after picking a format (the export itself fires on the row's own
+// handler). Skip close for a disabled row so the menu doesn't vanish on a no-op.
 qsMenu.querySelectorAll<HTMLButtonElement>('.qs-item').forEach((item) => {
-  item.addEventListener('click', () => {
-    ($(item.dataset.proxy!) as HTMLButtonElement).click(); // fire the real export
-    qsMenu.hidden = true;
-  });
+  item.addEventListener('click', () => { if (!item.disabled) qsMenu.hidden = true; });
 });
-// keep proxy items' disabled state mirrored from the canonical buttons. Queries
-// the DOM lazily (not a closed-over const) so it's safe to call during startup,
-// before the quick-save const below is initialized (avoids a TDZ ReferenceError).
-function syncQuickSave() {
-  document.querySelectorAll<HTMLButtonElement>('.qs-item').forEach((item) => {
-    const real = $(item.dataset.proxy!) as HTMLButtonElement;
-    item.disabled = real.disabled || real.hidden;
-  });
-}
 
 // --- minimize / restore windows (genie animation) ---------------------------
 
@@ -1021,7 +1361,7 @@ function restoreWin(win: HTMLElement, scroll = true) {
 
 // All control windows in boot order. On first load they start minimized (just the
 // CRT shows); after the first successful render they cascade in one by one.
-const allWins = ['winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion', 'winExport'];
+const allWins = ['winSurprise', 'winPics', 'winGrid', 'winLayer', 'winScheme', 'winMotion'];
 function bootMinimizeAll() {
   document.body.classList.add('no-media'); // hide the task buttons until a render exists
   allWins.forEach((id) => {
