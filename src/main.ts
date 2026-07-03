@@ -237,6 +237,7 @@ function addStarter(name: string) {
   redraw();
 }
 $('tryDemo').addEventListener('click', async () => {
+  await stopMirror(false); // the demo replaces a live feed outright, like an upload
   srcBitmap?.close();
   srcBitmap = await testCard();
   cells = sample(srcBitmap, settings);
@@ -274,6 +275,8 @@ const mirrorCanvas = document.createElement('canvas');
 let mirrorStream: MediaStream | null = null;
 let mirrorTimer = 0;
 let mirrorSkip = 0; // self-pacing: heavy ticks skip their following slots
+let mirrorStarting = false; // getUserMedia is in flight; a second click must not
+// open a second stream (the first would leak and hold the camera light on)
 
 function mirrorTick() {
   if (mirrorSkip > 0) { mirrorSkip--; return; }
@@ -300,11 +303,15 @@ function mirrorTick() {
 }
 
 async function startMirror() {
+  if (mirrorStarting) return;
+  mirrorStarting = true;
   try {
     mirrorStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 } }, audio: false });
   } catch {
     $('progText').textContent = '✖ NO SIGNAL ✖ camera denied or unavailable';
     return;
+  } finally {
+    mirrorStarting = false;
   }
   mirrorVideo.srcObject = mirrorStream;
   await mirrorVideo.play();
@@ -953,6 +960,9 @@ function heldGroups(): Set<string> {
 function doRoll() {
   Object.assign(settings, rollWithLocks(settings, rollRandom(), heldGroups()));
   syncControls();
+  resample(); // the roll changes cols/background; without this the density stays
+  // stale and render() sizes output from the NEW cols over the OLD grid
+  // (letterboxed exports).
   redraw(); // immediate (also writes the new URL), so the link reflects the roll
   commitHistory(); // a roll is one undoable step
 }
@@ -968,6 +978,7 @@ async function applySettings(next: Settings) {
   }
   Object.assign(settings, structuredClone(next));
   syncControls();
+  resample(); // presets carry their own cols/background (see doRoll)
   redraw();
   commitHistory(); // one undoable step
 }
@@ -1178,7 +1189,7 @@ const propsModal = $('propsModal');
 function openProperties() {
   const svg = exportSvg(); // built on demand; a modal open can afford one render
   // dimensions: the export SVG's width/height attrs are the real pixel footprint.
-  const wh = /width="(\d+)" height="(\d+)"/.exec(svg);
+  const wh = /width="([\d.]+)" height="([\d.]+)"/.exec(svg); // hex height is fractional
   const dims = wh ? `${wh[1]} x ${wh[2]} px` : 'not rendered yet';
   // cells = cols x rows after pooling; derive rows from the viewBox (H / CELL=16).
   const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
