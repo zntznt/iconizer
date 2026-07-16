@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { render } from './render.ts';
 import type { Cell } from './sample.ts';
-import { defaults } from './settings.ts';
+import { defaults, type Settings } from './settings.ts';
 
-const svg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24' }];
+const svg = [{ innerSvg: '<rect width="24" height="24"/>', viewBox: '0 0 24 24', singleShape: true }];
 // 6x6 grid so stagger has distinct cells.
 const grid: Cell[] = [];
 for (let row = 0; row < 6; row++)
@@ -113,7 +113,7 @@ for (const m of ['spin', 'shimmer'] as const) {
 }
 
 // --- new motions: shake, flip 3D, hue-cycle ----------------------------------
-const motionOut = (m: string) => render(grid, svg, { ...defaults, cols: 6, motion: m, staggerMode: 'none' });
+const motionOut = (m: Settings['motion']) => render(grid, svg, { ...defaults, cols: 6, motion: m, staggerMode: 'none' });
 
 // shake: transform jitter folding var(--amp,1); ease timing; transform pivot.
 const shakeOut = motionOut('shake');

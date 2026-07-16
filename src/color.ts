@@ -204,7 +204,8 @@ export function overlayColor(base: RGB, u: number, overlay: Overlay): RGB {
     switch (overlay.blend) {
       case 'multiply': blended = (bv * gv) / 255; break;
       case 'screen': blended = 255 - ((255 - bv) * (255 - gv)) / 255; break;
-      default: blended = gv; // 'mix' = straight crossfade
+      case 'mix':
+      default: blended = gv; // straight crossfade (default: permalink hashes are unvalidated JSON)
     }
     return clamp255(lerp(bv, blended, overlay.strength));
   };

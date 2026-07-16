@@ -53,3 +53,5 @@ settings change and stays the one thing worth a unit test.
   download, visual correctness) has a re-runnable checklist in
   `guidance/manual-tests.md`. Run the relevant phase's checks after touching
   sampling/render/tint/export. Tests passing is necessary, not sufficient.
+- `npm run lint` (type-aware ESLint) must stay clean. tsconfig includes the test
+  files, so `tsc` checks them too (tsx alone strips types without checking).

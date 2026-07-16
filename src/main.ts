@@ -109,9 +109,9 @@ function refreshMotionPerfNudge() {
 // SVG/PNG enabled once a render exists; GIF additionally needs motion.
 function refreshExportState() {
   const animated = settings.motion !== 'none';
-  ($('dlSvg') as HTMLButtonElement).disabled = !rendered;
-  ($('dlPng') as HTMLButtonElement).disabled = !rendered;
-  ($('dlGif') as HTMLButtonElement).disabled = !rendered || !animated;
+  $<HTMLButtonElement>('dlSvg').disabled = !rendered;
+  $<HTMLButtonElement>('dlPng').disabled = !rendered;
+  $<HTMLButtonElement>('dlGif').disabled = !rendered || !animated;
 }
 
 // Debounce so dragging a slider doesn't thrash render() on every input event,
@@ -121,7 +121,7 @@ let timer: number | undefined;
 let raf = 0;
 function scheduleRedraw() {
   clearTimeout(timer);
-  timer = setTimeout(() => {
+  timer = window.setTimeout(() => {
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => { raf = 0; redraw(); });
   }, 50);
@@ -141,7 +141,7 @@ let histTimer: number | undefined;
 function commitHistory() {
   if (restoring) return;
   clearTimeout(histTimer);
-  histTimer = setTimeout(() => {
+  histTimer = window.setTimeout(() => {
     if (JSON.stringify(settings) === JSON.stringify(history[histAt])) return; // no real change
     history.splice(histAt + 1); // drop any redo tail — a new edit forks the future
     history.push(structuredClone(settings));
@@ -217,7 +217,7 @@ function flashBad(msg: string) {
   dwErr.textContent = `✖ BAD DISK ✖  ${msg}`;
   dropwell.classList.add('bad');
   clearTimeout(badTimer);
-  badTimer = setTimeout(() => dropwell.classList.remove('bad'), 1600);
+  badTimer = window.setTimeout(() => dropwell.classList.remove('bad'), 1600);
 }
 
 // click anywhere on the well opens the right file picker for the current stage.
@@ -343,7 +343,11 @@ async function stopMirror(freeze = true) {
     redraw(); // full pass so the permalink + export state catch up
   }
 }
-$('mirrorBtn').addEventListener('click', () => { mirrorTimer ? stopMirror() : startMirror(); });
+$('mirrorBtn').addEventListener('click', () => {
+  // fire-and-forget: both paths surface their own failures (NO SIGNAL text).
+  if (mirrorTimer) void stopMirror();
+  else void startMirror();
+});
 
 // One-click anaglyph poster: the red/cyan-glasses look with a real offset. Goes
 // through the same heavy-combo gate as the layered checkbox.
@@ -367,7 +371,7 @@ $('poster3d').addEventListener('click', async () => {
 );
 dropwell.addEventListener('drop', async (e) => {
   e.preventDefault();
-  const file = (e as DragEvent).dataTransfer?.files?.[0];
+  const file = e.dataTransfer?.files?.[0]; // 'drop' listener, e is already DragEvent
   if (!file) return;
   if (dwStage() === 'need-image') {
     if (await loadImage(file)) setDwStage('need-svg');
@@ -515,10 +519,10 @@ const ROTATE_HINTS: Record<string, string> = {
   fixed: '▸ tilt every icon by this angle ✦',
 };
 function syncRotateUI() {
-  const mode = ($('rotate') as HTMLSelectElement).value;
+  const mode = $<HTMLSelectElement>('rotate').value;
   disclose('p-rotate', mode !== 'none');
   if (mode !== 'none') $('rotateHint').innerHTML = ROTATE_HINTS[mode];
-  $('rotateDegVal').textContent = `${($('rotateDeg') as HTMLInputElement).value}°`;
+  $('rotateDegVal').textContent = `${$<HTMLInputElement>('rotateDeg').value}°`;
 }
 $('rotate').addEventListener('change', (e) => {
   settings.rotate = (e.target as HTMLSelectElement).value as Settings['rotate'];
@@ -597,36 +601,36 @@ const matchPreset = (table: Record<string, RGB[]>, colors: RGB[]): string | null
     && table[name].every((c, i) => c.r === colors[i]?.r && c.g === colors[i]?.g && c.b === colors[i]?.b)) ?? null;
 
 function readScheme(): Scheme {
-  const kind = ($('scheme') as HTMLSelectElement).value;
+  const kind = $<HTMLSelectElement>('scheme').value;
   switch (kind) {
     case 'threshold':
-      return { kind, cutoff: +($('thresh') as HTMLInputElement).value };
+      return { kind, cutoff: +$<HTMLInputElement>('thresh').value };
     case 'hue':
-      return { kind, deg: +($('hueDeg') as HTMLInputElement).value };
+      return { kind, deg: +$<HTMLInputElement>('hueDeg').value };
     case 'posterize':
-      return { kind, levels: +($('levels') as HTMLInputElement).value };
+      return { kind, levels: +$<HTMLInputElement>('levels').value };
     case 'duotone':
-      return { kind, dark: hex2rgb(($('duoDark') as HTMLInputElement).value),
-        light: hex2rgb(($('duoLight') as HTMLInputElement).value) };
+      return { kind, dark: hex2rgb($<HTMLInputElement>('duoDark').value),
+        light: hex2rgb($<HTMLInputElement>('duoLight').value) };
     case 'tritone':
-      return { kind, dark: hex2rgb(($('triDark') as HTMLInputElement).value),
-        mid: hex2rgb(($('triMid') as HTMLInputElement).value),
-        light: hex2rgb(($('triLight') as HTMLInputElement).value) };
+      return { kind, dark: hex2rgb($<HTMLInputElement>('triDark').value),
+        mid: hex2rgb($<HTMLInputElement>('triMid').value),
+        light: hex2rgb($<HTMLInputElement>('triLight').value) };
     case 'solarize':
-      return { kind, cutoff: +($('solCutoff') as HTMLInputElement).value };
+      return { kind, cutoff: +$<HTMLInputElement>('solCutoff').value };
     case 'channelswap':
-      return { kind, order: ($('swapOrder') as HTMLSelectElement).value };
+      return { kind, order: $<HTMLSelectElement>('swapOrder').value };
     case 'palette': {
-      const preset = ($('palettePreset') as HTMLSelectElement).value;
+      const preset = $<HTMLSelectElement>('palettePreset').value;
       const colors = preset === 'custom'
-        ? ['pal0', 'pal1', 'pal2'].map((id) => hex2rgb(($(id) as HTMLInputElement).value))
+        ? ['pal0', 'pal1', 'pal2'].map((id) => hex2rgb($<HTMLInputElement>(id).value))
         : PALETTES[preset];
       return { kind, colors };
     }
     case 'gradient': {
-      const preset = ($('gradientPreset') as HTMLSelectElement).value;
+      const preset = $<HTMLSelectElement>('gradientPreset').value;
       const stops = preset === 'custom'
-        ? ['grad0', 'grad1', 'grad2', 'grad3'].map((id) => hex2rgb(($(id) as HTMLInputElement).value))
+        ? ['grad0', 'grad1', 'grad2', 'grad3'].map((id) => hex2rgb($<HTMLInputElement>(id).value))
         : GRADIENTS[preset];
       return { kind, stops };
     }
@@ -644,7 +648,7 @@ function disclose(id: string, show: boolean) {
 }
 
 function syncSchemeUI() {
-  const kind = ($('scheme') as HTMLSelectElement).value;
+  const kind = $<HTMLSelectElement>('scheme').value;
   disclose('p-levels', kind === 'posterize');
   disclose('p-threshold', kind === 'threshold');
   disclose('p-hue', kind === 'hue');
@@ -656,24 +660,24 @@ function syncSchemeUI() {
   disclose('p-palette', kind === 'palette');
   // palette preset 'custom' reveals the 3 hand-pick swatches; presets hide them.
   disclose('p-palette-custom', kind === 'palette'
-    && ($('palettePreset') as HTMLSelectElement).value === 'custom');
+    && $<HTMLSelectElement>('palettePreset').value === 'custom');
   disclose('p-gradient-custom', kind === 'gradient'
-    && ($('gradientPreset') as HTMLSelectElement).value === 'custom');
-  $('levelsVal').textContent = `${($('levels') as HTMLInputElement).value} steps`;
-  $('threshVal').textContent = (+($('thresh') as HTMLInputElement).value).toFixed(2);
-  $('hueDegVal').textContent = `${($('hueDeg') as HTMLInputElement).value}°`;
-  $('solCutoffVal').textContent = (+($('solCutoff') as HTMLInputElement).value).toFixed(2);
+    && $<HTMLSelectElement>('gradientPreset').value === 'custom');
+  $('levelsVal').textContent = `${$<HTMLInputElement>('levels').value} steps`;
+  $('threshVal').textContent = (+$<HTMLInputElement>('thresh').value).toFixed(2);
+  $('hueDegVal').textContent = `${$<HTMLInputElement>('hueDeg').value}°`;
+  $('solCutoffVal').textContent = (+$<HTMLInputElement>('solCutoff').value).toFixed(2);
   $('schemeHint').hidden = kind !== 'none'; // hint only while nothing's picked
 }
 
 // The disclosure insets (scheme insets are handled by syncSchemeUI).
 function syncDisclosure() {
-  disclose('p-sizeRange', ($('sizeByBrightness') as HTMLInputElement).checked);
-  disclose('p-fadeRange', ($('fadeByBrightness') as HTMLInputElement).checked);
-  disclose('p-dither', ($('dither') as HTMLInputElement).checked);
-  disclose('p-overlay', ($('overlayDir') as HTMLSelectElement).value !== 'none');
-  disclose('p-layered', ($('layered') as HTMLInputElement).checked);
-  disclose('p-motion', ($('motion') as HTMLSelectElement).value !== 'none');
+  disclose('p-sizeRange', $<HTMLInputElement>('sizeByBrightness').checked);
+  disclose('p-fadeRange', $<HTMLInputElement>('fadeByBrightness').checked);
+  disclose('p-dither', $<HTMLInputElement>('dither').checked);
+  disclose('p-overlay', $<HTMLSelectElement>('overlayDir').value !== 'none');
+  disclose('p-layered', $<HTMLInputElement>('layered').checked);
+  disclose('p-motion', $<HTMLSelectElement>('motion').value !== 'none');
   syncRotateUI();
   syncIconMetricUI();
   refreshExportState();
@@ -682,17 +686,17 @@ function syncDisclosure() {
 // --- adjust panel (sat/bright/contrast/temp) — pre-scheme, always live -------
 function readAdjust(): Settings['adjust'] {
   return {
-    brightness: +($('adjBright') as HTMLInputElement).value,
-    contrast: +($('adjContrast') as HTMLInputElement).value,
-    saturation: +($('adjSat') as HTMLInputElement).value,
-    temperature: +($('adjTemp') as HTMLInputElement).value,
+    brightness: +$<HTMLInputElement>('adjBright').value,
+    contrast: +$<HTMLInputElement>('adjContrast').value,
+    saturation: +$<HTMLInputElement>('adjSat').value,
+    temperature: +$<HTMLInputElement>('adjTemp').value,
   };
 }
 for (const [id, label] of [['adjBright', 'adjBrightVal'], ['adjContrast', 'adjContrastVal'],
   ['adjSat', 'adjSatVal'], ['adjTemp', 'adjTempVal']] as const) {
   $(id).addEventListener('input', () => {
     settings.adjust = readAdjust();
-    $(label).textContent = (+($(id) as HTMLInputElement).value).toFixed(2);
+    $(label).textContent = (+$<HTMLInputElement>(id).value).toFixed(2);
     scheduleRedraw();
   });
 }
@@ -719,10 +723,10 @@ $('colorJitter').addEventListener('input', (e) => {
 // --- gradient overlay (post-scheme wash) -------------------------------------
 function readOverlay(): Settings['overlay'] {
   return {
-    dir: ($('overlayDir') as HTMLSelectElement).value as Settings['overlay']['dir'],
-    preset: ($('overlayPreset') as HTMLSelectElement).value,
-    blend: ($('overlayBlend') as HTMLSelectElement).value as Settings['overlay']['blend'],
-    strength: +($('overlayStrength') as HTMLInputElement).value,
+    dir: $<HTMLSelectElement>('overlayDir').value as Settings['overlay']['dir'],
+    preset: $<HTMLSelectElement>('overlayPreset').value,
+    blend: $<HTMLSelectElement>('overlayBlend').value as Settings['overlay']['blend'],
+    strength: +$<HTMLInputElement>('overlayStrength').value,
   };
 }
 for (const id of ['overlayDir', 'overlayPreset', 'overlayBlend', 'overlayStrength']) {
@@ -786,7 +790,7 @@ $('dlPng').addEventListener('click', async () => {
   setStatus('exporting'); setProg(30);
   setExportBusy(true);
   try {
-    await downloadPng(exportSvg(), +($('scale') as HTMLSelectElement).value);
+    await downloadPng(exportSvg(), +$<HTMLSelectElement>('scale').value);
     setProg(100);
   } catch {
     // a failed raster (e.g. iOS canvas cap) must not leave the bar stuck on
@@ -799,7 +803,7 @@ $('dlPng').addEventListener('click', async () => {
 });
 $('dlGif').addEventListener('click', async () => {
   if (!rendered || settings.motion === 'none') return;
-  const btn = $('dlGif') as HTMLButtonElement;
+  const btn = $<HTMLButtonElement>('dlGif');
   const old = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'encoding…';
@@ -812,7 +816,7 @@ $('dlGif').addEventListener('click', async () => {
   // phone (and trip the encode timeout); 12 keeps it smooth at a tiny cost.
   const frames = matchMedia('(pointer: coarse)').matches ? 12 : 20;
   try {
-    await downloadGif(exportSvg(), settings.motion, settings.motionSpeed, +($('scale') as HTMLSelectElement).value, frames);
+    await downloadGif(exportSvg(), settings.motion, settings.motionSpeed, +$<HTMLSelectElement>('scale').value, frames);
     setProg(100);
   } catch {
     $('progText').textContent = '✖ GIF EXPORT FAILED';
@@ -833,7 +837,7 @@ const rgb2hex = (c: RGB) =>
 /** Push the current `settings` object back into every control + its value label. */
 function syncControls() {
   const set = (id: string, v: string | number | boolean) => {
-    const el = $(id) as HTMLInputElement;
+    const el = $<HTMLInputElement>(id);
     if (typeof v === 'boolean') el.checked = v;
     else el.value = String(v);
   };
@@ -951,7 +955,7 @@ const HOLD_BOXES: Record<string, string> = {
 function heldGroups(): Set<string> {
   const set = new Set<string>();
   for (const [group, id] of Object.entries(HOLD_BOXES))
-    if (($(id) as HTMLInputElement).checked) set.add(group);
+    if ($<HTMLInputElement>(id).checked) set.add(group);
   return set;
 }
 
@@ -1000,7 +1004,8 @@ PRESETS.forEach((p, i) => {
   presetList.appendChild(item);
 });
 function applyPreset(item: HTMLElement) {
-  applySettings(PRESETS[+item.dataset.i!].settings);
+  // fire-and-forget: applySettings only awaits the heavy-combo dialog.
+  void applySettings(PRESETS[+item.dataset.i!].settings);
   closeFav();
   setStart(false); // a chosen look closes the whole Start menu (Win98 behaviour)
 }
@@ -1021,7 +1026,7 @@ let favCloseTimer: number | undefined;
 const cancelClose = () => { clearTimeout(favCloseTimer); favCloseTimer = undefined; };
 const openFav = () => { cancelClose(); favParent.setAttribute('aria-expanded', 'true'); favTrigger.setAttribute('aria-expanded', 'true'); };
 const closeFav = () => { cancelClose(); favParent.setAttribute('aria-expanded', 'false'); favTrigger.setAttribute('aria-expanded', 'false'); };
-const closeSoon = () => { cancelClose(); favCloseTimer = setTimeout(closeFav, 220); };
+const closeSoon = () => { cancelClose(); favCloseTimer = window.setTimeout(closeFav, 220); };
 // HOVER DEVICES ONLY. A single tap on a touch device synthesizes mouseenter ->
 // click -> mouseleave, so wiring mouseleave here would arm the close timer right
 // after the tap opened the menu and tear it back down (looked like "tap does
@@ -1214,7 +1219,7 @@ function openProperties() {
   $('propsGrid').innerHTML = rows2
     .map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('');
   propsModal.hidden = false;
-  ($('propsOk') as HTMLButtonElement).focus();
+  $<HTMLButtonElement>('propsOk').focus();
 }
 function closeProperties() { propsModal.hidden = true; }
 $('propsOk').addEventListener('click', closeProperties);
@@ -1252,11 +1257,12 @@ crtMenu.addEventListener('click', (e) => {
   closeCrtMenu();
   switch (item.dataset.act) {
     case 'randomize': doRoll(); break;        // same as Surprise Me
-    case 'copy': copyImage(); break;
-    case 'svg': ($('dlSvg') as HTMLButtonElement).click(); break;
-    case 'png': ($('dlPng') as HTMLButtonElement).click(); break;
-    case 'gif': ($('dlGif') as HTMLButtonElement).click(); break;
+    case 'copy': void copyImage(); break;     // catches internally (progText)
+    case 'svg': $<HTMLButtonElement>('dlSvg').click(); break;
+    case 'png': $<HTMLButtonElement>('dlPng').click(); break;
+    case 'gif': $<HTMLButtonElement>('dlGif').click(); break;
     case 'properties': openProperties(); break;
+    default: break; // unknown/missing data-act: ignore
   }
 });
 
@@ -1308,7 +1314,7 @@ startMenu.addEventListener('click', (e) => {
 // quick-save split button: the menu rows (#dlSvg/#dlPng/#dlGif) ARE the canonical
 // export buttons now — their own click handlers (above) run the download. Here we
 // just open/close the menu; the rows' disabled state is set by refreshExportState.
-const quickSave = $('quickSave') as HTMLButtonElement;
+const quickSave = $<HTMLButtonElement>('quickSave');
 const qsMenu = $('quickSaveMenu');
 
 quickSave.addEventListener('click', () => {

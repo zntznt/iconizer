@@ -192,7 +192,7 @@ export async function downloadGif(
   const period = periodSec;
   const frameSvgAt = (i: number) => {
     const t = (period * i) / frames; // global time within one cycle
-    return styleStripped.replace(motionElRe, (_m, styleStr) => {
+    return styleStripped.replace(motionElRe, (_m, styleStr: string | undefined) => {
       const delayM = styleStr && /animation-delay:([\d.-]+)s/.exec(styleStr);
       const ampM = styleStr && /--amp:([\d.-]+)/.exec(styleStr);
       const delay = delayM ? parseFloat(delayM[1]) : 0;
