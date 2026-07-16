@@ -18,7 +18,9 @@ export function decodeSettings(hash: string): Settings | null {
   const raw = hash.replace(/^#/, '');
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(atob(raw));
+    // ponytail: a cast, not validation. A hand-crafted hash with wrong field
+    // types gets through; fine for a toy permalink, schema-check if it bites.
+    const parsed = JSON.parse(atob(raw)) as Partial<Settings>;
     return { ...defaults, ...parsed }; // forward/backward compatible
   } catch {
     return null; // garbage hash -> ignore, use defaults
@@ -67,7 +69,7 @@ export function rollRandom(rnd: () => number = Math.random): Settings {
   else if (kind === 'solarize') scheme = { kind, cutoff: +(0.3 + rnd() * 0.5).toFixed(2) };
   else if (kind === 'channelswap') scheme = { kind, order: choose(SWAP_ORDERS) };
   else if (kind === 'palette') scheme = { kind, colors: PALETTES[choose(PALETTE_NAMES)] };
-  else scheme = { kind } as Scheme; // none | grayscale | invert | sepia
+  else scheme = { kind }; // none | grayscale | invert | sepia, all payload-free
 
   // layered + motion together is the heavy combo (we warn about it) — so a roll
   // picks AT MOST ONE of them: a 'flavor' of layered, motion, or plain.
@@ -155,7 +157,10 @@ export function rollWithLocks(current: Settings, roll: Settings, locks: Set<stri
   const out: Settings = { ...current };
   for (const [group, keys] of Object.entries(LOCK_GROUPS)) {
     if (locks.has(group)) continue;
-    for (const k of keys) (out as any)[k] = roll[k];
+    // write through a keyed record: k is keyof Settings but TS can't prove the
+    // value type matches per-key, and `any` is banned. Runtime shape is safe
+    // because k and roll[k] come from the same Settings.
+    for (const k of keys) (out as Record<keyof Settings, unknown>)[k] = roll[k];
   }
   if (out.layered && out.motion !== 'none') {
     if (!locks.has('motion')) out.motion = 'none';

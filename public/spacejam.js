@@ -54,7 +54,7 @@
   }
   function hslToRgb(h, s, l) {
     const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
-    let r = 0, g = 0, b = 0;
+    let r, g, b;
     if (h < 60) [r, g, b] = [c, x, 0]; else if (h < 120) [r, g, b] = [x, c, 0];
     else if (h < 180) [r, g, b] = [0, c, x]; else if (h < 240) [r, g, b] = [0, x, c];
     else if (h < 300) [r, g, b] = [x, 0, c]; else [r, g, b] = [c, 0, x];
@@ -88,7 +88,6 @@
     let reduce = mq.matches;
     let exporting = false;               // paused while a raster export runs
     const FPS = 30;
-    const GIF = 12;                      // moiré shimmer quantized to a 12fps GIF clock
 
     // ---- pointer state (window listeners fill it; draw() consumes it) ----
     const ptr = { px: -1, py: -1, has: false, active: false, lastMove: -10, vx: 0, vy: 0, lpx: -1, lpy: -1 };
@@ -241,7 +240,8 @@
         if (reduce) { pulses = []; tilt = 0; p.frameRate(1); p.redraw(); p.noLoop(); }
         else if (!document.hidden && !exporting) { p.frameRate(FPS); p.loop(); }
       };
-      mq.addEventListener ? mq.addEventListener('change', onMq) : mq.addListener(onMq);
+      if (mq.addEventListener) mq.addEventListener('change', onMq);
+      else mq.addListener(onMq); // pre-2019 Safari fallback
       const sync = () => {
         if (reduce || document.hidden || exporting) p.noLoop();
         else { p.frameRate(FPS); p.loop(); }

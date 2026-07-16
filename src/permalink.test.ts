@@ -70,7 +70,8 @@ for (let s = 0; s < 200; s++) {
   // nothing locked: every group takes the roll (a plain reroll).
   const b = rollWithLocks(current, roll, new Set());
   for (const keys of Object.values(LOCK_GROUPS)) for (const k of keys)
-    assert.deepEqual((b as any)[k], (roll as any)[k], `unlocked key ${k} takes the roll`);
+    assert.deepEqual((b as Record<string, unknown>)[k], (roll as Record<string, unknown>)[k],
+      `unlocked key ${k} takes the roll`);
 
   // HEAVY-COMBO GUARD, branch 1 — layer locked ON, motion rerolls ON: drop motion
   // (the unlocked side), so the result is never layered + motion.
