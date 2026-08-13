@@ -40,7 +40,12 @@ export function gridDims(grid: Cell[]): { cols: number; rows: number } {
 export function poolCells(grid: Cell[], cols: number, block: number): Cell[] {
   if (block <= 1 || grid.length === 0) return grid;
   const { rows } = gridDims(grid);
-  const at = new Map(grid.map((c) => [c.row * cols + c.col, c]));
+  // Flat row-major index rather than a Map: `new Map(grid.map(...))` allocated a
+  // two-element array per cell just to build the entries, and pooling re-runs on
+  // every redraw while blockSize > 1. Same lookup semantics (a later duplicate
+  // wins, a miss reads undefined), none of the boxing.
+  const at = new Array<Cell | undefined>(rows * cols);
+  for (const c of grid) at[c.row * cols + c.col] = c;
   const outCols = Math.ceil(cols / block);
   const outRows = Math.ceil(rows / block);
   const out: Cell[] = [];
@@ -51,7 +56,7 @@ export function poolCells(grid: Cell[], cols: number, block: number): Cell[] {
       // average every source cell in this block (clamped at the grid edge).
       for (let dy = 0; dy < block; dy++) {
         for (let dx = 0; dx < block; dx++) {
-          const c = at.get((br * block + dy) * cols + (bc * block + dx));
+          const c = at[(br * block + dy) * cols + (bc * block + dx)];
           if (c) { r += c.r; g += c.g; b += c.b; n++; }
         }
       }
@@ -75,35 +80,46 @@ export function averageCells(
   cols: number,
 ): Cell[] {
   const rows = rowsFor(width, height, cols);
-  const cells: Cell[] = [];
+  const cells: Cell[] = new Array<Cell>(rows * cols); // exact size is known up front
 
+  // Cell rectangle in pixel space, clamped to the edge. The column bounds depend
+  // only on `col`, so they're floored ONCE here instead of re-floored for every
+  // row: at 100 columns on a 1024px image that's 75,000 divisions saved.
+  const xs0 = new Int32Array(cols), xs1 = new Int32Array(cols);
+  for (let col = 0; col < cols; col++) {
+    xs0[col] = Math.floor((col * width) / cols);
+    xs1[col] = Math.min(width, Math.floor(((col + 1) * width) / cols));
+  }
+
+  let k = 0;
   for (let row = 0; row < rows; row++) {
+    const y0 = Math.floor((row * height) / rows);
+    const y1 = Math.min(height, Math.floor(((row + 1) * height) / rows));
     for (let col = 0; col < cols; col++) {
-      // Cell rectangle in pixel space. Clamp the last col/row to the edge.
-      const x0 = Math.floor((col * width) / cols);
-      const x1 = Math.min(width, Math.floor(((col + 1) * width) / cols));
-      const y0 = Math.floor((row * height) / rows);
-      const y1 = Math.min(height, Math.floor(((row + 1) * height) / rows));
-
-      let r = 0, g = 0, b = 0, n = 0;
+      const x0 = xs0[col], x1 = xs1[col];
+      let r = 0, g = 0, b = 0;
       for (let y = y0; y < y1; y++) {
+        // Walk the row segment with a running offset: the old form recomputed
+        // (y * width + x) * 4 for every pixel.
+        let i = (y * width + x0) * 4;
         for (let x = x0; x < x1; x++) {
-          const i = (y * width + x) * 4;
           r += pixels[i];
           g += pixels[i + 1];
           b += pixels[i + 2];
           // alpha already flattened onto white in sample() before getImageData,
           // so RGB here is the composited color — averaging it directly is correct.
-          n++;
+          i += 4;
         }
       }
-      if (n === 0) n = 1; // degenerate 1px-wide cell guard
+      // pixel count is the rectangle's area (bounds are non-decreasing, so it is
+      // never negative); 0 is the degenerate 1px-wide cell guard.
+      const n = (x1 - x0) * (y1 - y0) || 1;
       r /= n; g /= n; b /= n;
 
       // ponytail: averaged in raw sRGB, not linear light. Gamma-correct
       // (decode -> average -> encode) if tonal accuracy ever matters.
       const brightness = (LUMA.r * r + LUMA.g * g + LUMA.b * b) / 255;
-      cells.push({ col, row, r, g, b, brightness });
+      cells[k++] = { col, row, r, g, b, brightness };
     }
   }
   return cells;
@@ -114,6 +130,14 @@ export function averageCells(
 // the getImageData buffer + JS loop by 10-100x on a big photo. 1024 leaves ~10px
 // per cell even at 100 cols, plenty of samples for a stable average.
 const MAX_SAMPLE_SIDE = 1024;
+
+// One scratch canvas for every sample(). A fresh <canvas> + 2d context per call
+// costs a real allocation (and a backing surface the browser has to set up), and
+// this runs on every column-slider tick and ~7 times a second in mirror mode. The
+// canvas is never attached to the document, so reusing it is invisible: the
+// background fillRect below repaints the whole surface before each draw.
+let scratch: HTMLCanvasElement | null = null;
+let scratchCtx: CanvasRenderingContext2D | null = null;
 
 /** Draw the image to a canvas, read pixels once, average into a Cell[] grid.
  *  Canvas sources serve mirror mode (a webcam frame drawn each tick). */
@@ -127,11 +151,17 @@ export function sample(
   const width = Math.max(1, Math.round(srcW * k));
   const height = Math.max(1, Math.round(srcH * k));
 
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!scratch) {
+    scratch = document.createElement('canvas');
+    scratchCtx = scratch.getContext('2d', { willReadFrequently: true });
+  }
+  const canvas = scratch;
+  const ctx = scratchCtx;
   if (!ctx) throw new Error('2d canvas context unavailable');
+  // Assigning width/height also clears the surface, so only touch them on a
+  // change (a mirror feed holds one size for its whole run).
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high'; // the downscale IS part of the averaging
   // Flatten transparency onto settings.background so transparent PNGs don't

@@ -50,6 +50,11 @@ let cells: Cell[] | null = null;
 let srcBitmap: ImageBitmap | null = null; // decoded once at load; resample reuses it
 let needsResample = false; // set by cols/background input; consumed by redraw()
 const icons: { name: string; svg: ParsedSvg }[] = []; // dark->light order
+// render() wants a bare ParsedSvg[]; the icon list rarely changes but redraw()
+// runs on every slider tick (and every mirror frame), so rebuild that array only
+// when the list actually changes. renderIconList() is the single point every
+// mutation of `icons` funnels through, so it owns the refresh.
+let iconSvgs: ParsedSvg[] = [];
 let rendered = false; // a live render exists; the export SVG is built on demand
 
 // FOR EXPORT (svg/png/gif): the <symbol>+<use> form, built at download time.
@@ -59,19 +64,35 @@ let rendered = false; // a live render exists; the export SVG is built on demand
 // doubled the cost of each slider tick for a string almost never used.
 function exportSvg(): string {
   if (!cells || icons.length === 0) return '';
-  return render(cells, icons.map((i) => i.svg), settings, 'export');
+  return render(cells, iconSvgs, settings, 'export');
+}
+
+// history.replaceState is a browser-level write (and Safari rate-limits it), so
+// it does not belong in the same frame as a 10,000-node DOM swap. The permalink
+// only has to be current by the time someone can copy it, so it rides an idle
+// callback after the paint. Share/export read it synchronously via syncUrlNow().
+let urlQueued = false;
+const idle: (cb: () => void) => void =
+  typeof requestIdleCallback === 'function'
+    ? (cb) => { requestIdleCallback(cb, { timeout: 500 }); }
+    : (cb) => { setTimeout(cb, 1); };
+function syncUrlSoon() {
+  if (urlQueued) return;
+  urlQueued = true;
+  idle(() => { urlQueued = false; syncUrl(settings); });
 }
 
 function redraw() {
-  syncUrl(settings); // keep the permalink current even before an image is loaded
+  syncUrlSoon(); // keep the permalink current even before an image is loaded
   if (!cells || icons.length === 0) return;
   if (needsResample && srcBitmap) {
     cells = sample(srcBitmap, settings);
+    gridRows = 0;
     needsResample = false;
   }
   // ON-SCREEN: inline-shapes form — the browser lays out a flat tree instead of
   // cloning a <symbol> shadow subtree per cell (~85x faster paint on big grids).
-  const live = render(cells, icons.map((i) => i.svg), settings, 'live');
+  const live = render(cells, iconSvgs, settings, 'live');
   out.innerHTML = live;
   rendered = true;
   // Hand the backdrop the fresh markup for its palette sampler. It used to
@@ -91,18 +112,21 @@ function redraw() {
 // chug, so the user can lower columns / raise blockSize if they want it smooth.
 // blockSize pools cells, so it shrinks the animated count by block².
 const SMOOTH_CELL_BUDGET = 2500; // ≈ 50×50; motion is smooth at/below this
+// Row count of the current grid, cached: gridDims scans every cell, and the grid
+// only changes when we re-sample. 0 means "not computed yet".
+let gridRows = 0;
+const nudgeEl = document.getElementById('motionPerfNudge');
 function refreshMotionPerfNudge() {
-  const nudge = document.getElementById('motionPerfNudge');
-  if (!nudge) return;
+  if (!nudgeEl) return;
   const animated = settings.motion !== 'none' && !settings.layered;
   let heavy = false;
   if (animated && cells) {
-    const { rows } = gridDims(cells);
+    if (!gridRows) gridRows = gridDims(cells).rows;
     const block = Math.max(1, settings.blockSize);
-    const effectiveCells = (settings.cols * rows) / (block * block);
+    const effectiveCells = (settings.cols * gridRows) / (block * block);
     heavy = effectiveCells > SMOOTH_CELL_BUDGET;
   }
-  nudge.hidden = !(animated && heavy);
+  nudgeEl.hidden = !(animated && heavy);
 }
 
 // Single source of truth for export button states (the taskbar Save menu rows).
@@ -177,6 +201,7 @@ async function loadImage(file: File): Promise<boolean> {
     srcBitmap?.close();              // free the previous image
     srcBitmap = await createImageBitmap(file);
     cells = sample(srcBitmap, settings);
+    gridRows = 0;
     needsResample = false; // fresh sample; drop any deferred request
   } catch { return false; } // corrupt/undecodable image
   $('srcName').textContent = file.name;
@@ -241,6 +266,7 @@ $('tryDemo').addEventListener('click', async () => {
   srcBitmap?.close();
   srcBitmap = await testCard();
   cells = sample(srcBitmap, settings);
+  gridRows = 0;
   needsResample = false;
   $('srcName').textContent = 'testcard (built-in)';
   refreshPips();
@@ -291,8 +317,9 @@ function mirrorTick() {
   ctx.setTransform(-1, 0, 0, 1, mirrorCanvas.width, 0); // mirror: selfies expect a flip
   ctx.drawImage(mirrorVideo, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
   cells = sample(mirrorCanvas, settings);
+  gridRows = 0;
   if (icons.length === 0) return;
-  const live = render(cells, icons.map((i) => i.svg), settings, 'live');
+  const live = render(cells, iconSvgs, settings, 'live');
   out.innerHTML = live;
   rendered = true;
   document.dispatchEvent(new CustomEvent('iconizer:render', { detail: { svg: live } }));
@@ -399,6 +426,7 @@ window.addEventListener('paste', async (e) => {
 
 // Render the icon list with remove buttons. Order = dark->light draw order.
 function renderIconList() {
+  iconSvgs = icons.map((i) => i.svg); // keep render()'s input in step with the list
   const list = $('iconList');
   list.innerHTML = '';
   icons.forEach((it, i) => {
@@ -967,7 +995,8 @@ function doRoll() {
   resample(); // the roll changes cols/background; without this the density stays
   // stale and render() sizes output from the NEW cols over the OLD grid
   // (letterboxed exports).
-  redraw(); // immediate (also writes the new URL), so the link reflects the roll
+  redraw();
+  syncUrl(settings); // a roll is a discrete action: the link reflects it immediately
   commitHistory(); // a roll is one undoable step
 }
 $('surprise').addEventListener('click', doRoll);
@@ -984,6 +1013,7 @@ async function applySettings(next: Settings) {
   syncControls();
   resample(); // presets carry their own cols/background (see doRoll)
   redraw();
+  syncUrl(settings); // discrete action, like a roll: don't wait for an idle slot
   commitHistory(); // one undoable step
 }
 

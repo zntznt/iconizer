@@ -65,23 +65,27 @@ export function rgbToHsl({ r, g, b }: RGB): { h: number; s: number; l: number } 
   return { h, s, l };
 }
 
+/** One channel of the HSL->RGB reconstruction. Module scope, taking p/q as
+ *  arguments, so hslToRgb doesn't allocate a fresh closure on every call: colour
+ *  jitter runs this once per cell, and a 100-column mosaic has ~10,000 of them. */
+function hue2rgb(p: number, q: number, t: number): number {
+  t = ((t % 1) + 1) % 1;
+  if (t < 1 / 6) return p + (q - p) * 6 * t;
+  if (t < 1 / 2) return q;
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+  return p;
+}
+
 /** HSL (each 0..1, h wraps) -> RGB (0-255). Inverse of rgbToHsl. */
 export function hslToRgb({ h, s, l }: { h: number; s: number; l: number }): RGB {
   h = ((h % 1) + 1) % 1; // wrap hue into [0,1)
   if (s === 0) { const v = clamp255(l * 255); return { r: v, g: v, b: v }; }
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
   const p = 2 * l - q;
-  const hue2rgb = (t: number) => {
-    t = ((t % 1) + 1) % 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
   return {
-    r: clamp255(hue2rgb(h + 1 / 3) * 255),
-    g: clamp255(hue2rgb(h) * 255),
-    b: clamp255(hue2rgb(h - 1 / 3) * 255),
+    r: clamp255(hue2rgb(p, q, h + 1 / 3) * 255),
+    g: clamp255(hue2rgb(p, q, h) * 255),
+    b: clamp255(hue2rgb(p, q, h - 1 / 3) * 255),
   };
 }
 
@@ -194,23 +198,45 @@ export const bayer = (col: number, row: number): number =>
 export const schemeQuantizes = (s: Scheme): boolean =>
   s.kind === 'threshold' || s.kind === 'posterize' || s.kind === 'palette';
 
+/** One channel of the wash blend. Module scope (taking `overlay` as an argument)
+ *  so overlayColor doesn't build a closure per cell: this runs for every cell in
+ *  the grid whenever the overlay is on. */
+function overlayCh(bv: number, gv: number, overlay: Overlay): number {
+  let blended: number;
+  switch (overlay.blend) {
+    case 'multiply': blended = (bv * gv) / 255; break;
+    case 'screen': blended = 255 - ((255 - bv) * (255 - gv)) / 255; break;
+    case 'mix':
+    default: blended = gv; // straight crossfade (default: permalink hashes are unvalidated JSON)
+  }
+  return clamp255(lerp(bv, blended, overlay.strength));
+}
+
 /** Blend a gradient-wash colour (at grid position u) over a base colour. */
 export function overlayColor(base: RGB, u: number, overlay: Overlay): RGB {
   const stops = GRADIENTS[overlay.preset] ?? [];
   if (stops.length === 0 || overlay.strength <= 0) return base;
   const g = gradientAt(stops, u);
-  const ch = (bv: number, gv: number): number => {
-    let blended: number;
-    switch (overlay.blend) {
-      case 'multiply': blended = (bv * gv) / 255; break;
-      case 'screen': blended = 255 - ((255 - bv) * (255 - gv)) / 255; break;
-      case 'mix':
-      default: blended = gv; // straight crossfade (default: permalink hashes are unvalidated JSON)
-    }
-    return clamp255(lerp(bv, blended, overlay.strength));
+  return {
+    r: overlayCh(base.r, g.r, overlay),
+    g: overlayCh(base.g, g.g, overlay),
+    b: overlayCh(base.b, g.b, overlay),
   };
-  return { r: ch(base.r, g.r), g: ch(base.g, g.g), b: ch(base.b, g.b) };
 }
+
+// Per-channel helpers for transformColor's branches. They live at module scope,
+// taking their parameters as arguments, because transformColor runs once per cell:
+// a closure rebuilt inside the switch would allocate ~10,000 times per render on a
+// 100-column grid. Same arithmetic, no per-call allocation.
+const band = (v: number, n: number): number => clamp255((Math.round((v / 255) * n) / n) * 255);
+const flip = (v: number, c: number): number => (v > c ? 255 - v : v);
+const chan = (rgb: RGB, ch: string): number => (ch === 'r' ? rgb.r : ch === 'g' ? rgb.g : rgb.b);
+/** One leg of the tritone ramp (a 2-stop lerp). Shared by both halves. */
+const seg = (a: RGB, b: RGB, u: number): RGB => ({
+  r: clamp255(lerp(a.r, b.r, u)),
+  g: clamp255(lerp(a.g, b.g, u)),
+  b: clamp255(lerp(a.b, b.b, u)),
+});
 
 /** Remap one cell color through a scheme. Pure: rgb in, rgb out. Called at a
  *  single upstream point in render() so it composes with solid AND layered. */
@@ -257,8 +283,7 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
     }
     case 'posterize': {
       const n = Math.max(2, scheme.levels) - 1;
-      const band = (v: number) => clamp255((Math.round((v / 255) * n) / n) * 255);
-      return { r: band(rgb.r), g: band(rgb.g), b: band(rgb.b) };
+      return { r: band(rgb.r, n), g: band(rgb.g, n), b: band(rgb.b, n) };
     }
     case 'duotone': {
       const t = luma(rgb);
@@ -272,11 +297,6 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
       // 3-stop gradient map: dark -> mid over the lower half of luma, mid ->
       // light over the upper half. duotone with a third anchor for richer ramps.
       const t = luma(rgb);
-      const seg = (a: RGB, b: RGB, u: number): RGB => ({
-        r: clamp255(lerp(a.r, b.r, u)),
-        g: clamp255(lerp(a.g, b.g, u)),
-        b: clamp255(lerp(a.b, b.b, u)),
-      });
       return t < 0.5
         ? seg(scheme.dark, scheme.mid, t * 2)
         : seg(scheme.mid, scheme.light, (t - 0.5) * 2);
@@ -289,15 +309,13 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
       // invert only the channels brighter than cutoff — the darkroom/psychedelic
       // tone reversal in the highlights.
       const c = scheme.cutoff * 255;
-      const f = (v: number) => (v > c ? 255 - v : v);
-      return { r: f(rgb.r), g: f(rgb.g), b: f(rgb.b) };
+      return { r: flip(rgb.r, c), g: flip(rgb.g, c), b: flip(rgb.b, c) };
     }
     case 'channelswap': {
       // order is a permutation of 'rgb' naming which source channel feeds each
       // output channel — instant alien palettes for ~free.
       const o = scheme.order;
-      const pick = (ch: string) => (ch === 'r' ? rgb.r : ch === 'g' ? rgb.g : rgb.b);
-      return { r: pick(o[0]), g: pick(o[1]), b: pick(o[2]) };
+      return { r: chan(rgb, o[0]), g: chan(rgb, o[1]), b: chan(rgb, o[2]) };
     }
     case 'palette': {
       // ponytail: nearest by squared RGB distance — perceptually off. Lab/OKLab
