@@ -92,17 +92,14 @@ function opacityFor(cell: Cell, settings: Settings): number {
 }
 const opAttr = (o: number) => (o < 1 ? ` opacity="${r2(o)}"` : '');
 
-/** Wrap a cell body in a static-rotation group, pivoting in place (fill-box) so
- *  it rotates around the icon's own centre. Sits INSIDE the motion wrapper so a
- *  spinning/bobbing cell still carries its static tilt (nested transforms). */
-function rotateWrap(body: string, cell: Cell, index: number, plan: Plan): string {
+/** Opening tag of a cell's static-rotation group, or '' for no rotation. Pivots
+ *  in place (fill-box) so it rotates around the icon's own centre, and sits INSIDE
+ *  the motion wrapper so a spinning/bobbing cell still carries its static tilt. */
+function rotateOpen(cell: Cell, index: number, plan: Plan): string {
   // 'fixed' is one angle for the whole grid: reuse the prefix built in the plan.
-  if (plan.settings.rotate === 'fixed') {
-    return plan.rotatePrefix ? `${plan.rotatePrefix}${body}</g>` : body;
-  }
+  if (plan.settings.rotate === 'fixed') return plan.rotatePrefix ?? '';
   const deg = rotationFor(cell, index, plan.settings);
-  if (!deg) return body; // no rotation -> output unchanged
-  return `${pivotWrap(r1(deg))}${body}</g>`;
+  return deg ? pivotWrap(r1(deg)) : ''; // no rotation -> no group, output unchanged
 }
 
 /** Which icon a cell draws. 'brightness' (default): dark cell -> icon 0, light ->
@@ -329,7 +326,7 @@ function makePlan(settings: Settings, cols: number, rows: number, iconCount: num
  *  shared page (white for multiply styles, black for screen). No per-cell rect
  *  or isolation — the page IS the blend backdrop. Subtractive styles shrink each
  *  successive layer (concentric inks); additive/anaglyph stay full size. */
-function layeredBody(cell: Cell, plan: Plan, place: Placer, placers: Placer[]): string {
+function layeredBodyOnto(s: string, cell: Cell, plan: Plan, place: Placer, placers: Placer[]): string {
   // Per-channel icons: ink i draws icon i (a different uploaded shape per channel),
   // falling back to the cell's normal placer when there aren't enough icons, so 1
   // icon is byte-identical to before. Off -> every ink uses the cell's one placer.
@@ -339,54 +336,63 @@ function layeredBody(cell: Cell, plan: Plan, place: Placer, placers: Placer[]): 
   const r = cell.r / 255, g = cell.g / 255, b = cell.b / 255;
   const off = settings.layerOffset;
   const op = opAttr(opacityFor(cell, settings)); // fades the whole stack uniformly
-  let s = '';
   for (let i = 0; i < n; i++) {
     const inkPlace = perChannel ? (placers[i] ?? place) : place;
     const scale = shrink ? r1(base * (1 - i / n)) : base; // even concentric steps
     const box = cellBox(cell, plan, scale);
     box.x = r1(box.x + inks[i].dx * off);
     box.y = r1(box.y + inks[i].dy * off);
-    const layer = inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
     // Halftone: rotate this ink to its screen angle, pivoting in place (fill-box) so
     // it turns around the icon's own centre instead of flinging across the canvas.
     // The angle is per-ink, not per-cell, so the wrapper came ready-made.
     const pre = inkPrefix[i];
-    s += pre ? `${pre}${layer}</g>` : layer;
+    if (pre) s += pre;
+    s += inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    if (pre) s += '</g>';
   }
   return s;
 }
 
-/** A layered cell: CMY multiply stack or RGB-additive stack, then the motion
- *  wrapper. The scheme already transformed cell.r/g/b upstream, so both styles
- *  pick up the scheme for free. */
-function emitLayered(cell: Cell, plan: Plan, index: number, place: Placer, placers: Placer[]): string {
-  let body = layeredBody(cell, plan, place, placers);
-  if (plan.rotates) body = rotateWrap(body, cell, index, plan);
-  // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
-  // browser caches the cell's raster and moves/scales the bitmap per frame. No
-  // motion -> bare body, output unchanged.
-  if (!plan.motion) return body;
-  return `<g${plan.motion(cell, index)}>${body}</g>`;
-}
-
-/** One cell's drawable(s): a single tinted icon, or a layered ink stack. `place`
- *  is the per-icon placer (export <use> or live inlined shapes). */
-function emitCellWith(cell: Cell, plan: Plan, index: number, place: Placer, placers: Placer[]): string {
+/**
+ * One cell's drawable(s) appended to the output so far: a single tinted icon, or
+ * a layered ink stack. `place` is the per-icon placer (export <use> or live
+ * inlined shapes).
+ *
+ * The group wrappers are appended in place rather than concatenated around a
+ * finished body string. A layered cell's body runs past a thousand characters,
+ * and `<g...>${body}</g>` copied every one of them again per nesting level, twice
+ * over for a rotated AND animated cell. Appending open/close tags keeps the whole
+ * render one linear write; garbage collection was the single largest cost in a
+ * profile of the heaviest settings.
+ */
+function emitCellOnto(s: string, cell: Cell, plan: Plan, index: number, place: Placer, placers: Placer[]): string {
   const { settings } = plan;
-  if (settings.layered) return emitLayered(cell, plan, index, place, placers);
+  // OUTERMOST group: motion only. .motion (incl. will-change) GPU-promotes it so
+  // the browser caches the cell's raster and moves/scales the bitmap per frame. It
+  // wraps a <g>, not the leaf: fill-box on a <use>->symbol instance resolves
+  // inconsistently, while a <g>'s fill-box is its children's rendered box, so it
+  // pivots around its OWN centre. No motion -> no wrapper, output unchanged.
+  const mo = plan.motion ? plan.motion(cell, index) : '';
+  if (mo) s += `<g${mo}>`;
+  const rot = plan.rotates ? rotateOpen(cell, index, plan) : '';
+  if (rot) s += rot;
 
-  const box = cellBox(cell, plan, scaleFor(cell, settings));
-  // Tint via color= (makeTintable forces icons to currentColor, so this recolors
-  // any art). GPU-cheap, the SAME mechanism CMY uses. fill= too, belt-and-
-  // suspenders on currentColor inheritance.
-  const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-  let el = place(box, ` fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}`);
-  if (plan.rotates) el = rotateWrap(el, cell, index, plan);
-  // Motion on a <g> wrapper, not the leaf: fill-box on a <use>->symbol instance
-  // resolves inconsistently; a <g>'s fill-box is its children's rendered box, so
-  // it pivots around its OWN centre. No motion -> bare element, output unchanged.
-  if (!plan.motion) return el;
-  return `<g${plan.motion(cell, index)}>${el}</g>`;
+  if (settings.layered) {
+    // The scheme already transformed cell.r/g/b upstream, so the ink stack picks
+    // up the scheme for free.
+    s = layeredBodyOnto(s, cell, plan, place, placers);
+  } else {
+    const box = cellBox(cell, plan, scaleFor(cell, settings));
+    // Tint via color= (makeTintable forces icons to currentColor, so this recolors
+    // any art). GPU-cheap, the SAME mechanism CMY uses. fill= too, belt-and-
+    // suspenders on currentColor inheritance.
+    const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
+    s += place(box, ` fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}`);
+  }
+
+  if (rot) s += '</g>';
+  if (mo) s += '</g>';
+  return s;
 }
 
 /**
@@ -503,7 +509,7 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   let uses = '';
   for (let i = 0; i < grid.length; i++) {
     const c = grid[i];
-    uses += emitCellWith(c, plan, i, placers[iconIndex(c, iconCount, metric)], placers);
+    uses = emitCellOnto(uses, c, plan, i, placers[iconIndex(c, iconCount, metric)], placers);
   }
 
   // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
@@ -518,6 +524,6 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
  *  self-checks assert). Builds a single export placer for #icon0. */
 function emitCell(cell: Cell, settings: Settings, index = 0, _iconCount = 1): string {
   const p = makePlacer({ innerSvg: '', viewBox: '0 0 24 24', singleShape: false }, 'icon0', 'export');
-  return emitCellWith(cell, makePlan(settings, 1, 1, 1), index, p, [p]);
+  return emitCellOnto('', cell, makePlan(settings, 1, 1, 1), index, p, [p]);
 }
 export { emitCell };
