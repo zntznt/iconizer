@@ -212,16 +212,27 @@ function overlayCh(bv: number, gv: number, overlay: Overlay): number {
   return clamp255(lerp(bv, blended, overlay.strength));
 }
 
+/** Resolve the gradient wash ONCE for a whole grid: the preset lookup and the
+ *  inert check are the same for every cell, so a render pays them once instead of
+ *  ten thousand times. null = the wash does nothing, so callers skip it entirely
+ *  (which is what overlayColor returning `base` unchanged already meant). */
+export function makeOverlay(overlay: Overlay): ((base: RGB, u: number) => RGB) | null {
+  const stops = GRADIENTS[overlay.preset] ?? [];
+  if (stops.length === 0 || overlay.strength <= 0) return null;
+  return (base, u) => {
+    const g = gradientAt(stops, u);
+    return {
+      r: overlayCh(base.r, g.r, overlay),
+      g: overlayCh(base.g, g.g, overlay),
+      b: overlayCh(base.b, g.b, overlay),
+    };
+  };
+}
+
 /** Blend a gradient-wash colour (at grid position u) over a base colour. */
 export function overlayColor(base: RGB, u: number, overlay: Overlay): RGB {
-  const stops = GRADIENTS[overlay.preset] ?? [];
-  if (stops.length === 0 || overlay.strength <= 0) return base;
-  const g = gradientAt(stops, u);
-  return {
-    r: overlayCh(base.r, g.r, overlay),
-    g: overlayCh(base.g, g.g, overlay),
-    b: overlayCh(base.b, g.b, overlay),
-  };
+  const wash = makeOverlay(overlay);
+  return wash ? wash(base, u) : base;
 }
 
 // Per-channel helpers for transformColor's branches. They live at module scope,
@@ -238,27 +249,31 @@ const seg = (a: RGB, b: RGB, u: number): RGB => ({
   b: clamp255(lerp(a.b, b.b, u)),
 });
 
-/** Remap one cell color through a scheme. Pure: rgb in, rgb out. Called at a
- *  single upstream point in render() so it composes with solid AND layered. */
-export function transformColor(rgb: RGB, scheme: Scheme): RGB {
+/**
+ * Resolve a scheme into its per-cell remap ONCE for a whole grid. Every branch
+ * below hoists the setup that does not depend on the cell: the hue matrix's nine
+ * coefficients (two trig calls and eighteen multiplies, previously redone for
+ * every cell), posterize's level count, solarize's scaled cutoff, the palette and
+ * gradient stop lists. The arithmetic each cell then runs is unchanged, operation
+ * for operation, so the colours out are bit-identical.
+ */
+export function makeTransform(scheme: Scheme): (rgb: RGB) => RGB {
   switch (scheme.kind) {
     case 'none':
-      return rgb;
-    case 'grayscale': {
-      const v = clamp255(luma(rgb) * 255);
-      return { r: v, g: v, b: v };
-    }
+      return (rgb) => rgb;
+    case 'grayscale':
+      return (rgb) => { const v = clamp255(luma(rgb) * 255); return { r: v, g: v, b: v }; };
     case 'invert':
-      return { r: 255 - rgb.r, g: 255 - rgb.g, b: 255 - rgb.b };
+      return (rgb) => ({ r: 255 - rgb.r, g: 255 - rgb.g, b: 255 - rgb.b });
     case 'sepia':
-      return {
+      return (rgb) => ({
         r: clamp255(0.393 * rgb.r + 0.769 * rgb.g + 0.189 * rgb.b),
         g: clamp255(0.349 * rgb.r + 0.686 * rgb.g + 0.168 * rgb.b),
         b: clamp255(0.272 * rgb.r + 0.534 * rgb.g + 0.131 * rgb.b),
-      };
+      });
     case 'threshold': {
-      const v = luma(rgb) >= scheme.cutoff ? 255 : 0;
-      return { r: v, g: v, b: v };
+      const cutoff = scheme.cutoff;
+      return (rgb) => { const v = luma(rgb) >= cutoff ? 255 : 0; return { r: v, g: v, b: v }; };
     }
     case 'hue': {
       // Luma-preserving hue rotation matrix (same coefficients as SVG
@@ -266,71 +281,85 @@ export function transformColor(rgb: RGB, scheme: Scheme): RGB {
       const a = (scheme.deg * Math.PI) / 180;
       const c = Math.cos(a);
       const s = Math.sin(a);
-      return {
-        r: clamp255(
-          (0.213 + c * 0.787 - s * 0.213) * rgb.r +
-          (0.715 - c * 0.715 - s * 0.715) * rgb.g +
-          (0.072 - c * 0.072 + s * 0.928) * rgb.b),
-        g: clamp255(
-          (0.213 - c * 0.213 + s * 0.143) * rgb.r +
-          (0.715 + c * 0.285 + s * 0.140) * rgb.g +
-          (0.072 - c * 0.072 - s * 0.283) * rgb.b),
-        b: clamp255(
-          (0.213 - c * 0.213 - s * 0.787) * rgb.r +
-          (0.715 - c * 0.715 + s * 0.715) * rgb.g +
-          (0.072 + c * 0.928 + s * 0.072) * rgb.b),
-      };
+      const rr = 0.213 + c * 0.787 - s * 0.213;
+      const rg = 0.715 - c * 0.715 - s * 0.715;
+      const rb = 0.072 - c * 0.072 + s * 0.928;
+      const gr = 0.213 - c * 0.213 + s * 0.143;
+      const gg = 0.715 + c * 0.285 + s * 0.140;
+      const gb = 0.072 - c * 0.072 - s * 0.283;
+      const br = 0.213 - c * 0.213 - s * 0.787;
+      const bg = 0.715 - c * 0.715 + s * 0.715;
+      const bb = 0.072 + c * 0.928 + s * 0.072;
+      return (rgb) => ({
+        r: clamp255(rr * rgb.r + rg * rgb.g + rb * rgb.b),
+        g: clamp255(gr * rgb.r + gg * rgb.g + gb * rgb.b),
+        b: clamp255(br * rgb.r + bg * rgb.g + bb * rgb.b),
+      });
     }
     case 'posterize': {
       const n = Math.max(2, scheme.levels) - 1;
-      return { r: band(rgb.r, n), g: band(rgb.g, n), b: band(rgb.b, n) };
+      return (rgb) => ({ r: band(rgb.r, n), g: band(rgb.g, n), b: band(rgb.b, n) });
     }
     case 'duotone': {
-      const t = luma(rgb);
-      return {
-        r: clamp255(lerp(scheme.dark.r, scheme.light.r, t)),
-        g: clamp255(lerp(scheme.dark.g, scheme.light.g, t)),
-        b: clamp255(lerp(scheme.dark.b, scheme.light.b, t)),
+      const { dark, light } = scheme;
+      return (rgb) => {
+        const t = luma(rgb);
+        return {
+          r: clamp255(lerp(dark.r, light.r, t)),
+          g: clamp255(lerp(dark.g, light.g, t)),
+          b: clamp255(lerp(dark.b, light.b, t)),
+        };
       };
     }
     case 'tritone': {
       // 3-stop gradient map: dark -> mid over the lower half of luma, mid ->
       // light over the upper half. duotone with a third anchor for richer ramps.
-      const t = luma(rgb);
-      return t < 0.5
-        ? seg(scheme.dark, scheme.mid, t * 2)
-        : seg(scheme.mid, scheme.light, (t - 0.5) * 2);
+      const { dark, mid, light } = scheme;
+      return (rgb) => {
+        const t = luma(rgb);
+        return t < 0.5 ? seg(dark, mid, t * 2) : seg(mid, light, (t - 0.5) * 2);
+      };
     }
     case 'gradient': {
-      if (scheme.stops.length === 0) return rgb;
-      return gradientAt(scheme.stops, luma(rgb));
+      const stops = scheme.stops;
+      if (stops.length === 0) return (rgb) => rgb;
+      return (rgb) => gradientAt(stops, luma(rgb));
     }
     case 'solarize': {
-      // invert only the channels brighter than cutoff — the darkroom/psychedelic
+      // invert only the channels brighter than cutoff: the darkroom/psychedelic
       // tone reversal in the highlights.
       const c = scheme.cutoff * 255;
-      return { r: flip(rgb.r, c), g: flip(rgb.g, c), b: flip(rgb.b, c) };
+      return (rgb) => ({ r: flip(rgb.r, c), g: flip(rgb.g, c), b: flip(rgb.b, c) });
     }
     case 'channelswap': {
       // order is a permutation of 'rgb' naming which source channel feeds each
-      // output channel — instant alien palettes for ~free.
-      const o = scheme.order;
-      return { r: chan(rgb, o[0]), g: chan(rgb, o[1]), b: chan(rgb, o[2]) };
+      // output channel: instant alien palettes for ~free.
+      const o0 = scheme.order[0], o1 = scheme.order[1], o2 = scheme.order[2];
+      return (rgb) => ({ r: chan(rgb, o0), g: chan(rgb, o1), b: chan(rgb, o2) });
     }
     case 'palette': {
-      // ponytail: nearest by squared RGB distance — perceptually off. Lab/OKLab
+      // ponytail: nearest by squared RGB distance, perceptually off. Lab/OKLab
       // if it ever matters; not now.
-      if (scheme.colors.length === 0) return rgb;
-      let best = scheme.colors[0];
-      let bestD = Infinity;
-      for (const c of scheme.colors) {
-        const d = (c.r - rgb.r) ** 2 + (c.g - rgb.g) ** 2 + (c.b - rgb.b) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          best = c;
+      const colors = scheme.colors;
+      if (colors.length === 0) return (rgb) => rgb;
+      return (rgb) => {
+        let best = colors[0];
+        let bestD = Infinity;
+        for (const c of colors) {
+          const d = (c.r - rgb.r) ** 2 + (c.g - rgb.g) ** 2 + (c.b - rgb.b) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = c;
+          }
         }
-      }
-      return best;
+        return best;
+      };
     }
   }
+}
+
+/** Remap one cell color through a scheme. Pure: rgb in, rgb out. render() builds
+ *  the remap once with makeTransform instead of going through here per cell. */
+export function transformColor(rgb: RGB, scheme: Scheme): RGB {
+  return makeTransform(scheme)(rgb);
 }

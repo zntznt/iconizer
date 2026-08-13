@@ -166,9 +166,20 @@ export function sample(
   ctx.imageSmoothingQuality = 'high'; // the downscale IS part of the averaging
   // Flatten transparency onto settings.background so transparent PNGs don't
   // average toward black. The composite color is an input to the color model
-  // (it sets the CMY floor in Phase 4), not just cosmetic — see batch-02 append.
+  // (it sets the CMY floor in Phase 4), not just cosmetic, see batch-02 append.
+  // Two guards keep the REUSED surface identical to the fresh one this used to
+  // allocate, which always started out transparent black with a black fillStyle:
+  //   'copy' makes the fill REPLACE rather than composite, so a background colour
+  //   carrying alpha cannot leave the previous sample showing through;
+  //   the '#000000' pre-set is where an unparseable colour has to land, since
+  //   assigning a bad value to fillStyle is ignored and would otherwise keep the
+  //   PREVIOUS call's colour. Both are reachable only through a hand-written
+  //   permalink hash (decodeSettings casts, it does not validate).
+  ctx.globalCompositeOperation = 'copy';
+  ctx.fillStyle = '#000000';
   ctx.fillStyle = settings.background;
   ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over'; // drawImage composites as before
   ctx.drawImage(image, 0, 0, width, height);
 
   const { data } = ctx.getImageData(0, 0, width, height);

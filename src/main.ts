@@ -311,11 +311,16 @@ function mirrorTick() {
   const vw = mirrorVideo.videoWidth, vh = mirrorVideo.videoHeight;
   if (!vw) return;
   const k = Math.min(1, 480 / Math.max(vw, vh)); // small: it's resampled anyway
-  mirrorCanvas.width = Math.round(vw * k);
-  mirrorCanvas.height = Math.round(vh * k);
+  // Only assign on a real change: writing width/height reallocates and clears the
+  // backing store, and a feed holds one size for its whole run. The explicit
+  // setTransform below is what actually resets the matrix, so nothing relied on
+  // the reset. Same reasoning as sample()'s scratch canvas.
+  const mw = Math.round(vw * k), mh = Math.round(vh * k);
+  if (mirrorCanvas.width !== mw) mirrorCanvas.width = mw;
+  if (mirrorCanvas.height !== mh) mirrorCanvas.height = mh;
   const ctx = mirrorCanvas.getContext('2d')!;
   ctx.setTransform(-1, 0, 0, 1, mirrorCanvas.width, 0); // mirror: selfies expect a flip
-  ctx.drawImage(mirrorVideo, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
+  ctx.drawImage(mirrorVideo, 0, 0, mw, mh);
   cells = sample(mirrorCanvas, settings);
   gridRows = 0;
   if (icons.length === 0) return;
@@ -1378,11 +1383,18 @@ function flipSiblings(except: HTMLElement, mutate: () => void) {
     .filter((w) => w && w !== except && !w.classList.contains('minimized') && !w.classList.contains('minimizing'));
   const first = new Map(others.map((w) => [w, w.getBoundingClientRect()]));
   mutate(); // layout changes here
+  // READ every new position first, THEN write. Interleaving the two made each
+  // getBoundingClientRect flush the style writes from the previous iteration, so
+  // minimizing a window forced one full layout PER sibling; with a big mosaic in
+  // #out that layout is the whole cost of the hitch. Now it is one.
+  const moved: { w: HTMLElement; dx: number; dy: number }[] = [];
   for (const w of others) {
     const a = first.get(w)!;
     const b = w.getBoundingClientRect();
     const dx = a.left - b.left, dy = a.top - b.top;
-    if (!dx && !dy) continue;
+    if (dx || dy) moved.push({ w, dx, dy });
+  }
+  for (const { w, dx, dy } of moved) {
     w.style.transition = 'none';
     w.style.transform = `translate(${dx}px, ${dy}px)`; // invert: appear unmoved
     requestAnimationFrame(() => {

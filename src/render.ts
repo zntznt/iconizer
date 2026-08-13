@@ -2,7 +2,7 @@ import type { Cell } from './sample.ts';
 import { poolCells, gridDims } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
-import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, rgbToHsl, hslToRgb, type RGB } from './color.ts';
+import { makeTransform, makeOverlay, adjustColor, adjustActive, schemeQuantizes, bayer, rgbToHsl, hslToRgb, type RGB } from './color.ts';
 import { motionStyle, motionEmitter, hash01, type MotionEmitter } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
@@ -87,8 +87,10 @@ function rotationFor(cell: Cell, index: number, settings: Settings): number {
  *  blends against the page more weakly, which is the look we want. */
 function opacityFor(cell: Cell, settings: Settings): number {
   if (!settings.fadeByBrightness) return 1;
-  const [lo, hi] = settings.fadeRange;
-  return Math.max(0, Math.min(1, lo + (hi - lo) * cell.brightness));
+  // Index reads, not a destructure: array destructuring goes through the iterator
+  // protocol, and this runs once per cell (per ink, when layered).
+  const fade = settings.fadeRange;
+  return Math.max(0, Math.min(1, fade[0] + (fade[1] - fade[0]) * cell.brightness));
 }
 const opAttr = (o: number) => (o < 1 ? ` opacity="${r2(o)}"` : '');
 
@@ -446,7 +448,11 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
     const k = settings.colorJitter;
     // The overlay's direction resolves to one closure for the whole grid rather
     // than a switch (plus a radial normaliser) re-run per cell.
-    const uAt = doOverlay ? overlayUFor(overlay.dir, cols, rows) : null;
+    // Scheme and wash both resolve to one closure for the whole grid: the hue
+    // matrix, the palette list and the gradient preset lookup are cell-independent.
+    const xform = doScheme ? makeTransform(settings.scheme) : null;
+    const wash = doOverlay ? makeOverlay(overlay) : null;
+    const uAt = wash ? overlayUFor(overlay.dir, cols, rows) : () => 0;
     // Written into a pre-sized array with explicit literals: `grid.map` with a
     // `{ ...c }` spread per cell allocated an extra intermediate object for every
     // cell, and the spread hides the shape from the engine.
@@ -471,8 +477,8 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
         hsl.s = Math.max(0, Math.min(1, hsl.s + (hash01(i * 7 + 1) - 0.5) * k));
         rgb = hslToRgb(hsl);
       }
-      if (doScheme) rgb = transformColor(rgb, settings.scheme);
-      if (uAt) rgb = overlayColor(rgb, uAt(c.col, c.row), overlay);
+      if (xform) rgb = xform(rgb);
+      if (wash) rgb = wash(rgb, uAt(c.col, c.row));
       next[i] = { col: c.col, row: c.row, r: rgb.r, g: rgb.g, b: rgb.b, brightness: c.brightness };
     }
     grid = next;
