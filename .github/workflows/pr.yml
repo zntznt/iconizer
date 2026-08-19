@@ -1,0 +1,24 @@
+# What deploy.yml does NOT do: it only runs on push to main, so nothing checks a
+# pull request. This runs the same gates a dev runs locally, before merge.
+name: PR checks
+on: pull_request
+permissions:
+  contents: read
+# A new push supersedes the run it interrupted; no point finishing the old one.
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      # lint is type-aware, so it needs the same install the build does.
+      - run: npm run lint
+      - run: npm test
+      # `npm run build` is tsc + vite build: the type check and the real
+      # production bundle, the same one deploy.yml ships.
+      - run: npm run build
