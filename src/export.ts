@@ -40,13 +40,33 @@ const GIF_BASE = 720; // capped so animated GIFs stay shareable in size
 // blank export. Conservative enough to also cover the area cap for any ratio.
 const MAX_SIDE = 4096;
 
+// GIF needs its OWN, much tighter ceiling, for a different reason than MAX_SIDE:
+// the limit is memory across frames, not one canvas. gif.js keeps every frame's
+// raw RGBA alive on the main thread for the whole encode (its `frames` array is
+// never freed), and postMessage CLONES a second full copy into each busy worker,
+// which holds an RGB and an indexed buffer beside it. Peak lands around
+// frames*px*4 + workers*px*8, and workers scales with core count, so a 2880px
+// square at 20 frames reaches the better part of 2GB. Measured on the 4× setting:
+// the export simply never finished. 1440 keeps the worst case near 500MB, and it
+// is the largest value that leaves 1× and 2× exactly as they were.
+const MAX_GIF_SIDE = 1440;
+
 /** Export pixel dimensions: scale the SVG to `base` on its longest side (× scale),
- *  preserving aspect ratio, then clamp to MAX_SIDE so mobile canvases don't blank. */
-export function exportSize(svg: string, base: number, scale: number): { w: number; h: number } {
+ *  preserving aspect ratio, then clamp. `maxSide` is an optional per-format ceiling;
+ *  MAX_SIDE applies on top of it regardless, so no caller can widen its way past the
+ *  mobile canvas limit. */
+export function exportSize(svg: string, base: number, scale: number, maxSide = MAX_SIDE): { w: number; h: number } {
   const { w, h } = svgSize(svg);
-  const k = Math.min(base * scale, MAX_SIDE) / Math.max(w, h);
+  const k = Math.min(base * scale, maxSide, MAX_SIDE) / Math.max(w, h);
   return { w: Math.round(w * k), h: Math.round(h * k) };
 }
+
+/** The GIF path's size policy in one place: base 720 per scale step, capped at
+ *  MAX_GIF_SIDE. Named (rather than passing both constants at the call site) so
+ *  there is exactly one thing that can forget the cap, and so a self-check can
+ *  assert the real policy instead of "a cap I passed in was applied". */
+export const gifExportSize = (svg: string, scale: number) =>
+  exportSize(svg, GIF_BASE, scale, MAX_GIF_SIDE);
 
 /** A 2d context with high-quality image smoothing (the default is "low").
  *  `readback`=true sets willReadFrequently so repeated getImageData (the GIF
@@ -164,8 +184,12 @@ function motionRuleAt(motion: string, p: number, amp = 1): string {
 export async function downloadGif(
   svg: string, motion: string, periodSec: number, scale = 1, frames = 20, filename = 'iconizer.gif',
 ): Promise<void> {
-  // GIF caps at a smaller base than PNG so animated files stay shareable.
-  const { w: W, h: H } = exportSize(svg, GIF_BASE, scale);
+  // GIF caps at a smaller base than PNG so animated files stay shareable, and at a
+  // smaller SIDE because every frame is held in memory at once (see MAX_GIF_SIDE).
+  // ponytail: past 2× the cap binds, so the scale select's 4× yields the same GIF
+  // as 2×. Accepted: the alternative today is an export that never returns. The
+  // upgrade path is a per-format scale control, or a size readout in the save menu.
+  const { w: W, h: H } = gifExportSize(svg, scale);
   const delayMs = Math.max(20, Math.round((periodSec * 1000) / frames));
 
   // gif.js worker inlined via ?raw -> blob URL (works in dev and build; ?url+fetch
