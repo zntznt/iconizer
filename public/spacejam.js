@@ -94,6 +94,10 @@
     let pulses = [];                     // {cx,cy,born} traveling brightness rings (click)
     let tilt = 0;                        // eased separation nudge from drag velocity
     const R = 150;                       // lens / heat radius
+    // Slack on the off-screen ring cull in drawRipple: covers the 1px stroke's
+    // inner half, the polyline's chord sag at the 160-segment cap, and the largest
+    // inward lens nudge a ring can take (bounded by R * LENS * 0.6).
+    const CULL_PAD = 12;
     const LENS = 0.07;                   // lens push strength — a soft nudge, not a bulge
     const PULSE_SPD = 520, PULSE_MAX = 3;
 
@@ -144,7 +148,9 @@
       const area = p.width * p.height;
       const k = Math.min(1.4, Math.max(0.9, area / 1500000));
       ringPitch = Math.max(14, Math.round(TUNE.density / k));
-      // enough rings for each center to span the whole diagonal (full coverage).
+      // diagonal-many rings is the safe UPPER bound (it covers any center
+      // position); drawRipple culls that down per frame to the rings the current
+      // centers can actually put on screen.
       const diag = Math.hypot(p.width, p.height);
       ringCount = Math.ceil(diag / ringPitch) + 2;
       // famA / famB are just the ring index lists for each center.
@@ -276,7 +282,23 @@
     // family hue, accented toward its partner under heat; additive blend means where
     // THIS ripple set overlaps the OTHER, brightness adds -> the moiré fringe arcs.
     function drawRipple(rings, cx, cy, base, accentToward, lensOn, px, py) {
-      const maxR = ringCount * ringPitch;
+      // OFF-SCREEN CULL. buildFamilies sizes the ring set off the full viewport
+      // DIAGONAL so that any center position stays covered, but both centers only
+      // ever orbit near the middle, so the outer ~40% of every family is a circle
+      // that fully ENCLOSES the viewport: its stroke lands entirely off-canvas and
+      // paints nothing, yet each one still runs the full 160-segment vertex loop,
+      // 30 times a second, behind every slider drag and every mirror frame. The
+      // real ceiling is THIS center's distance to the farthest viewport corner
+      // (max distance to a rectangle is always at a corner). Recomputed per frame
+      // so it tracks the orbiting centers and the drag tilt on its own.
+      // The old guard here compared against ringCount * ringPitch, which rad0 can
+      // never exceed, so it never skipped anything.
+      const maxR = Math.max(
+        Math.hypot(cx, cy),
+        Math.hypot(p.width - cx, cy),
+        Math.hypot(cx, p.height - cy),
+        Math.hypot(p.width - cx, p.height - cy),
+      ) + CULL_PAD;
       const dim = centerDim(cx, cy);     // ripple-center based dim (whole set shares)
       const curDist = lensOn ? Math.hypot(px - cx, py - cy) : 0; // cursor->center, same for every ring
       for (const rg of rings) {

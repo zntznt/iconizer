@@ -2,8 +2,8 @@ import type { Cell } from './sample.ts';
 import { poolCells, gridDims } from './sample.ts';
 import type { Settings } from './settings.ts';
 import type { ParsedSvg } from './parseSvg.ts';
-import { transformColor, adjustColor, adjustActive, schemeQuantizes, bayer, overlayColor, rgbToHsl, hslToRgb, type RGB } from './color.ts';
-import { motionStyle, motionAttrs, hash01 } from './motion.ts';
+import { makeTransform, makeOverlay, adjustColor, adjustActive, schemeQuantizes, bayer, rgbToHsl, hslToRgb, type RGB } from './color.ts';
+import { motionStyle, motionEmitter, hash01, type MotionEmitter } from './motion.ts';
 
 // Each cell occupies a CELL x CELL box in output user units. Arbitrary; the
 // root viewBox scales the whole thing, so this is just internal resolution.
@@ -38,17 +38,30 @@ function scaleFor(cell: Cell, settings: Settings): number {
   return Math.max(0.02, s);
 }
 
-/** Grid position -> u in [0,1] for the gradient-wash overlay, per direction. */
-function overlayU(col: number, row: number, cols: number, rows: number, dir: string): number {
+/** Grid position -> u in [0,1] for the gradient-wash overlay. The direction and
+ *  its normalisers (the radial centre, the diagonal span) are grid constants, so
+ *  they're resolved ONCE here and the returned function is all a cell pays. The
+ *  divisions stay inside it exactly as they were, so results are bit-identical. */
+function overlayUFor(dir: string, cols: number, rows: number): (col: number, row: number) => number {
   switch (dir) {
-    case 'h': return cols > 1 ? col / (cols - 1) : 0;
-    case 'v': return rows > 1 ? row / (rows - 1) : 0;
-    case 'diag': return (col + row) / Math.max(1, cols - 1 + rows - 1);
+    case 'h': {
+      const last = cols - 1;
+      return cols > 1 ? (col) => col / last : () => 0;
+    }
+    case 'v': {
+      const last = rows - 1;
+      return rows > 1 ? (_col, row) => row / last : () => 0;
+    }
+    case 'diag': {
+      const span = Math.max(1, cols - 1 + rows - 1);
+      return (col, row) => (col + row) / span;
+    }
     case 'radial': {
       const cx = (cols - 1) / 2, cy = (rows - 1) / 2;
-      return Math.hypot(col - cx, row - cy) / (Math.hypot(cx, cy) || 1);
+      const maxD = Math.hypot(cx, cy) || 1;
+      return (col, row) => Math.hypot(col - cx, row - cy) / maxD;
     }
-    default: return 0;
+    default: return () => 0;
   }
 }
 
@@ -74,19 +87,21 @@ function rotationFor(cell: Cell, index: number, settings: Settings): number {
  *  blends against the page more weakly, which is the look we want. */
 function opacityFor(cell: Cell, settings: Settings): number {
   if (!settings.fadeByBrightness) return 1;
-  const [lo, hi] = settings.fadeRange;
-  return Math.max(0, Math.min(1, lo + (hi - lo) * cell.brightness));
+  // Index reads, not a destructure: array destructuring goes through the iterator
+  // protocol, and this runs once per cell (per ink, when layered).
+  const fade = settings.fadeRange;
+  return Math.max(0, Math.min(1, fade[0] + (fade[1] - fade[0]) * cell.brightness));
 }
 const opAttr = (o: number) => (o < 1 ? ` opacity="${r2(o)}"` : '');
 
-/** Wrap a cell body in a static-rotation group, pivoting in place (fill-box) so
- *  it rotates around the icon's own centre. Sits INSIDE the motion wrapper so a
- *  spinning/bobbing cell still carries its static tilt (nested transforms). */
-function rotateWrap(body: string, cell: Cell, index: number, settings: Settings): string {
-  const deg = rotationFor(cell, index, settings);
-  if (!deg) return body; // no rotation -> output unchanged
-  return `<g style="transform:rotate(${r1(deg)}deg);transform-box:fill-box;` +
-    `transform-origin:center">${body}</g>`;
+/** Opening tag of a cell's static-rotation group, or '' for no rotation. Pivots
+ *  in place (fill-box) so it rotates around the icon's own centre, and sits INSIDE
+ *  the motion wrapper so a spinning/bobbing cell still carries its static tilt. */
+function rotateOpen(cell: Cell, index: number, plan: Plan): string {
+  // 'fixed' is one angle for the whole grid: reuse the prefix built in the plan.
+  if (plan.settings.rotate === 'fixed') return plan.rotatePrefix ?? '';
+  const deg = rotationFor(cell, index, plan.settings);
+  return deg ? pivotWrap(r1(deg)) : ''; // no rotation -> no group, output unchanged
 }
 
 /** Which icon a cell draws. 'brightness' (default): dark cell -> icon 0, light ->
@@ -123,7 +138,7 @@ function parseViewBox(vb: string): [number, number, number, number] {
 /** An icon placer: given a cell box + paint attrs, emit ONE drawable for the icon.
  *  'export' -> <use href="#iconN" ...>; 'live' -> <g transform...>inlined shapes</g>.
  *  Built once per icon per render (closes over the parsed viewBox / inner markup). */
-type Placer = (box: { x: number; y: number; size: number }, attrs: string) => string;
+type Placer = (box: Box, attrs: string) => string;
 function makePlacer(icon: ParsedSvg, id: string, mode: RenderMode): Placer {
   if (mode === 'export') {
     return ({ x, y, size }, attrs) =>
@@ -166,12 +181,22 @@ const rowPitch = (settings: Settings) => (settings.layout === 'hex' ? CELL * HEX
 
 /** Centered placement box for a cell's icon at a given scale factor. brick/hex
  *  shift odd rows half a cell right; hex also tightens the row pitch. Placement
- *  math only: same node count as the square grid. */
-function cellBox(cell: Cell, settings: Settings, scale = scaleFor(cell, settings)) {
+ *  math only: same node count as the square grid. Reads the row pitch and the
+ *  odd-row shift off the plan, both settled once per render. */
+type Box = { x: number; y: number; size: number };
+function cellBox(cell: Cell, plan: Plan, scale: number): Box {
   const size = r1(CELL * scale);
   const pad = r1((CELL - size) / 2); // center the shrunk icon in its box
-  const ox = settings.layout !== 'grid' && (cell.row & 1) ? CELL / 2 : 0;
-  return { x: r1(cell.col * CELL + pad + ox), y: r1(cell.row * rowPitch(settings) + pad), size };
+  const ox = plan.offsetRows && (cell.row & 1) ? CELL / 2 : 0;
+  // Written into the plan's single scratch box. A placer reads x/y/size and is
+  // done with it before the next cell (or the next ink) computes its own, so a
+  // fresh object here was ~30,000 pieces of garbage per layered render, and GC
+  // was the biggest single cost in a profile of the heaviest settings.
+  const b = plan.box;
+  b.x = r1(cell.col * CELL + pad + ox);
+  b.y = r1(cell.row * plan.pitch + pad);
+  b.size = size;
+  return b;
 }
 
 // Which layer styles SUBTRACT ink (multiply over a WHITE page) vs ADD light
@@ -189,8 +214,16 @@ export const SUBTRACTIVE = new Set(['cmy', 'cmyk', 'ryb', 'halftone']);
 // layerStyle: each ink rotates to its own angle so the channels interfere into a
 // newsprint rosette under offset. Undefined = upright (every non-halftone style).
 type Ink = { color: (r: number, g: number, b: number) => string; dx: number; dy: number; angle?: number };
+// One ink per channel, written out per channel rather than indexed through a
+// scratch [255,255,255] array: the array form allocated TWO arrays per ink per
+// cell (the rest-args array and the rgb triple), which a layered 100-column grid
+// pays ~40,000 times a render. Same strings out.
 const cmyInk = (chan: number): Ink => ({
-  color: (...c) => { const rgb = [255, 255, 255]; rgb[chan] = Math.round(c[chan] * 255); return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; },
+  color: chan === 0
+    ? (r) => `rgb(${Math.round(r * 255)},255,255)`
+    : chan === 1
+      ? (_r, g) => `rgb(255,${Math.round(g * 255)},255)`
+      : (_r, _g, b) => `rgb(255,255,${Math.round(b * 255)})`,
   dx: [-1, 1, -1][chan], dy: [-1, 1, 1][chan],
 });
 // K ink: gray = max(r,g,b); multiplying by it darkens every channel equally in
@@ -239,69 +272,129 @@ function inksFor(settings: Settings): { inks: Ink[]; blend: 'multiply' | 'screen
   }
 }
 
+/**
+ * Everything render() can settle ONCE for a whole grid instead of re-deriving it
+ * per cell. A 100-column mosaic emits ~10,000 cells (x4 inks when layered), so a
+ * switch on `settings.layerStyle` or a `rowPitch()` call inside the emit loop is
+ * work done ten thousand times to reach the same answer. Pure bookkeeping: every
+ * field is a plain function of `settings` + the grid shape, and the emitted markup
+ * is byte-for-byte what the per-cell derivation produced.
+ */
+type Plan = {
+  settings: Settings;
+  pitch: number; // vertical distance between row origins (hex packs tighter)
+  offsetRows: boolean; // brick/hex shift odd rows half a cell right
+  inks: Ink[]; // layered only: the ink stack for this layerStyle
+  blend: 'multiply' | 'screen';
+  shrink: boolean; // subtractive inks nest concentrically; additive stay full size
+  perChannel: boolean; // one icon per ink (needs enough icons to be meaningful)
+  rotates: boolean; // any static per-cell rotation at all
+  // A 'fixed' tilt is the same angle for every cell, and the halftone screen
+  // angles are four constants, so both group wrappers are built once here rather
+  // than re-interpolated per cell (per INK, for halftone). null = no wrapper.
+  rotatePrefix: string | null;
+  inkPrefix: (string | null)[];
+  motion: MotionEmitter | null; // per-cell motion attrs, or null when static
+  box: Box; // scratch placement box, refilled per cell (see cellBox)
+};
+
+/** The in-place pivot every rotation wrapper uses: transform-box:fill-box makes
+ *  the element turn around its OWN centre instead of the SVG origin. */
+const pivotWrap = (deg: number) =>
+  `<g style="transform:rotate(${deg}deg);transform-box:fill-box;transform-origin:center">`;
+
+function makePlan(settings: Settings, cols: number, rows: number, iconCount: number): Plan {
+  const { inks, blend } = inksFor(settings);
+  // Gate on the RAW angle, not the rounded one: a sub-0.05 degree tilt still
+  // emits its (rotate(0deg)) wrapper, which is what the per-cell path did.
+  const fixedDeg = settings.rotate === 'fixed' ? settings.rotateDeg : 0;
+  return {
+    settings,
+    pitch: rowPitch(settings),
+    offsetRows: settings.layout !== 'grid',
+    inks,
+    blend,
+    shrink: blend === 'multiply',
+    perChannel: settings.perChannelIcons && iconCount > 1,
+    rotates: settings.rotate !== 'none',
+    rotatePrefix: fixedDeg ? pivotWrap(r1(fixedDeg)) : null,
+    inkPrefix: inks.map((ink) => (ink.angle ? pivotWrap(ink.angle) : null)),
+    motion: motionEmitter(settings, cols, rows),
+    box: { x: 0, y: 0, size: 0 },
+  };
+}
+
 /** A layered cell body: N tinted copies of the icon, each blended against the
  *  shared page (white for multiply styles, black for screen). No per-cell rect
  *  or isolation — the page IS the blend backdrop. Subtractive styles shrink each
  *  successive layer (concentric inks); additive/anaglyph stay full size. */
-function layeredBody(cell: Cell, settings: Settings, place: Placer, placers: Placer[]): string {
-  const { inks, blend } = inksFor(settings);
+function layeredBodyOnto(s: string, cell: Cell, plan: Plan, place: Placer, placers: Placer[]): string {
+  // Per-channel icons: ink i draws icon i (a different uploaded shape per channel),
+  // falling back to the cell's normal placer when there aren't enough icons, so 1
+  // icon is byte-identical to before. Off -> every ink uses the cell's one placer.
+  const { settings, inks, blend, shrink, perChannel, inkPrefix } = plan;
   const n = inks.length;
   const base = scaleFor(cell, settings);
-  const shrink = blend === 'multiply'; // CMY/RYB inks nest; RGB/anaglyph overlap full-size
   const r = cell.r / 255, g = cell.g / 255, b = cell.b / 255;
   const off = settings.layerOffset;
   const op = opAttr(opacityFor(cell, settings)); // fades the whole stack uniformly
-  // Per-channel icons: ink i draws icon i (a different uploaded shape per channel),
-  // falling back to the cell's normal placer when there aren't enough icons — so 1
-  // icon is byte-identical to before. Off -> every ink uses the cell's one placer.
-  const perChannel = settings.perChannelIcons && placers.length > 1;
-  let s = '';
   for (let i = 0; i < n; i++) {
     const inkPlace = perChannel ? (placers[i] ?? place) : place;
     const scale = shrink ? r1(base * (1 - i / n)) : base; // even concentric steps
-    const box = cellBox(cell, settings, scale);
+    const box = cellBox(cell, plan, scale);
     box.x = r1(box.x + inks[i].dx * off);
     box.y = r1(box.y + inks[i].dy * off);
-    let layer = inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
     // Halftone: rotate this ink to its screen angle, pivoting in place (fill-box) so
     // it turns around the icon's own centre instead of flinging across the canvas.
-    const angle = inks[i].angle;
-    if (angle) layer = `<g style="transform:rotate(${angle}deg);transform-box:fill-box;transform-origin:center">${layer}</g>`;
-    s += layer;
+    // The angle is per-ink, not per-cell, so the wrapper came ready-made.
+    const pre = inkPrefix[i];
+    if (pre) s += pre;
+    s += inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    if (pre) s += '</g>';
   }
   return s;
 }
 
-/** A layered cell: CMY multiply stack or RGB-additive stack, then the motion
- *  wrapper. The scheme already transformed cell.r/g/b upstream, so both styles
- *  pick up the scheme for free. */
-function emitLayered(cell: Cell, settings: Settings, index: number, place: Placer, placers: Placer[], cols = 1, rows = 1): string {
-  const body = rotateWrap(layeredBody(cell, settings, place, placers), cell, index, settings);
-  // OUTER group: motion only. .motion (incl. will-change) GPU-promotes it so the
-  // browser caches the cell's raster and moves/scales the bitmap per frame. No
-  // motion -> bare body, output unchanged.
-  const mo = motionAttrs(cell, index, settings, cols, rows);
-  return mo ? `<g${mo}>${body}</g>` : body;
-}
+/**
+ * One cell's drawable(s) appended to the output so far: a single tinted icon, or
+ * a layered ink stack. `place` is the per-icon placer (export <use> or live
+ * inlined shapes).
+ *
+ * The group wrappers are appended in place rather than concatenated around a
+ * finished body string. A layered cell's body runs past a thousand characters,
+ * and `<g...>${body}</g>` copied every one of them again per nesting level, twice
+ * over for a rotated AND animated cell. Appending open/close tags keeps the whole
+ * render one linear write; garbage collection was the single largest cost in a
+ * profile of the heaviest settings.
+ */
+function emitCellOnto(s: string, cell: Cell, plan: Plan, index: number, place: Placer, placers: Placer[]): string {
+  const { settings } = plan;
+  // OUTERMOST group: motion only. .motion (incl. will-change) GPU-promotes it so
+  // the browser caches the cell's raster and moves/scales the bitmap per frame. It
+  // wraps a <g>, not the leaf: fill-box on a <use>->symbol instance resolves
+  // inconsistently, while a <g>'s fill-box is its children's rendered box, so it
+  // pivots around its OWN centre. No motion -> no wrapper, output unchanged.
+  const mo = plan.motion ? plan.motion(cell, index) : '';
+  if (mo) s += `<g${mo}>`;
+  const rot = plan.rotates ? rotateOpen(cell, index, plan) : '';
+  if (rot) s += rot;
 
-/** One cell's drawable(s): a single tinted icon, or a layered ink stack. `place`
- *  is the per-icon placer (export <use> or live inlined shapes). */
-function emitCellWith(cell: Cell, settings: Settings, index: number, place: Placer, placers: Placer[], cols = 1, rows = 1): string {
-  if (settings.layered) return emitLayered(cell, settings, index, place, placers, cols, rows);
+  if (settings.layered) {
+    // The scheme already transformed cell.r/g/b upstream, so the ink stack picks
+    // up the scheme for free.
+    s = layeredBodyOnto(s, cell, plan, place, placers);
+  } else {
+    const box = cellBox(cell, plan, scaleFor(cell, settings));
+    // Tint via color= (makeTintable forces icons to currentColor, so this recolors
+    // any art). GPU-cheap, the SAME mechanism CMY uses. fill= too, belt-and-
+    // suspenders on currentColor inheritance.
+    const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
+    s += place(box, ` fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}`);
+  }
 
-  const box = cellBox(cell, settings);
-  // Tint via color= (makeTintable forces icons to currentColor, so this recolors
-  // any art). GPU-cheap, the SAME mechanism CMY uses. fill= too, belt-and-
-  // suspenders on currentColor inheritance.
-  const fill = `rgb(${Math.round(cell.r)},${Math.round(cell.g)},${Math.round(cell.b)})`;
-  const el = rotateWrap(
-    place(box, ` fill="${fill}" color="${fill}"${opAttr(opacityFor(cell, settings))}`),
-    cell, index, settings);
-  // Motion on a <g> wrapper, not the leaf: fill-box on a <use>->symbol instance
-  // resolves inconsistently; a <g>'s fill-box is its children's rendered box, so
-  // it pivots around its OWN centre. No motion -> bare element, output unchanged.
-  const mo = motionAttrs(cell, index, settings, cols, rows);
-  return mo ? `<g${mo}>${el}</g>` : el;
+  if (rot) s += '</g>';
+  if (mo) s += '</g>';
+  return s;
 }
 
 /**
@@ -352,28 +445,43 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   const doJitter = settings.colorJitter > 0;
   if (doAdjust || doScheme || doDither || doOverlay || doJitter) {
     const spread = settings.ditherStrength * 255;
-    grid = grid.map((c, i) => {
+    const k = settings.colorJitter;
+    // The overlay's direction resolves to one closure for the whole grid rather
+    // than a switch (plus a radial normaliser) re-run per cell.
+    // Scheme and wash both resolve to one closure for the whole grid: the hue
+    // matrix, the palette list and the gradient preset lookup are cell-independent.
+    const xform = doScheme ? makeTransform(settings.scheme) : null;
+    const wash = doOverlay ? makeOverlay(overlay) : null;
+    const uAt = wash ? overlayUFor(overlay.dir, cols, rows) : () => 0;
+    // Written into a pre-sized array with explicit literals: `grid.map` with a
+    // `{ ...c }` spread per cell allocated an extra intermediate object for every
+    // cell, and the spread hides the shape from the engine.
+    const next: Cell[] = new Array<Cell>(grid.length);
+    for (let i = 0; i < grid.length; i++) {
+      const c = grid[i];
       let rgb: RGB = { r: c.r, g: c.g, b: c.b };
       if (doAdjust) rgb = adjustColor(rgb, adjust);
       if (doDither) {
+        // rgb is ours (freshly built above, or returned by adjustColor), so nudge
+        // it in place instead of allocating a replacement triple.
         const off = (bayer(c.col, c.row) - 0.5) * spread;
-        rgb = { r: rgb.r + off, g: rgb.g + off, b: rgb.b + off };
+        rgb.r += off; rgb.g += off; rgb.b += off;
       }
       // Colour jitter BEFORE the scheme: a deterministic hue+sat nudge per cell
       // (two decorrelated hashes off the index) so a flat region shimmers into a
       // sticker-bomb. Pre-scheme means palette/threshold still snap jittered cells
       // on-palette for free. Amount scales the spread; sat shifts both ways.
       if (doJitter) {
-        const k = settings.colorJitter;
         const hsl = rgbToHsl(rgb);
         hsl.h += (hash01(i) - 0.5) * 0.5 * k;            // up to ±90° of hue at k=1
         hsl.s = Math.max(0, Math.min(1, hsl.s + (hash01(i * 7 + 1) - 0.5) * k));
         rgb = hslToRgb(hsl);
       }
-      if (doScheme) rgb = transformColor(rgb, settings.scheme);
-      if (doOverlay) rgb = overlayColor(rgb, overlayU(c.col, c.row, cols, rows, overlay.dir), overlay);
-      return { ...c, r: rgb.r, g: rgb.g, b: rgb.b };
-    });
+      if (xform) rgb = xform(rgb);
+      if (wash) rgb = wash(rgb, uAt(c.col, c.row));
+      next[i] = { col: c.col, row: c.row, r: rgb.r, g: rgb.g, b: rgb.b, brightness: c.brightness };
+    }
+    grid = next;
   }
 
   // A placer per icon: export mode references a shared <symbol> via <use>; live
@@ -398,8 +506,17 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   // so removing it would break the blend math; there cutout only drops cells.
   const bg = settings.cutout > 0 && !settings.layered
     ? '' : `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
-  const uses = grid.map((c, i) =>
-    emitCellWith(c, settings, i, placers[iconIndex(c, icons.length, settings.iconMetric)], placers, cols, rows)).join('');
+  // One plan for the whole grid (ink stack, row pitch, motion emitter, ...), then
+  // an indexed loop: `grid.map(...).join('')` built an N-string array purely to
+  // throw it away, and every cell re-derived what the plan now holds.
+  const plan = makePlan(settings, cols, rows, icons.length);
+  const iconCount = icons.length;
+  const metric = settings.iconMetric;
+  let uses = '';
+  for (let i = 0; i < grid.length; i++) {
+    const c = grid[i];
+    uses = emitCellOnto(uses, c, plan, i, placers[iconIndex(c, iconCount, metric)], placers);
+  }
 
   // aspect-ratio locks the element box to the image ratio; --ar (the numeric ratio)
   // lets the maximized CSS size it correctly with min() (CSS can't read a ratio at
@@ -413,6 +530,6 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
  *  self-checks assert). Builds a single export placer for #icon0. */
 function emitCell(cell: Cell, settings: Settings, index = 0, _iconCount = 1): string {
   const p = makePlacer({ innerSvg: '', viewBox: '0 0 24 24', singleShape: false }, 'icon0', 'export');
-  return emitCellWith(cell, settings, index, p, [p]);
+  return emitCellOnto('', cell, makePlan(settings, 1, 1, 1), index, p, [p]);
 }
 export { emitCell };

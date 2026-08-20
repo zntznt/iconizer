@@ -101,24 +101,53 @@ export function cellDelay(cell: Cell, index: number, settings: Settings, cols = 
   }
 }
 
-/** Per-cell motion amplitude 0..1 when "react to image" is on for an amplitude
- *  motion: a lerp of brightness floored at 0.15 so dark cells still move a little
- *  (0 would freeze them, reading as broken). Off / spin / shimmer -> null (no --amp,
- *  so the keyframe's var(--amp,1) fallback gives full reach, unchanged output). */
-function ampFor(cell: Cell, settings: Settings): number | null {
-  if (!settings.motionReactive || !AMPLITUDE_MOTIONS.has(settings.motion)) return null;
-  return r2(0.15 + 0.85 * cell.brightness);
-}
+/** Emits one cell's motion attributes. Built once per render by motionEmitter. */
+export type MotionEmitter = (cell: Cell, index: number) => string;
 
-/** class + (optional) inline style (animation-delay + --amp) for an animated element. */
-export function motionAttrs(cell: Cell, index: number, settings: Settings, cols = 1, rows = 1): string {
-  if (settings.motion === 'none') return '';
-  const delay = cellDelay(cell, index, settings, cols, rows);
-  const amp = ampFor(cell, settings);
-  const decls = [
-    delay ? `animation-delay:${delay}s` : '',
-    amp !== null ? `--amp:${amp}` : '',
-  ].filter(Boolean).join(';');
-  const style = decls ? ` style="${decls}"` : '';
-  return ` class="motion"${style}`;
+/**
+ * Build the per-cell motion attribute writer ONCE for a whole grid, or null when
+ * motion is off (callers then emit the bare body, output unchanged).
+ *
+ * Everything that depends only on the settings and the grid shape resolves here:
+ * the stagger mode, the radial normaliser, whether "react to image" applies. The
+ * old per-cell path re-derived all of that (plus an array + filter + join for two
+ * declarations) for every cell, which a 100-column mosaic pays ~10,000 times.
+ * Emits byte-identical markup to the per-cell version it replaces.
+ */
+export function motionEmitter(settings: Settings, cols: number, rows: number): MotionEmitter | null {
+  if (settings.motion === 'none') return null;
+  const period = settings.motionSpeed;
+  const mode = settings.staggerMode;
+  // "react to image" only means anything for the amplitude motions; resolve the
+  // Set lookup once rather than per cell.
+  const reactive = settings.motionReactive && AMPLITUDE_MOTIONS.has(settings.motion);
+  // radial's centre + max corner distance, and ripple's per-step scale, are grid
+  // constants. Divisions stay inside the closure exactly as they were, so the
+  // floating-point result is bit-for-bit what the per-cell version produced.
+  const cx = (cols - 1) / 2, cy = (rows - 1) / 2;
+  const maxD = Math.hypot(cx, cy) || 1;
+  const rippleK = period * 0.04;
+  const wide = cols > 1;
+  const lastCol = cols - 1;
+
+  return (cell: Cell, index: number): string => {
+    let delay: number;
+    switch (mode) {
+      case 'ripple': delay = r2((cell.col + cell.row) * rippleK); break;
+      case 'radial': delay = r2((Math.hypot(cell.col - cx, cell.row - cy) / maxD) * period); break;
+      case 'sweep': delay = r2((wide ? cell.col / lastCol : 0) * period); break;
+      case 'brightness': delay = r2(cell.brightness * period); break;
+      case 'random': delay = r2(hash01(index) * period); break;
+      case 'none':
+      default: delay = 0;
+    }
+    // Two optional declarations, concatenated directly: the array-of-strings +
+    // filter + join this replaces allocated three objects per cell.
+    let decls = delay ? `animation-delay:${delay}s` : '';
+    if (reactive) {
+      const amp = r2(0.15 + 0.85 * cell.brightness);
+      decls = decls ? `${decls};--amp:${amp}` : `--amp:${amp}`;
+    }
+    return decls ? ` class="motion" style="${decls}"` : ' class="motion"';
+  };
 }

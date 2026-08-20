@@ -190,19 +190,46 @@ export async function downloadGif(
   // animation-delay, --amp, or both); we parse the delay + amp out of the captured text.
   const motionElRe = /class="motion"(?:\s+style="([^"]*)")?/g;
   const period = periodSec;
+
+  // Split the markup ONCE. Only a cell's PHASE changes between frames; the text
+  // between motion elements, and each cell's delay and amp, are the same for all
+  // of them. Re-running the regex over the whole (multi-megabyte) string 20 times,
+  // re-parsing every cell's style attribute each pass, froze the UI for hundreds
+  // of milliseconds on a big grid before a single frame was drawn.
+  const statics: string[] = []; // text before each motion element, then the tail
+  const delays: number[] = [];
+  const amps: number[] = [];
+  let cut = 0, m: RegExpExecArray | null;
+  while ((m = motionElRe.exec(styleStripped)) !== null) {
+    statics.push(styleStripped.slice(cut, m.index));
+    cut = m.index + m[0].length;
+    const styleStr = m[1] as string | undefined;
+    const delayM = styleStr ? /animation-delay:([\d.-]+)s/.exec(styleStr) : null;
+    const ampM = styleStr ? /--amp:([\d.-]+)/.exec(styleStr) : null;
+    delays.push(delayM ? parseFloat(delayM[1]) : 0);
+    amps.push(ampM ? parseFloat(ampM[1]) : 1);
+  }
+  statics.push(styleStripped.slice(cut));
+
   const frameSvgAt = (i: number) => {
     const t = (period * i) / frames; // global time within one cycle
-    return styleStripped.replace(motionElRe, (_m, styleStr: string | undefined) => {
-      const delayM = styleStr && /animation-delay:([\d.-]+)s/.exec(styleStr);
-      const ampM = styleStr && /--amp:([\d.-]+)/.exec(styleStr);
-      const delay = delayM ? parseFloat(delayM[1]) : 0;
-      const amp = ampM ? parseFloat(ampM[1]) : 1;
+    // Cells that share a phase share a rule, and with stagger off EVERY cell does,
+    // so remember the last one rather than re-deriving the same string per cell.
+    let lastP = NaN, lastAmp = NaN, lastRule = '';
+    let out = statics[0];
+    for (let c = 0; c < delays.length; c++) {
       // CSS: effective phase = ((t - delay) / period) wrapped to [0,1).
-      let p = ((t - delay) / period) % 1;
+      let p = ((t - delays[c]) / period) % 1;
       if (p < 0) p += 1;
+      const amp = amps[c];
+      if (p !== lastP || amp !== lastAmp) {
+        lastP = p; lastAmp = amp;
+        lastRule = motionRuleAt(motion, p, amp);
+      }
       // bake this cell's transform inline; class removed so nothing re-animates.
-      return `style="${motionRuleAt(motion, p, amp)}"`;
-    });
+      out += `style="${lastRule}"` + statics[c + 1];
+    }
+    return out;
   };
 
   try {

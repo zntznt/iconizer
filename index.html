@@ -1075,8 +1075,12 @@
          src is DOCUMENT-RELATIVE (./) so it resolves to /iconizer/spacejam.js in
          BOTH `vite dev` and GitHub Pages prod; an absolute /iconizer/… path got
          doubled to /iconizer/iconizer/… under the dev server's base. -->
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
-    <script src="./spacejam.js"></script>
+    <!-- ORDER MATTERS: app first, decorative backdrop after. p5 is ~1MB off a CDN,
+         and module/defer scripts run in DOCUMENT order, so listing it first made
+         the whole UI wait on that download. Deferred and last, it still downloads
+         during parse but the desktop boots as soon as our own bundle lands. -->
     <script type="module" src="/src/main.ts"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+    <script defer src="./spacejam.js"></script>
   </body>
 </html>
