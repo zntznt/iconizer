@@ -286,6 +286,17 @@ type Plan = {
   offsetRows: boolean; // brick/hex shift odd rows half a cell right
   inks: Ink[]; // layered only: the ink stack for this layerStyle
   blend: 'multiply' | 'screen';
+  // How an ink layer declares its blend mode. Live mode points every layer at ONE
+  // class rule instead of giving each its own inline style: the mode is a render
+  // constant, and a 100-column CMY grid has 22,500 layers, so that was 22,500
+  // inline styles for the engine to parse and resolve. Style recalculation was the
+  // single largest slice of the on-screen cost. Export keeps the inline form so a
+  // downloaded file stays self-contained and the GIF encoder's <style> strip (which
+  // removes the animation) cannot take the blending with it.
+  // The class name is namespaced on purpose: a <style> inside an inline SVG applies
+  // to the WHOLE document, not just the SVG, so a short name like "k" would also
+  // hit the Properties dialog's <span class="k"> key cells.
+  blendAttr: string;
   shrink: boolean; // subtractive inks nest concentrically; additive stay full size
   perChannel: boolean; // one icon per ink (needs enough icons to be meaningful)
   rotates: boolean; // any static per-cell rotation at all
@@ -303,7 +314,7 @@ type Plan = {
 const pivotWrap = (deg: number) =>
   `<g style="transform:rotate(${deg}deg);transform-box:fill-box;transform-origin:center">`;
 
-function makePlan(settings: Settings, cols: number, rows: number, iconCount: number): Plan {
+function makePlan(settings: Settings, cols: number, rows: number, iconCount: number, mode: RenderMode = 'export'): Plan {
   const { inks, blend } = inksFor(settings);
   // Gate on the RAW angle, not the rounded one: a sub-0.05 degree tilt still
   // emits its (rotate(0deg)) wrapper, which is what the per-cell path did.
@@ -314,6 +325,7 @@ function makePlan(settings: Settings, cols: number, rows: number, iconCount: num
     offsetRows: settings.layout !== 'grid',
     inks,
     blend,
+    blendAttr: mode === 'live' ? ' class="iz-ink"' : ` style="mix-blend-mode:${blend}"`,
     shrink: blend === 'multiply',
     perChannel: settings.perChannelIcons && iconCount > 1,
     rotates: settings.rotate !== 'none',
@@ -332,7 +344,7 @@ function layeredBodyOnto(s: string, cell: Cell, plan: Plan, place: Placer, place
   // Per-channel icons: ink i draws icon i (a different uploaded shape per channel),
   // falling back to the cell's normal placer when there aren't enough icons, so 1
   // icon is byte-identical to before. Off -> every ink uses the cell's one placer.
-  const { settings, inks, blend, shrink, perChannel, inkPrefix } = plan;
+  const { settings, inks, shrink, perChannel, inkPrefix, blendAttr } = plan;
   const n = inks.length;
   const base = scaleFor(cell, settings);
   const r = cell.r / 255, g = cell.g / 255, b = cell.b / 255;
@@ -349,7 +361,7 @@ function layeredBodyOnto(s: string, cell: Cell, plan: Plan, place: Placer, place
     // The angle is per-ink, not per-cell, so the wrapper came ready-made.
     const pre = inkPrefix[i];
     if (pre) s += pre;
-    s += inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op} style="mix-blend-mode:${blend}"`);
+    s += inkPlace(box, ` color="${inks[i].color(r, g, b)}"${op}${blendAttr}`);
     if (pre) s += '</g>';
   }
   return s;
@@ -492,9 +504,18 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
     ? `<defs>${icons.map((svg, i) =>
         `<symbol id="icon${i}" viewBox="${svg.viewBox}" overflow="visible">${svg.innerSvg}</symbol>`).join('')}</defs>`
     : '';
+  // One plan for the whole grid (ink stack, row pitch, motion emitter, ...), so
+  // nothing settings-derived is re-computed per cell.
+  const plan = makePlan(settings, cols, rows, icons.length, mode);
   // Motion keyframes baked into the SVG (no JS loop) — so animation survives
   // export: the downloaded .svg stays alive. '' when motion:'none'.
-  const style = motionStyle(settings);
+  let style = motionStyle(settings);
+  // One rule for every ink layer on screen (see Plan.blendAttr). Appended AFTER the
+  // motion block so it is a separate <style>: the GIF encoder strips the first one
+  // to kill the animation, and the blending must survive that.
+  if (mode === 'live' && settings.layered) {
+    style += `<style>.iz-ink{mix-blend-mode:${plan.blend}}</style>`;
+  }
   // Background = the blend backdrop for layered styles, else the sampled bg.
   // SUBTRACTIVE inks (cmy/cmyk/ryb) multiply -> need a WHITE page (multiply's
   // identity) so the inks resolve to the cell colour with no per-cell rect.
@@ -506,10 +527,8 @@ export function render(grid: Cell[], icons: ParsedSvg[], settings: Settings, mod
   // so removing it would break the blend math; there cutout only drops cells.
   const bg = settings.cutout > 0 && !settings.layered
     ? '' : `<rect width="${w}" height="${h}" fill="${bgFill}"/>`;
-  // One plan for the whole grid (ink stack, row pitch, motion emitter, ...), then
-  // an indexed loop: `grid.map(...).join('')` built an N-string array purely to
-  // throw it away, and every cell re-derived what the plan now holds.
-  const plan = makePlan(settings, cols, rows, icons.length);
+  // An indexed loop: `grid.map(...).join('')` built an N-string array purely to
+  // throw it away.
   const iconCount = icons.length;
   const metric = settings.iconMetric;
   let uses = '';

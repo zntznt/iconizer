@@ -52,6 +52,12 @@ export function motionStyle(settings: Settings): string {
     // will-change:transform GPU-promotes each animated element so the browser caches
     // its raster and moves/scales the cached bitmap instead of re-rasterizing every
     // frame. transform-box:fill-box makes each icon pivot around its OWN box.
+    // Do NOT be tempted to drop this at high cell counts on the theory that ten
+    // thousand promoted layers must cost more than they save. Measured on a
+    // 4x-throttled CPU (a stand-in for a weak machine), removing it made the
+    // 100-column animated grid 35 to 45 percent SLOWER across three runs, against
+    // a control whose noise floor was ~2 percent. It pays for itself well past the
+    // point where the guess says otherwise.
     : `.motion{transform-box:fill-box;transform-origin:${origin};will-change:transform;` +
       `animation:mo ${period}s ${timing} infinite}`;
   return (
