@@ -14,7 +14,8 @@ merge (the branch predates live mode, the color stage, and the layered rework):
 - cutout + layout (brick/hex) -> ported directly, with two perf guarantees the
   original lacked: cut cells are filtered BEFORE the color stage (they cost
   nothing and shrink the DOM), and layouts are placement math only (node count
-  identical to the square grid; verified at 100x100 in render.test.ts).
+  identical to the square grid; asserted in render.test.ts, and measured at
+  100x100 in a live render).
 - **spacing: intentionally NOT ported.** It multiplied icon size within the cell,
   which is exactly what `iconScale` (0.2-3) already does. Redundant knob.
 

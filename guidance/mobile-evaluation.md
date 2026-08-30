@@ -7,11 +7,13 @@ M5 (44px touch targets for sm-link / ring-site / qs-item / win-bar glyphs),
 M7 (minimize tucks 40px + fades instead of flinging 60vh). Verified on
 390×844 emulation: all 6 control windows reachable, sysbar no overflow,
 maximize clears the top bar, desktop layout unaffected.
-Export/perf cluster now also DONE: B2 (GIF → 12 frames on coarse pointers, no
-OOM/freeze), M2/F5 (exportSize clamps the longest side to 4096px so high-scale
-PNG/GIF don't blank on iOS), M4 (30fps + pause-on-export shipped earlier). Both
-raster exports recover from failure (✖ message, status → READY) instead of
-hanging. Remaining: the MINOR polish list (m1–m7) only.
+Export/perf cluster now also DONE: B2 (GIF → 12 frames on coarse pointers, plus
+a 1440px `MAX_GIF_SIDE` cap so the 4x scale stops asking for 2880px), M2/F5
+(exportSize clamps the longest side to 4096px so high-scale PNG/GIF don't blank
+on iOS), M4 (30fps + pause-on-export shipped earlier). Both raster exports
+recover from failure (✖ message, status → READY) instead of hanging. Remaining:
+the MINOR polish list, minus m1, m4 and m5, which have since shipped. m2, m3,
+m6 and m7 are still open.
 
 Method: real-device emulation in Chrome DevTools (iPhone-12 class, 390×844,
 dpr 3, touch) on the built `dist/`, plus two parallel code auditors (CSS and
@@ -62,6 +64,12 @@ iOS focus-zoom (no text inputs exist), pinch-zoom (intentionally allowed).
   Safari can crash the tab on a large source image.
 - **Direction:** gate GIF behind a coarse-pointer warning, drop frame count /
   base resolution on mobile, and/or yield between frames.
+- **Resolved:** frame count drops to 12 on coarse pointers, and `MAX_GIF_SIDE`
+  (1440) caps the longest side on the GIF path only. The resolution half turned out
+  to matter everywhere, not just on phones: at the 4x scale this never finished on
+  DESKTOP either, measured past a 300s timeout with no file, because gif.js holds
+  every frame's raw RGBA for the whole encode and clones another copy into each
+  worker. PNG and SVG keep the 4096px `MAX_SIDE` clamp.
 
 ### B3 — Maximized CRT is sized to raw `100vh`, clipped by chrome
 - **Where:** `index.html` `.crt.maximized` (~122–137): `position:fixed; top:50%;
@@ -105,6 +113,11 @@ iOS focus-zoom (no text inputs exist), pinch-zoom (intentionally allowed).
   ignores the `download` attribute (opens in-page instead of saving).
 - **Direction:** append the anchor, defer the revoke a tick, consider the Web
   Share API for files on mobile.
+- **Resolved (mostly):** the anchor is appended to `document.body` before the
+  click, and `a.remove()` plus `URL.revokeObjectURL` are both deferred a tick
+  (`src/export.ts`), so the detached-anchor and revoke-too-early halves are gone.
+  Still open: iOS partly ignoring the `download` attribute (it opens in-page
+  instead of saving), and the Web Share API idea, which is unimplemented.
 
 ### M4 — p5 backdrop runs 60fps full-time; battery + export contention
 - **Where:** `public/spacejam.js` `p.frameRate(60)` (~78), `p.draw` (~178).
@@ -149,10 +162,11 @@ iOS focus-zoom (no text inputs exist), pinch-zoom (intentionally allowed).
 ## MINOR
 
 ### m1 — Dead rule: `.desktop { grid-template-columns: 1fr }` on a flex box
-- `index.html` ~line 356. `.desktop` is `display:flex` and never grid; the
-  `grid-template-columns` part is inert (only the `padding` works). Leftover from
-  the pre-flex layout. Harmless but misleading. Direction: delete the
-  declaration, keep the padding.
+- `index.html` (was ~line 356, now ~429). `.desktop` is `display:flex` and never
+  grid; the `grid-template-columns` part was inert (only the `padding` worked).
+  Leftover from the pre-flex layout. Harmless but misleading.
+- **Resolved:** the declaration is gone. The mobile rule keeps only its padding
+  and carries a comment noting the element is flex, not grid.
 
 ### m2 — `restoreWin` `scrollIntoView` yanks mobile scroll
 - `src/main.ts` `restoreWin` (~608): `scrollIntoView({behavior:'smooth',
@@ -170,12 +184,18 @@ iOS focus-zoom (no text inputs exist), pinch-zoom (intentionally allowed).
 - `src/main.ts` `resample` (~190). Dragging the columns slider re-runs
   `createImageBitmap` (full decode) per settled input — heavy for a big photo on
   a phone. The bitmap isn't cached. Direction: cache the decoded bitmap at load.
+- **Resolved:** the decoded bitmap is cached at load. `srcBitmap` holds it and
+  `createImageBitmap` runs once per upload; `resample()` now only raises a flag
+  that `redraw()` consumes by re-sampling that cached bitmap, so no decode
+  happens per slider tick.
 
 ### m5 — `100vh`/`70vh` math instead of `dvh`
 - `#out svg max-height:70vh` (~161), idle `min-height` calc (~111), start-menu
   `max-height` calc (~317) all use `vh`, which on mobile includes the URL-bar
   area → content taller than the real free space, extra scroll, items under the
   dynamic toolbar. Direction: `dvh` on small screens.
+- **Resolved:** all three now use `dvh`. The only plain `vh` left is the desktop
+  `.win.minimizing` translate, which the mobile block already overrides.
 
 ### m6 — Sub-12px low-contrast decorative text invites pinch-zoom
 - Many: `.dw-disk` 11px, `.dw-nudge` 12px (`#7a9a3a` on dark), `.ring-foot` 11px,

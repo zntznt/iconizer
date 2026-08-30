@@ -13,7 +13,7 @@ grid, map each sample to SVG transforms/fills.
 
 | Choice  | Decision |
 |---------|----------|
-| Stack   | Vite + vanilla TS, no runtime deps |
+| Stack   | Vite + vanilla TS; gif.js is the one runtime dep (GIF export) |
 | Hosting | GitHub Pages (static, client-side only) |
 | Export  | Live SVG + download, **plus** PNG export (SVG rasterized via canvas) |
 | Color   | Solid tint first, then layered quasi-RGB as a toggle |
@@ -40,11 +40,14 @@ no layering, no motion. Our wedge is vector-icon tile + channel-split + animatio
 
 One pure function, everything else is plumbing:
 
-    render(grid: Cell[], svg: ParsedSvg, settings: Settings) -> string  // an <svg>
+    render(grid: Cell[], icons: ParsedSvg[], settings: Settings,
+           mode: RenderMode = 'export') -> string  // an <svg>
 
 - `sample(image, settings) -> Cell[]` — canvas + getImageData, average each cell.
 - `Cell = { col, row, r, g, b, brightness }`.
-- Output uses `<symbol id="icon">` defined once + one or more `<use>` per cell.
+- Export output defines one `<symbol id="iconN">` per uploaded icon + one or more
+  `<use>` per cell. The live on-screen render inlines the same shapes per cell
+  instead (same pixels, much faster paint).
 
 ## File layout
 
@@ -82,10 +85,12 @@ non-blended `<g>` wrapper (blend resolves once, statically; transform moves the
 buffer). See the batch-07 append. Deploy (6) is live on GitHub Pages. New
 fun-first twists welcome anytime.
 
-**Parked:** rotation / jitter / cutout / spacing+layouts / gradient-map+presets
-were built and verified, then rolled off `main` to a branch over a perf cliff
-(heavy combos -> 24k+ animated DOM nodes). They need a perf gate before merging
-back, not rework. See `guidance/parked.md` and branch `parked/per-cell-effects`.
+**Harvested:** rotation / jitter / cutout / layouts / gradient-map+presets were
+parked over a perf cliff (heavy combos -> 24k+ animated DOM nodes), then brought
+back once the gate shipped (the heavy-combo warning modal + the motion perf
+nudge). They are all on `main` now; spacing was dropped as redundant with
+`iconScale`. See `guidance/parked.md` for what changed on the way in. The
+`parked/per-cell-effects` branch is historical.
 
 ## Deliberately skipped (add when needed)
 
