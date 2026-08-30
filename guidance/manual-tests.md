@@ -28,25 +28,34 @@ Annotated so nobody prunes them as "obvious":
 
 ## Phase 1 — Sampling (`sample.ts`)
 
-- **S1** Upload an image. Console logs `sampled N cells` where N = cols × rows for
-  the image's aspect ratio. No errors.
-- **S2 (transparency)** Upload a PNG with transparency. Cells over transparent
-  areas read as the `background` color (default white), NOT black. This is the
-  b635034 fix — transparent art must not bias dark.
+- **S1** Upload an image AND an SVG (nothing renders until both are present).
+  Properties, from the CRT right-click menu or the Start menu, reports
+  `Cells: N (cols x rows)` where N = cols × rows for the image's aspect ratio.
+  No console errors. (Nothing logs to the console any more; the count moved
+  into the UI.)
+- **S2 (transparency)** Upload a PNG with transparency. Set the canvas background
+  to white FIRST: the default `#0d120d` is itself near black, so the check cannot
+  otherwise tell the fixed behaviour from the bug it guards. Cells over transparent
+  areas then read as the `background` color, NOT black. This is the b635034 fix:
+  transparent art must not bias dark.
 
 ## Phase 2 — Render + tint (`render.ts`)
 
 - **R1** Upload image + SVG. Mosaic renders. Blank before BOTH are present is by
   design — confirm it's blank-by-design, not blank-by-bug (no console errors).
-- **R2 (filter mode, the default)** Use a SOLID-color icon (e.g. Font Awesome
+- **R2 (solid-color icon)** Use a SOLID-color icon (e.g. Font Awesome
   `*-solid.svg`, baked `fill="#000"`). Mosaic is full-color, NOT all-black.
   ← This is B2: the regression that reads as "not generating."
-- **R3 (fill mode)** Switch to fill mode with a `currentColor` icon. Tints
-  correctly (crisper/lighter than filter). With a solid-color icon, fill mode does
-  NOT tint — that's by design; the label must warn ("currentColor icons").
-- **R4 (filter quantization)** At a fine grid (e.g. 50+ cols), filter mode still
-  renders quickly and the DOM has a SMALL number of `<filter>` defs (tens, not
-  thousands). Inspect `<defs>` to confirm sharing.
+- **R3 (currentColor icon)** Swap in a `currentColor` icon. It tints exactly like
+  R2's did: `makeTintable` rewrites any hardcoded fill to `currentColor`, so both
+  icon classes run the one tint path and neither silently refuses to tint. (There
+  is no tint-MODE setting; the old filter/fill split is gone.)
+- **R4 (fine grid)** At a fine grid (e.g. 50+ cols) the mosaic still renders
+  quickly. Tinting is `fill=`/`color=` only, so the renderer emits no `<filter>`
+  anywhere: an SVG filter per cell re-rasterized on every animation frame and was
+  removed. Live mode emits no `<defs>` of its own either; the `<symbol>` block
+  appears only in the exported file, one per uploaded icon however many cells
+  there are. Any `<defs>`/`<filter>` you do see came from the uploaded icon.
 - **R5 (cols slider)** Dragging cols re-renders live, smoothly (debounced).
 - **R6 (sizeByBrightness)** Toggle on: icon sizes visibly vary by cell tone. The
   ramp should read evenly (area-linear) — no "all thin, then suddenly big" cliff.
@@ -76,9 +85,10 @@ Annotated so nobody prunes them as "obvious":
 
 - **E1 (SVG download)** Click Download SVG. File downloads, opens correctly in a
   browser/editor, looks like the on-screen mosaic. Zero console errors.
-- **E2 (PNG size invariant)** Download PNG at 1x/2x/4x. Output dimensions =
-  on-screen SVG size × scale (e.g. 512px SVG at 2x -> 1024px PNG). ← guards the
-  brief's stated invariant.
+- **E2 (PNG size invariant)** Download PNG at 1x/2x/4x. The longest side is an
+  ABSOLUTE base, not the SVG's own size: 1500 / 3000 / 4096 px (4x hits the
+  `MAX_SIDE` clamp), aspect ratio preserved. ← guards the `exportSize` policy in
+  `export.ts`. The brief's older "svg size × scale" wording predates `PNG_BASE`.
 - **E3 (PNG no-taint)** PNG download succeeds and yields a valid `image/png`
   (toBlob did not throw SecurityError). ← B3-PNG, the central export risk. If this
   ever fails, an external resource crept into the SVG — check for external
@@ -91,7 +101,7 @@ Annotated so nobody prunes them as "obvious":
   4x matching 2x is deliberate: `MAX_GIF_SIDE` caps the GIF path only, because every
   frame is held as raw RGBA until the encode finishes and 2880px never completed
   (measured past a 300s timeout with no file). If you are tempted to "fix" 4x, read
-  the comment above `MAX_GIF_SIDE` first. E2's size × scale invariant is PNG only.
+  the comment above `MAX_GIF_SIDE` first. E2's base × scale sizing is PNG only.
 
 ## Phase 4 — Layered quasi-RGB (`render.ts`) — checks for when it lands
 
