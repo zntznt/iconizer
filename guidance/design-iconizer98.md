@@ -37,8 +37,10 @@ Taskbar holds `#surprise` `#share` `#dlSvg` `#dlPng` `#scale` (IDs unchanged).
   `#motion` (content, inside the SVG) is untouched.
 - Responsive: works 360px→desktop. `overflow-x:hidden` backstop, `min-width:0` +
   `width:100%` on inner controls, `minmax(min(280px,100%),1fr)` grid floor, preview
-  source-order-first and sticky-on-top at phone width, taskbar `flex-wrap`, export
-  tray never hidden.
+  source-order-first at phone width (the CRT is `position:static` there, NOT
+  sticky, so the control windows below it stay reachable by scrolling), taskbar a
+  strict single row (`flex-wrap:nowrap`; the task strip scrolls horizontally
+  instead), export tray never hidden.
 
 ## CSS recipes (no external assets)
 - Raised bevel: `inset 1px 1px #fff, inset -1px -1px #808080, inset 2px 2px #dfdfdf,
