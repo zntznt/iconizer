@@ -7,9 +7,10 @@ M5 (44px touch targets for sm-link / ring-site / qs-item / win-bar glyphs),
 M7 (minimize tucks 40px + fades instead of flinging 60vh). Verified on
 390×844 emulation: all 6 control windows reachable, sysbar no overflow,
 maximize clears the top bar, desktop layout unaffected.
-Export/perf cluster now also DONE: B2 (GIF → 12 frames on coarse pointers, no
-OOM/freeze), M2/F5 (exportSize clamps the longest side to 4096px so high-scale
-PNG/GIF don't blank on iOS), M4 (30fps + pause-on-export shipped earlier). Both
+Export/perf cluster now also DONE: B2 (GIF → 12 frames on coarse pointers, plus
+a 1440px `MAX_GIF_SIDE` cap so the 4x scale stops asking for 2880px), M2/F5
+(exportSize clamps the longest side to 4096px so high-scale PNG/GIF don't blank
+on iOS), M4 (30fps + pause-on-export shipped earlier). Both
 raster exports recover from failure (✖ message, status → READY) instead of
 hanging. Remaining: the MINOR polish list (m1–m7) only.
 
@@ -62,6 +63,12 @@ iOS focus-zoom (no text inputs exist), pinch-zoom (intentionally allowed).
   Safari can crash the tab on a large source image.
 - **Direction:** gate GIF behind a coarse-pointer warning, drop frame count /
   base resolution on mobile, and/or yield between frames.
+- **Resolved:** frame count drops to 12 on coarse pointers, and `MAX_GIF_SIDE`
+  (1440) caps the longest side on the GIF path only. The resolution half turned out
+  to matter everywhere, not just on phones: at the 4x scale this never finished on
+  DESKTOP either, measured past a 300s timeout with no file, because gif.js holds
+  every frame's raw RGBA for the whole encode and clones another copy into each
+  worker. PNG and SVG keep the 4096px `MAX_SIDE` clamp.
 
 ### B3 — Maximized CRT is sized to raw `100vh`, clipped by chrome
 - **Where:** `index.html` `.crt.maximized` (~122–137): `position:fixed; top:50%;

@@ -83,8 +83,15 @@ Annotated so nobody prunes them as "obvious":
   (toBlob did not throw SecurityError). ← B3-PNG, the central export risk. If this
   ever fails, an external resource crept into the SVG — check for external
   fonts/images, not the export code.
-- **E4 (buttons gated)** Both export buttons are disabled until a render exists;
-  export never triggers a re-render (uses the cached `lastSvg`).
+- **E4 (buttons gated)** All three export rows (SVG/PNG/GIF) are disabled until a
+  render exists, and GIF stays disabled unless a motion is selected. Export never
+  triggers a re-render: `exportSvg()` builds the `<symbol>`+`<use>` form on demand
+  from the current grid, so there is no cached copy that can go stale.
+- **E5 (GIF size cap)** Download GIF at 1x/2x/4x. Longest side is 720 / 1440 / 1440.
+  4x matching 2x is deliberate: `MAX_GIF_SIDE` caps the GIF path only, because every
+  frame is held as raw RGBA until the encode finishes and 2880px never completed
+  (measured past a 300s timeout with no file). If you are tempted to "fix" 4x, read
+  the comment above `MAX_GIF_SIDE` first. E2's size × scale invariant is PNG only.
 
 ## Phase 4 — Layered quasi-RGB (`render.ts`) — checks for when it lands
 
