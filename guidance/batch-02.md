@@ -153,3 +153,18 @@ space. A one-line UI hint beats a detector — keep the modes honest and explici
 UI: make sure the mode toggle's labels say which input each suits — e.g.
 `filter (any SVG)` / `fill (currentColor icons — crisper)`. No new self-check;
 this is a default value + label change.
+
+## APPENDED (later): the filter tint path was built, then removed
+
+The `tintMode` setting specified above shipped and then came out again. An SVG
+filter per `<use>` re-rasterizes on every animation frame, which was the motion
+lag, so the whole path went: the setting, its UI, `filterFor`, the quantiser and
+the per-cell filter defs (5ddea23, "perf: drop SVG-filter tint mode; tint via
+color="). There is one tint path now, `fill=`/`color=` per cell, and
+`render.test.ts` asserts the output contains no `<filter>` anywhere.
+
+The two icon classes this brief distinguishes both tint through it: `makeTintable`
+rewrites hardcoded fills to `currentColor` at parse time, so there is no longer an
+icon that silently refuses to tint, and no mode toggle or label to warn about.
+Read the `"filter"` mode below as history. Reimplementing it would fail a
+self-check and reintroduce a fixed performance bug.

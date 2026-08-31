@@ -166,3 +166,17 @@ Pure string assertions on `render()` output:
 
 Per-layer CMY phase offset (stretch, deferred above), mouse/pointer-reactive motion
 (JS-only, dies on export — different feature), physics simulation, deploy (Phase 6).
+
+## APPENDED (later): the inner isolation group no longer exists
+
+The "Correct structure" block above shows a per-cell `<g style="isolation:isolate">`
+holding a white backing rect. Neither exists now; layered inks blend straight
+against the page-wide rect (see the batch-04 append). So the rationale beside it,
+that an inner blend resolves once into a buffer which the outer `<g>` then
+transforms cheaply per frame, no longer describes the mechanism.
+
+What actually keeps an animated layered cell affordable is `will-change:transform`
+on the `.motion` class. That is measured, not assumed, and worth leaving alone:
+removing it made a 100-column animated grid 35 to 45 percent SLOWER on a throttled
+CPU across three runs. `motion.test.ts` asserts layered output carries no
+isolation group, with or without motion.

@@ -142,7 +142,7 @@ Other dials, by where they live:
 
 ## Gotchas
 
-- **Dev-server 404 is normal.** `index.html` loads `./spacejam.js` (document-relative). Under
+- **Keep the script path document-relative.** `index.html` loads `./spacejam.js`. Under
   `vite dev` it resolves correctly; in production on GitHub Pages it also resolves correctly.
   (An earlier absolute `/iconizer/spacejam.js` got doubled to `/iconizer/iconizer/…` in dev —
   fixed. Don't change it back to an absolute path.)
