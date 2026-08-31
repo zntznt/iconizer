@@ -55,3 +55,14 @@ no assets · all ids preserved · no guestbook · name "Iconizer".
 `.maximized` logic, `[hidden]` disclosure, heavyModal focus pattern. render() pure.
 
 (Full committee output in the task transcript.)
+
+## APPENDED (later): Export.exe was folded into the taskbar
+
+The Export.exe window specified above was built and then removed (d15b60e); the
+markup still carries a comment where the section used to sit. Its controls (the
+scale select, .SVG, .PNG, .GIF) live in the taskbar Save menu now, and there is no
+`#winExport` or `#exportSize` anywhere.
+
+The "export reachable 2 ways" constraint above still holds, but the two routes are
+the taskbar Save menu and the CRT right-click context menu, not an Export.exe
+window plus a footer chip.

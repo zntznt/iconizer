@@ -79,3 +79,15 @@ check small and honest:
 
 Layered quasi-RGB (Phase 4), color schemes (Phase 5), deploy (Phase 6),
 font-inlining / external-resource support (deferred, see tainting note above).
+
+## APPENDED (later): the export size invariant changed, and is now tested
+
+"output size = svg size * scale" is not the policy any more, and it is no longer
+the untestable one either. `exportSize` scales the longest side to an ABSOLUTE
+base times the scale, then clamps: `PNG_BASE` is 1500, the clamp is `MAX_SIDE`
+4096, so PNG at 1x/2x/4x is 1500 / 3000 / 4096. GIF takes a tighter
+`MAX_GIF_SIDE` of 1440 through `gifExportSize`, because it holds every frame as
+raw RGBA until the encode finishes and 2880px never completed.
+
+`export.test.ts` asserts all of it headlessly: base at 1x, the clamp at 4x,
+aspect ratio preserved, and the GIF cap.

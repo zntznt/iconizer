@@ -127,3 +127,26 @@ called `background` "the CMY floor" — that framing held for the opacity spec; 
 multiply the white per-cell backing is the floor instead. Documented in
 manual-tests R7. If a tinted layered background is ever wanted, it needs a
 different mechanism (e.g. compositing the cell color in JS), not this path.
+
+## APPENDED (later): per-cell isolation is gone, and the CMY gaps are filled
+
+Three things in the brief above have since moved.
+
+**No per-cell isolation group, and no per-cell white backing rect.** Layered mode
+blends every ink against ONE page-wide rect instead, which render() forces white
+for the subtractive styles (cmy/cmyk/ryb/halftone) and black for the additive ones
+(rgb/anaglyph). The warning above, that without per-cell isolation the canvas
+cascades to black, describes the old alpha-stacked mechanism and no longer
+applies. It is also what makes a layered grid affordable: a 100-column CMY mosaic
+would otherwise carry 7,500 extra groups and rects.
+
+**`background` in layered mode.** With the per-cell backing gone, the divergence
+note above needs restating. In layered mode `background` does not set the page
+backdrop either, because render() overrides it for the whole canvas. What it still
+does, and this is a real input to the ink math, is set the colour that transparent
+source pixels are flattened onto in `sample()`.
+
+**The CMY simplification is no longer deferred.** Both named upgrades shipped:
+`layerStyle:'cmyk'` adds a K ink (gray = max(r,g,b)) for the shadows CMY cannot
+reach, and `layerStyle:'halftone'` rotates all four inks to the canonical print
+screen angles (15/75/0/45).
